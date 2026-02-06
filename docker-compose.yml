@@ -67,7 +67,7 @@ services:
       - puyo-net
     container_name: cloudflared-tunnel
     restart: always
-    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
+    command: tunnel run --protocol http2 --token ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
     depends_on:
       - api
       - game-server
