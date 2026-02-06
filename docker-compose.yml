@@ -45,7 +45,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
   # :3
   # --- Cloudflare Tunnel (puyo_network) ---
   tunnel:
