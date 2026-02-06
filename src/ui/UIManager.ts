@@ -1226,11 +1226,13 @@ export class UIManager {
                 // Update header
                 this.updateProfile();
 
-                // Show localized feedback via DOM Toast
+                // Show localized feedback via DOM Toast (Only if NOT in game over screen? Or always?)
+                // If we have match_result, we might not need this toast if the Game Over screen covers it.
+                // But this is good for instant feedback.
                 const sign = data.change >= 0 ? '+' : '';
                 const color = data.change >= 0 ? '#00ff00' : '#ff0000';
 
-                // Create toast element manually since we can't depend on missing spawnFloatingText
+                // Create toast element manually
                 const toast = document.createElement('div');
                 toast.innerText = `ELO ${sign}${data.change}`;
                 Object.assign(toast.style, {
@@ -1261,6 +1263,21 @@ export class UIManager {
                 setTimeout(() => {
                     if (document.body.contains(toast)) document.body.removeChild(toast);
                 }, 2000);
+            }
+        });
+
+        NetworkManager.on('match_result', (data: any) => {
+            console.log("UI: Match Result Received", data);
+            if (AuthManager.currentUser) {
+                // Update persistent user state
+                AuthManager.currentUser.level = data.new_level;
+                AuthManager.currentUser.current_xp = data.new_xp;
+                AuthManager.currentUser.elo_rating = data.new_elo;
+
+                this.updateProfile();
+
+                // Forward to GameEvents so React Overlay can pick it up
+                GameEvents.emit('match_result', data);
             }
         });
     }

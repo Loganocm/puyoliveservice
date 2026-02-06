@@ -253,22 +253,46 @@ export function initializeSocket(io: Server) {
                             });
 
                             if (matchResult) {
-                                console.log(`Match recorded: ${winner.userId} beat ${loser.userId}, ELO change: ${matchResult.elo_change}`);
+                                const { match, player1_stats, player2_stats } = matchResult;
+                                console.log(`Match recorded: ${winner.userId} beat ${loser.userId}, ELO change: ${player1_stats.elo_change}`);
 
-                                // Notify players of ELO changes
+                                // Notify players of ELO changes and XP
                                 const winnerSocket = io.sockets.sockets.get(winnerSocketId);
                                 const loserSocket = io.sockets.sockets.get(loserSocketId);
 
                                 if (winnerSocket) {
+                                    // Winner is either P1 or P2
+                                    const stats = isPlayer1Winner ? player1_stats : player2_stats;
+                                    winnerSocket.emit('match_result', {
+                                        matchId: match.id,
+                                        result: 'win',
+                                        xp_gained: stats.xp_gained,
+                                        new_level: stats.level,
+                                        new_xp: stats.xp,
+                                        elo_change: stats.elo_change, // This is positive
+                                        new_elo: stats.new_elo
+                                    });
+                                    // Keep legacy event for now just in case
                                     winnerSocket.emit('elo_update', {
-                                        new_elo: isPlayer1Winner ? matchResult.player1_elo_after : matchResult.player2_elo_after,
-                                        change: matchResult.elo_change
+                                        new_elo: stats.new_elo,
+                                        change: stats.elo_change
                                     });
                                 }
                                 if (loserSocket) {
+                                    const stats = isPlayer1Winner ? player2_stats : player1_stats;
+                                    loserSocket.emit('match_result', {
+                                        matchId: match.id,
+                                        result: 'loss',
+                                        xp_gained: stats.xp_gained,
+                                        new_level: stats.level,
+                                        new_xp: stats.xp,
+                                        elo_change: stats.elo_change, // This is negative
+                                        new_elo: stats.new_elo
+                                    });
+                                    // Keep legacy event
                                     loserSocket.emit('elo_update', {
-                                        new_elo: isPlayer1Winner ? matchResult.player2_elo_after : matchResult.player1_elo_after,
-                                        change: -matchResult.elo_change
+                                        new_elo: stats.new_elo,
+                                        change: stats.elo_change
                                     });
                                 }
                             }

@@ -5,7 +5,8 @@ import type {
   Match,
   CreateMatchInput,
   MatchHistoryEntry,
-  EloCalculation
+  EloCalculation,
+  MatchRecordResult
 } from '../types/match.js';
 import type { User } from '../types/user.js';
 import { Prisma } from '@prisma/client';
@@ -41,7 +42,7 @@ export class MatchService {
    * Record a match result and update player ELOs
    * Uses a transaction to ensure consistency
    */
-  static async recordMatch(input: CreateMatchInput): Promise<Match> {
+  static async recordMatch(input: CreateMatchInput): Promise<MatchRecordResult> {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Get current player ratings
       const player1 = await tx.user.findUnique({ where: { id: input.player1_id } });
@@ -145,7 +146,23 @@ export class MatchService {
         }
       });
 
-      return match as unknown as Match;
+      return {
+        match: match as unknown as Match,
+        player1_stats: {
+          level: p1Progression.level,
+          xp: p1Progression.xp,
+          xp_gained: xp1,
+          elo_change: isPlayer1Winner ? eloResult.elo_change : -eloResult.elo_change,
+          new_elo: player1EloAfter
+        },
+        player2_stats: {
+          level: p2Progression.level,
+          xp: p2Progression.xp,
+          xp_gained: xp2,
+          elo_change: isPlayer1Winner ? -eloResult.elo_change : eloResult.elo_change,
+          new_elo: player2EloAfter
+        }
+      };
     });
   }
 

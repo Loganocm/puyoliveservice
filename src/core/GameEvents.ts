@@ -21,6 +21,15 @@ type GameEventMap = {
     'next_queue': { pieces: any[] }; // TBD structure
     'exit_game': void;
     'user_update': any; // Should by User | null but circular dep risk if we import User from AuthManager. Using any for now or move types.
+    'match_result': {
+        matchId: number;
+        result: 'win' | 'loss';
+        xp_gained: number;
+        new_level: number;
+        new_xp: number;
+        elo_change: number;
+        new_elo: number;
+    };
 };
 
 class GameEventEmitter extends EventEmitter<GameEventMap> { }

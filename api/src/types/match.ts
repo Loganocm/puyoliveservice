@@ -60,3 +60,17 @@ export interface EloCalculation {
   loser_new_elo: number;
   elo_change: number;
 }
+
+export interface PlayerMatchStats {
+  level: number;
+  xp: number;
+  xp_gained: number;
+  elo_change: number;
+  new_elo: number;
+}
+
+export interface MatchRecordResult {
+  match: Match;
+  player1_stats: PlayerMatchStats;
+  player2_stats: PlayerMatchStats;
+}

@@ -99,7 +99,7 @@ export function PuyoWordmark({ size = 'medium' }: PuyoWordmarkProps) {
         transition={{ duration: 0.5, delay: 0.1 }}
       >
         PUYO
-        <span className="ml-3 text-indigo-400">LIVE</span>
+        <span className="ml-1 text-indigo-400 text-[1.15em] leading-none">LIVE</span>
       </motion.h1>
     </div>
   );

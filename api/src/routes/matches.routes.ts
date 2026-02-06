@@ -42,7 +42,7 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
   }
 
   try {
-    const match = await MatchService.recordMatch({
+    const result = await MatchService.recordMatch({
       player1_id,
       player2_id,
       winner_id,
@@ -57,7 +57,8 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
       replay_data
     });
 
-    res.status(201).json(match);
+    // Return the match object to be backward compatible with HTTP clients
+    res.status(201).json(result.match);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to record match';
     res.status(400).json({ error: message });

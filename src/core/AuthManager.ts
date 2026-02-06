@@ -33,6 +33,27 @@ export class AuthManager {
             }
         });
 
+        // Listen for match results to update user state immediately
+        NetworkManager.on('match_result', (data: any) => {
+            console.log("Auth: Received match_result", data);
+            if (this.currentUser) {
+                // Update local user state
+                this.currentUser.level = data.new_level;
+                this.currentUser.current_xp = data.new_xp;
+                this.currentUser.elo_rating = data.new_elo;
+                // Note: rank might need refresh, but we don't have it in match_result usually unless we added it? 
+                // We added level/xp/elo. Rank is global so might need refreshProfile eventually, but this is good for instant feedback.
+
+                // Notify app of User Update
+                import('./GameEvents').then(({ GameEvents }) => {
+                    GameEvents.emit('user_update', { ...this.currentUser }); // Spread to ensure new reference for React
+
+                    // Forward match_result for GameOverlay
+                    GameEvents.emit('match_result', data);
+                });
+            }
+        });
+
         if (this.token) {
             try {
                 this.currentUser = await APIClient.getMe();

@@ -56,7 +56,7 @@ export function GameOverlay({ onBack, onQueueAgain }: GameOverlayProps) {
                 isMultiplayer: data.isMultiplayer || false,
                 xpGained: !AuthManager.isGuest 
                     ? (data.isMultiplayer 
-                        ? XpCalculator.calculateMultiplayerXp(data.message === 'YOU WIN!', 0) 
+                        ? undefined // Wait for match_result from server
                         : XpCalculator.calculateSingleplayerXp(data.score))
                     : undefined
             });
@@ -71,16 +71,31 @@ export function GameOverlay({ onBack, onQueueAgain }: GameOverlayProps) {
             setIsPaused(false);
         };
 
+        const handleMatchResult = (data: { xp_gained: number }) => {
+            setGameOverState(prev => {
+                // If we are on the game over screen, update the XP
+                if (prev) {
+                    return {
+                        ...prev,
+                        xpGained: data.xp_gained
+                    };
+                }
+                return prev;
+            });
+        };
+
         GameEvents.on('exit_game', handleExitGame);
         GameEvents.on('game_over', handleGameOver);
         GameEvents.on('game_pause', handlePause);
         GameEvents.on('game_resume', handleResumeEvent);
+        GameEvents.on('match_result', handleMatchResult);
 
         return () => {
             GameEvents.off('exit_game', handleExitGame);
             GameEvents.off('game_over', handleGameOver);
             GameEvents.off('game_pause', handlePause);
             GameEvents.off('game_resume', handleResumeEvent);
+            GameEvents.off('match_result', handleMatchResult);
         };
     }, [onBack]);
 

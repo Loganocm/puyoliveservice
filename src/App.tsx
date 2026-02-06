@@ -14,6 +14,7 @@ import { PlayerStatsPanel } from '@/components/PlayerStatsPanel';
 import { AuthManager, type User as UserData } from './core/AuthManager';
 import { XpCalculator } from './core/XpCalculator';
 import { GameEvents } from '@/core/GameEvents';
+import { LevelUpOverlay } from '@/components/LevelUpOverlay';
 
 import { SinglePlayerModeSelect } from '@/screens/SinglePlayerModeSelect';
 import { MultiplayerLobby } from '@/screens/MultiplayerLobby';
@@ -34,6 +35,8 @@ export default function App() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   // Restore reactive user state
   const [user, setUser] = useState<UserData | null>(AuthManager.currentUser as UserData | null);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(1);
   
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
@@ -44,6 +47,11 @@ export default function App() {
     setUser(AuthManager.currentUser as UserData | null);
 
     const handleUserUpdate = (userData: any) => {
+        // Check for level up
+        if (userData && user && userData.level > user.level) {
+             setShowLevelUp(true);
+             setLevelUpLevel(userData.level);
+        }
         setUser(userData as UserData | null);
     };
 
@@ -51,7 +59,7 @@ export default function App() {
     return () => {
         GameEvents.off('user_update', handleUserUpdate);
     };
-  }, []);
+  }, [user]);
 
   // Update ref when we enter menu
   useEffect(() => {
@@ -329,6 +337,14 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Level Up Overlay */}
+      {showLevelUp && (
+        <LevelUpOverlay 
+          level={levelUpLevel} 
+          onComplete={() => setShowLevelUp(false)} 
+        />
+      )}
     </div>
   );
 }

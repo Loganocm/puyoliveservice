@@ -127,6 +127,11 @@ export class NetworkManager {
             this.emit('elo_update', data);
         });
 
+        this.socket.on('match_result', (data: any) => {
+            console.log("Network: Received match_result", data);
+            this.emit('match_result', data);
+        });
+
         this.socket.on('error', (data: { message: string }) => {
             console.error('[NetworkManager] Error:', data.message);
             this.emit('error', data);
