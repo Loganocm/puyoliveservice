@@ -18,7 +18,7 @@ services:
 
   # --- REST API (accounts, matches, leaderboard) ---
   api:
-    build: ./api
+    image: ghcr.io/loganocm/puyio-api:latest
     container_name: puyio-api
     restart: always
     environment:
@@ -36,7 +36,7 @@ services:
 
   # --- Game Server (WebSocket) ---
   game-server:
-    build: ./server
+    image: ghcr.io/loganocm/puyo-game:latest
     container_name: puyo-game
     restart: always
     environment:
