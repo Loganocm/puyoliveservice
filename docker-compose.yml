@@ -56,7 +56,7 @@ services:
     depends_on:
       - api
       - game-server
-
+ #:3 :3
   # --- Watchtower (auto-pulls new images from GHCR) ---
   watchtower:
     image: containrrr/watchtower:latest
