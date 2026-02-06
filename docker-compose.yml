@@ -4,6 +4,8 @@ services:
     image: postgres:18-alpine
     container_name: puyio-db
     restart: always
+    networks:
+      - puyo-net
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
@@ -24,6 +26,8 @@ services:
     image: ghcr.io/loganocm/puyio-api:latest
     container_name: puyio-api
     restart: always
+    networks:
+      - puyo-net
     environment:
       DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-puyio_db}
       PORT: 8080
@@ -43,6 +47,8 @@ services:
       context: ./server
       dockerfile: Dockerfile
     image: ghcr.io/loganocm/puyo-game:latest
+    networks:
+      - puyo-net
     container_name: puyo-game
     restart: always
     environment:
@@ -57,6 +63,8 @@ services:
   # --- Cloudflare Tunnel (puyo_network) ---
   tunnel:
     image: cloudflare/cloudflared:latest
+    networks:
+      - puyo-net
     container_name: cloudflared-tunnel
     restart: always
     command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
@@ -67,8 +75,8 @@ services:
   # --- Watchtower (auto-pulls new images from GHCR) ---
   watchtower:
     image: containrrr/watchtower:latest
-    container_name: watchtower
-    restart: always
+    networks:
+      - puyo-net
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -79,3 +87,8 @@ services:
 
 volumes:
   postgres_data:
+
+
+networks:
+  puyo-net:
+    driver: bridge

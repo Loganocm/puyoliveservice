@@ -14,6 +14,13 @@ const httpServer = createServer(app);
 
 // Security middleware
 app.use(helmet());
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+  console.log(`[API Request] ${req.method} ${req.url} from ${req.ip} (Origin: ${req.get('Origin')})`);
+  next();
+});
+
 // Hardcoded allowed origins pattern + explicit Env Var
 const allowedOrigins = [
   config.corsOrigin, // The one from ENV (e.g. "https://puyo.live")
@@ -107,8 +114,8 @@ export async function startServer(): Promise<void> {
     // Migrations are handled by external CLI/scripts now
 
     // Start listening (Using httpServer instead of app.listen)
-    httpServer.listen(config.port, () => {
-      console.log(`🚀 Puyo Live API & Game Server running on http://localhost:${config.port}`);
+    httpServer.listen(Number(config.port), "0.0.0.0", () => {
+      console.log(`🚀 Puyo Live API & Game Server running on http://0.0.0.0:${config.port}`);
       console.log(`   Environment: ${config.nodeEnv}`);
     });
   } catch (error) {

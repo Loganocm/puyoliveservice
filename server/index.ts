@@ -43,6 +43,11 @@ app.use(cors({
 }));
 
 // Root route for health checking via browser
+app.use((req, res, next) => {
+  console.log(`[Request] ${req.method} ${req.url} from ${req.ip} (Origin: ${req.get('Origin')})`);
+  next();
+});
+
 app.get('/', (_req, res) => {
   res.json({ status: 'Socket Server Alive', version: '1.0.0', time: new Date().toISOString() });
 });
@@ -587,7 +592,7 @@ io.on('connection', (socket: Socket) => {
 // Startup
 (async () => {
   // Start listening IMMEDIATELY - Don't wait for API check
-  httpServer.listen(port, () => {
+  httpServer.listen(Number(port), "0.0.0.0", () => {
     console.log(`🎮 Puyo Game Server running on port ${port}`);
     console.log(`📡 URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`}`);
   });
