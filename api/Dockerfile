@@ -27,6 +27,6 @@ RUN chmod +x ./entrypoint.sh
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/health || exit 1
 
-EXPOSE 8080
-
 ENTRYPOINT ["./entrypoint.sh"]
+
+EXPOSE 8080

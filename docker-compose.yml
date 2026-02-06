@@ -18,6 +18,9 @@ services:
 
   # --- REST API (accounts, matches, leaderboard) ---
   api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     image: ghcr.io/loganocm/puyio-api:latest
     container_name: puyio-api
     restart: always
@@ -36,6 +39,9 @@ services:
 
   # --- Game Server (WebSocket) ---
   game-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     image: ghcr.io/loganocm/puyo-game:latest
     container_name: puyo-game
     restart: always
