@@ -1,0 +1,74 @@
+services:
+  # --- PostgreSQL Database ---
+  db:
+    image: postgres:18-alpine
+    container_name: puyio-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-puyio_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- REST API (accounts, matches, leaderboard) ---
+  api:
+    build: ./api
+    container_name: puyio-api
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-puyio_db}
+      PORT: 8080
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: https://puyo.live
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # --- Game Server (WebSocket) ---
+  game-server:
+    build: ./server
+    container_name: puyo-game
+    restart: always
+    environment:
+      PORT: 3000
+      API_URL: http://api:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  # --- Cloudflare Tunnel (puyo_network) ---
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-tunnel
+    restart: always
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
+    depends_on:
+      - api
+      - game-server
+
+  # --- Watchtower (auto-pulls new images from GHCR) ---
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - REPO_USER=${GITHUB_USER}
+      - REPO_PASS=${GITHUB_PAT}
+      - DOCKER_API_VERSION=1.44
+    command: --interval 300 --cleanup
+
+volumes:
+  postgres_data:

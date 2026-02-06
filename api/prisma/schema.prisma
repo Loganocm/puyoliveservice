@@ -1,0 +1,75 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int      @id @default(autoincrement())
+  username         String   @unique
+  email            String?  @unique
+  avatar_url       String?  // Base64 data URI
+  password_hash    String
+  elo_rating       Int      @default(1000)
+  games_played     Int      @default(0)
+  games_won        Int      @default(0)
+  games_lost       Int      @default(0)
+  highest_chain    Int      @default(0)
+  total_garbage_sent Int    @default(0)
+  level            Int      @default(1)
+  current_xp       Int      @default(0)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  matches_as_p1    Match[]  @relation("Player1Matches")
+  matches_as_p2    Match[]  @relation("Player2Matches")
+  matches_won      Match[]  @relation("WinnerMatches")
+  matches_lost     Match[]  @relation("LoserMatches")
+
+  @@map("users")
+}
+
+model Match {
+  id               Int      @id @default(autoincrement())
+  player1_id       Int
+  player2_id       Int
+  winner_id        Int
+  loser_id         Int
+  
+  room_id          String?
+  duration_seconds Int?
+  
+  // Game stats
+  player1_max_chain     Int     @default(0)
+  player2_max_chain     Int     @default(0)
+  player1_garbage_sent  Int     @default(0)
+  player2_garbage_sent  Int     @default(0)
+  
+  // Elo snapshots
+  player1_elo_before    Int
+  player2_elo_before    Int
+  player1_elo_after     Int
+  player2_elo_after     Int
+  elo_change            Int
+  
+  is_ranked        Boolean  @default(true)
+  started_at       DateTime?
+  ended_at         DateTime @default(now())
+
+  // Replay Data
+  replay_data      Json?    // Stores seed, inputs, and settings
+
+  // Relations
+  player1          User     @relation("Player1Matches", fields: [player1_id], references: [id])
+  player2          User     @relation("Player2Matches", fields: [player2_id], references: [id])
+  winner           User     @relation("WinnerMatches", fields: [winner_id], references: [id])
+  loser            User     @relation("LoserMatches", fields: [loser_id], references: [id])
+
+  @@map("matches")
+}

@@ -1,0 +1,45 @@
+{
+  "name": "puyolive-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Puyo Live REST API with PostgreSQL backend",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx --watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx src/db/seed.ts",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "prisma": "^6.19.2",
+    "socket.io": "^4.8.3",
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.19.7",
+    "@types/pg": "^8.11.10"
+  },
+  "devDependencies": {
+    "@types/socket.io": "^3.0.1",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
+    "vitest": "^2.1.8"
+  }
+}

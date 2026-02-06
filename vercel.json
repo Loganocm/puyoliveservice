@@ -1,0 +1,12 @@
+{
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "installCommand": "npm install",
+    "framework": null,
+    "rewrites": [
+        {
+            "source": "/privacy",
+            "destination": "/legal.html"
+        }
+    ]
+}

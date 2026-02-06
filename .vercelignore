@@ -1,0 +1,14 @@
+# Backend folders (deployed to Render)
+# Use leading slash to only match root-level folders
+/api/
+/server/
+
+# Docker files
+Dockerfile
+Dockerfile.server
+docker-compose.yml
+
+# Development
+.env
+.env.example
+*.log

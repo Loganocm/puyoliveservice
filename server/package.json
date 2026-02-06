@@ -1,0 +1,22 @@
+{
+    "name": "puyolive-socket-server",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "start": "node dist/index.js",
+        "build": "tsc",
+        "dev": "tsx --watch index.ts"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^5.2.1",
+        "socket.io": "^4.8.3"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.17",
+        "@types/express": "^5.0.6",
+        "@types/node": "^25.0.10",
+        "tsx": "^4.21.0",
+        "typescript": "~5.9.3"
+    }
+}

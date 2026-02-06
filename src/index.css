@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+    --color-puyo-red: #FF5733;
+    --color-puyo-blue: #3B82F6;
+    --color-puyo-yellow: #EAB308;
+    --color-puyo-purple: #A855F7;
+    --color-puyo-bg: #0a0a12;
+}
+
+/* Custom Utilities that might not be covered by default utilities yet */
+@utility text-shadow-sm {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@utility text-shadow-md {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Ensure #app (Canvas) is centered and behind React */
+#app {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 0;
+    pointer-events: auto;
+    /* Canvas needs interaction */
+    background-color: #0a0a12;
+    /* Match theme bg */
+}
+
+/* Ensure React root sits on top but passes through clicks by default */
+#root {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 10;
+    pointer-events: none;
+    /* Let clicks pass through to canvas by default */
+}
+
+/* Re-enable pointer events for interactive React elements */
+#root>* {
+    pointer-events: none;
+}
+
+.pointer-events-auto {
+    pointer-events: auto !important;
+}
