@@ -1,7 +1,6 @@
 import { motion } from 'motion/react';
 import { Star, Sparkles } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { SoundManager } from '../core/SoundManager';
+import { useEffect } from 'react';
 
 interface LevelUpOverlayProps {
   level: number;

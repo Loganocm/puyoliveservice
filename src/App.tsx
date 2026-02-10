@@ -48,7 +48,7 @@ export default function App() {
 
     const handleUserUpdate = (userData: any) => {
         // Check for level up
-        if (userData && user && userData.level > user.level) {
+        if (userData && user && userData.level > (user.level ?? 0)) {
              setShowLevelUp(true);
              setLevelUpLevel(userData.level);
         }
