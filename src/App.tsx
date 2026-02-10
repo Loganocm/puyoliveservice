@@ -27,12 +27,13 @@ import { ControlsScreen } from '@/screens/ControlsScreen';
 import { OnboardingScreen } from '@/screens/OnboardingScreen';
 import { GameOverlay } from '@/screens/GameOverlay';
 import { ReplayOverlay } from '@/screens/ReplayOverlay';
+import { TransitionParticles } from '@/components/TransitionParticles';
 import { SceneManager } from '@/core/SceneManager';
 import { GameScene } from '@/scenes/GameScene';
 import { MenuScene } from '@/scenes/MenuScene';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 
-type Screen = 'menu' | 'single' | 'multi' | 'leaderboard' | 'settings' | 'controls' | 'onboarding' | 'game' | 'replay';
+type Screen = 'menu' | 'single' | 'multi' | 'leaderboard' | 'settings' | 'controls' | 'onboarding' | 'game' | 'replay' | 'transition';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('onboarding'); // Default to onboarding until auth check
@@ -153,9 +154,12 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen bg-transparent overflow-hidden font-sans text-white z-50 pointer-events-none">
-      {bgImage && screen !== 'game' && (
-         <div 
-           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-60"
+      {bgImage && screen !== 'game' && screen !== 'onboarding' && screen !== 'transition' && (
+         <motion.div 
+           initial={{ opacity: 0 }}
+           animate={{ opacity: 0.6 }}
+           transition={{ duration: 1.5, ease: "easeOut" }}
+           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
            style={{ backgroundImage: `url(${bgImage})` }}
          />
       )}
@@ -355,12 +359,21 @@ export default function App() {
         )}
 
         {screen === 'onboarding' && (
-          <motion.div key="onboarding" className="size-full pointer-events-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <motion.div key="onboarding" className="size-full pointer-events-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <OnboardingScreen onComplete={(username) => {
               console.log('Onboarding Complete:', username);
-              setScreen('menu');
+              setScreen('transition');
+              setTimeout(() => {
+                  setScreen('menu');
+              }, 2000);
             }} />
           </motion.div>
+        )}
+
+        {screen === 'transition' && (
+            <motion.div key="transition" className="size-full z-[100]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <TransitionParticles />
+            </motion.div>
         )}
 
         {screen === 'game' && (
