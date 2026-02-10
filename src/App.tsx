@@ -241,7 +241,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* About the Game – Semantic SEO Section */}
+            {/* About the Game – SEO Section */}
             <section
               aria-label="About Puyo Live"
               className="relative z-10 px-8 py-8 max-w-4xl mx-auto"
