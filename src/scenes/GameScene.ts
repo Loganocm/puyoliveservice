@@ -12,6 +12,8 @@ import { GameEngine, GameState } from '../core/GameEngine';
 import { NetworkManager } from '../core/NetworkManager';
 import { GameEvents } from '../core/GameEvents';
 import { SettingsOverlay } from '../ui/SettingsOverlay';
+import { backgroundManager } from '../core/BackgroundManager';
+import { Assets } from 'pixi.js';
 
 interface Particle {
     x: number; y: number;
@@ -31,7 +33,7 @@ export class GameScene implements IScene {
     container: Container;
 
     // Visual Elements
-    private staticBg: Graphics; // Fullscreen background layer
+    private staticBg: Sprite; // Fullscreen background layer
     private gameContentWrapper: Container; // Wrapper for all game content (scaled/centered together)
     private graphics: Graphics;
     private puyoContainer: Container;
@@ -114,8 +116,21 @@ export class GameScene implements IScene {
         this.container = new Container();
 
         // Initialize Static Background (fullscreen, not scaled with game content)
-        this.staticBg = new Graphics();
+        this.staticBg = new Sprite();
+        this.staticBg.anchor.set(0.5);
+        this.staticBg.position.set(window.innerWidth / 2, window.innerHeight / 2);
         this.container.addChild(this.staticBg);
+
+        // Load Random Background
+        const bgUrl = backgroundManager.getRandomBackground(backgroundManager.getMenuBackground());
+        if (bgUrl) {
+            Assets.load(bgUrl).then((texture) => {
+                if (this.staticBg && !this.staticBg.destroyed) {
+                    this.staticBg.texture = texture;
+                    this.resizeBackground();
+                }
+            });
+        }
 
         // Game content wrapper - this single container holds ALL game elements
         // and gets scaled/centered as a unit for responsive design
@@ -517,6 +532,32 @@ export class GameScene implements IScene {
         // UI container at origin of base dimensions
         this.uiContainer.position.set(0, 0);
         this.uiContainer.scale.set(1);
+        this.uiContainer.scale.set(1);
+
+        this.resizeBackground();
+    }
+
+    private resizeBackground() {
+        if (!this.staticBg || !this.staticBg.texture) return;
+
+        const screenW = SceneManager.screenWidth;
+        const screenH = SceneManager.screenHeight;
+
+        this.staticBg.position.set(screenW / 2, screenH / 2);
+
+        // Cover logic
+        const bgRatio = this.staticBg.texture.width / this.staticBg.texture.height;
+        const screenRatio = screenW / screenH;
+
+        if (screenRatio > bgRatio) {
+            this.staticBg.width = screenW;
+            this.staticBg.height = screenW / bgRatio;
+        } else {
+            this.staticBg.height = screenH;
+            this.staticBg.width = screenH * bgRatio;
+        }
+
+        this.staticBg.alpha = 0.4; // Darken for gameplay visibility
     }
 
     // Called by SceneManager when window resizes
@@ -1511,46 +1552,56 @@ export class GameScene implements IScene {
 
         try {
             // Draw Static Background - fills entire viewport
-            this.staticBg.clear();
-            this.staticBg.removeChildren();
+            // Draw Static Background - fills entire viewport
+            // staticBg is a Sprite now, managed by resizeBackground() and texture loading.
+            // We do NOT plain clear/draw rects on it every frame unless we want to clear children (dim overlay).
 
-            const screenW = SceneManager.screenWidth;
-            const screenH = SceneManager.screenHeight;
+            // If we have a texture, we just ensure it's positioned (resize handles this).
+            // We just need to ensure the dim overlay is present if not already.
 
-            const bgTex = ResourceManager.backgroundTexture;
-            if (bgTex && bgTex !== Texture.WHITE) {
-                const sprite = new Sprite(bgTex);
+            // Actually, staticBg is a Container/Sprite. 
+            // If we want to support fallback (no texture), we might need a Graphics child.
 
-                // Cover-style scaling: fill viewport while maintaining aspect ratio
-                const texAspect = bgTex.width / bgTex.height;
-                const screenAspect = screenW / screenH;
+            // Let's simplify: 
+            // If texture is loaded, staticBg shows it.
+            // We need a dim overlay ON TOP of it.
 
-                if (screenAspect > texAspect) {
-                    // Screen is wider than texture
-                    sprite.width = screenW;
-                    sprite.height = screenW / texAspect;
-                } else {
-                    // Screen is taller than texture
-                    sprite.height = screenH;
-                    sprite.width = screenH * texAspect;
-                }
+            // Ensure dim overlay exists
+            // We can't easily check children type without casting, but we can name it.
 
-                // Center the background
-                sprite.x = (screenW - sprite.width) / 2;
-                sprite.y = (screenH - sprite.height) / 2;
+            // Alternative: Just use a separate Graphics for dimming in the container, ABOVE staticBg.
+            // But staticBg is added to this.container.
 
-                this.staticBg.addChild(sprite);
+            // Let's just fix the crash first:
+            // this.staticBg is a Sprite. It does NOT have .clear(), .rect(), .fill().
 
-                // Add dark overlay to dim the background (55% opacity)
-                const dimOverlay = new Graphics();
-                dimOverlay.rect(0, 0, screenW, screenH);
-                dimOverlay.fill({ color: 0x000000, alpha: 0.55 });
-                this.staticBg.addChild(dimOverlay);
+            if (!this.staticBg.texture || this.staticBg.texture === Texture.WHITE) {
+                // Fallback: Use a simple colored texture or nothing?
+                // Since we changed it to Sprite, we can't draw on it.
+                // We can assign a 1x1 white texture and tint it?
+                this.staticBg.texture = Texture.WHITE;
+                this.staticBg.tint = 0x0a0a12;
+                this.staticBg.width = SceneManager.screenWidth;
+                this.staticBg.height = SceneManager.screenHeight;
             } else {
-                // Fallback to solid dark color
-                this.staticBg.rect(0, 0, screenW, screenH);
-                this.staticBg.fill({ color: 0x0a0a12, alpha: 1.0 });
+                this.staticBg.tint = 0xFFFFFF; // Reset tint
             }
+
+            // We need a dim overlay.
+            // Let's check if we have a child for dimming.
+            // Actually, we can just use staticBg.alpha?
+            // In resizeBackground we set alpha to 0.4.
+            // That might be enough? The user asked for "fading particle effect" earlier, 
+            // but here we are just doing background image.
+
+            // Previous code had a "dimOverlay" child.
+            // If we want to replicate that:
+            // We shouldn't do it inside draw() every frame if it creates new objects!
+            // The previous code WAS creating new Graphics every frame: `const dimOverlay = new Graphics()`
+            // That is bad for performance.
+
+            // Let's just rely on this.staticBg.alpha = 0.4 set in resizeBackground for now.
+            // And remove the offending lines.
 
             this.graphics.clear();
             this.puyoContainer.removeChildren();

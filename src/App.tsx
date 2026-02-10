@@ -8,9 +8,7 @@ import {
   User
 } from 'lucide-react';
 import puyoHeaderLogo from '@/resources/puyoheader.svg';
-import bg1 from '@/resources/felix-mittermeier-milky-way-5295160.jpg';
-import bg2 from '@/resources/chiemseherin-milky-way-8149815.jpg';
-import bg3 from '@/resources/charlvera-polar-lights-5858656.jpg';
+import { backgroundManager } from '@/core/BackgroundManager';
 import { PuyoFooter } from '@/components/PuyoFooter';
 import { WaterFillButton } from '@/components/WaterFillButton';
 import { PlayerStatsPanel } from '@/components/PlayerStatsPanel';
@@ -48,9 +46,10 @@ export default function App() {
 
   // Set random background on component mount
   useEffect(() => {
-    const backgrounds = [bg1, bg2, bg3];
-    const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
-    setBgImage(randomBg);
+    // Select a random background for the menu
+    const bg = backgroundManager.getRandomBackground();
+    backgroundManager.setMenuBackground(bg);
+    setBgImage(bg);
   }, []);
   
   // Track if we've shown the menu animation once already
