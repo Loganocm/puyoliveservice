@@ -1,8 +1,14 @@
-
 // Use Vite's import.meta.glob to load all background images
 // Use relative path to avoid alias issues with glob
-const bgModules = import.meta.glob('../resources/backgrounds/*.jpg', { eager: true, as: 'url' });
-const backgrounds = Object.values(bgModules);
+// Note: 'as: url' might still return a Module with default export in some Vite versions
+const bgModules = import.meta.glob('../resources/backgrounds/*.jpg', { eager: true, query: '?url', import: 'default' });
+
+// Ensure we extract the string URL. 
+// If import: 'default' works as expected with eager, it should be the string.
+// If not, we might get a module. Let's handle both.
+const backgrounds = Object.values(bgModules).map((mod: any) => {
+    return (typeof mod === 'string') ? mod : mod.default;
+});
 
 class BackgroundManager {
     private currentMenuBg: string = '';
