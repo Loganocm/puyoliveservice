@@ -5,7 +5,7 @@ import puyoPng from '../resources/puyo.png';
 
 export class ResourceManager {
   private static sheetTexture: Texture;
-  public static backgroundTexture: Texture;
+  // public static backgroundTexture: Texture;
   private static puyoTextures: Map<string, Texture> = new Map();
 
   public static async load() {
@@ -13,12 +13,12 @@ export class ResourceManager {
     try {
       // Load the play background
       // this.backgroundTexture = await Assets.load(playbgPng);
-      this.backgroundTexture = Texture.WHITE;
+      // this.backgroundTexture = Texture.WHITE;
     } catch (e) {
       console.warn("Failed to load high-res background, falling back/ignoring", e);
       // Fallback or empty? dynamic graphics will be used if this is null usually,
       // but we'll handle it in GameScene
-      this.backgroundTexture = Texture.WHITE; // Placeholder
+      // this.backgroundTexture = Texture.WHITE; // Placeholder
     }
   }
 
