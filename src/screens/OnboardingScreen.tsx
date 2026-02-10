@@ -95,7 +95,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       />
 
       <motion.div 
-        className="w-full max-w-md px-8 relative z-10"
+        className="w-full max-w-md px-8 py-8 relative z-10 bg-[#1a1a24] border border-white/10 rounded-3xl shadow-2xl backdrop-blur-md"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
