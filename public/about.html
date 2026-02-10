@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Puyo Live | Browser-Based Puyo Puyo Alternative</title>
+    <meta name="description"
+        content="Learn about Puyo Live — a free, competitive, browser-based Puyo Puyo alternative with real-time multiplayer, classic chaining mechanics, and no download required.">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #333;
+        }
+
+        .logo {
+            color: #ff4d00;
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 2rem;
+            margin: 50px 0 25px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ff4d00;
+        }
+
+        h2 {
+            color: #ff4d00;
+            font-size: 1.4rem;
+            margin: 35px 0 15px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            color: #bbb;
+        }
+
+        ul {
+            margin: 15px 0 15px 30px;
+            color: #bbb;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        a {
+            color: #ff4d00;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 50px;
+            padding: 12px 30px;
+            background: #ff4d00;
+            color: #000;
+            font-weight: 700;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .back-link:hover {
+            background: #ff6622;
+            text-decoration: none;
+        }
+
+        .section {
+            background: #ffffff08;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+
+        .highlight {
+            background: #ff4d0020;
+            border-left: 3px solid #ff4d00;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .links-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+            flex-wrap: wrap;
+        }
+
+        .links-row a {
+            display: inline-block;
+            padding: 12px 30px;
+            font-weight: 700;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .links-row .back-link {
+            margin-top: 0;
+        }
+
+        .links-row .secondary-link {
+            background: transparent;
+            color: #ff4d00;
+            border: 2px solid #ff4d00;
+        }
+
+        .links-row .secondary-link:hover {
+            background: #ff4d0015;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">Puyo.Live</div>
+            <p class="subtitle">About the Game</p>
+        </div>
+
+        <h1>What is Puyo Live?</h1>
+
+        <div class="section">
+            <p><strong>Puyo Live</strong> is a free, browser-based Puyo Puyo alternative built from
+                the ground up for competitive online play. No downloads, no installs — just open your
+                browser and start chaining.</p>
+            <p>Whether you're a newcomer learning to build your first chain or a seasoned competitive
+                stacker grinding ranked matches, Puyo Live delivers the fast-paced match-4 puzzle action
+                you love with modern performance and real-time multiplayer.</p>
+        </div>
+
+        <h1>Features</h1>
+
+        <div class="section">
+            <h2>Real-Time Multiplayer</h2>
+            <p>Play Puyo online against opponents from around the world with low-latency WebSocket
+                connections. Jump into ranked matches for Elo-rated competition, or create custom rooms
+                to play with friends.</p>
+        </div>
+
+        <div class="section">
+            <h2>Classic Chaining Mechanics</h2>
+            <p>Puyo Live faithfully recreates the chain-building puzzle gameplay that fans love. Master
+                advanced techniques like:</p>
+            <ul>
+                <li><strong>GTR (Great Tanaka Rensa)</strong> — the foundational competitive chain pattern</li>
+                <li><strong>Stairs</strong> — a beginner-friendly staircase chain to build consistent combos</li>
+                <li><strong>Sandwich Chaining</strong> — an advanced technique for maximum garbage output</li>
+            </ul>
+            <p>Build massive chains, send devastating garbage, and outplay your opponents with superior
+                stacking strategy.</p>
+        </div>
+
+        <div class="section">
+            <h2>Competitive Rankings</h2>
+            <p>Climb the global leaderboard with Elo-based matchmaking. Track your stats, review your
+                match history, and prove you're the best competitive stacker on the web.</p>
+        </div>
+
+        <div class="section">
+            <h2>Single Player Modes</h2>
+            <p>Warm up with timed challenges — 3-minute, 5-minute, or 10-minute time attacks to practice
+                your chains and improve your score before heading into multiplayer.</p>
+        </div>
+
+        <div class="section">
+            <h2>Built for the Browser</h2>
+            <p>Puyo Live runs entirely in your web browser with no plugins or downloads required. Built
+                with modern web technologies for smooth 60fps gameplay on any device. Play the premier
+                browser Puyo experience anywhere, anytime.</p>
+        </div>
+
+        <div class="highlight">
+            <p><strong>Puyo Live is a fan-made project.</strong> "Puyo Puyo" is a trademark of SEGA
+                Corporation. This project is not affiliated with, endorsed by, or sponsored by SEGA.</p>
+        </div>
+
+        <div class="links-row">
+            <a href="/" class="back-link">← Back to Game</a>
+            <a href="/privacy" class="secondary-link">Terms &amp; Privacy</a>
+        </div>
+    </div>
+</body>
+
+</html>

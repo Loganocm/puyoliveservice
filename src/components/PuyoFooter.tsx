@@ -58,7 +58,7 @@ export function PuyoFooter() {
         ))}
         {/* About / Legal Link */}
         <motion.a
-            href="/privacy"
+            href="/about"
             target="_blank"
             rel="noopener noreferrer"
             className="px-3 py-1.5 rounded-md text-xs font-bold text-white/60 hover:text-white border border-white/5 cursor-pointer flex items-center justify-center no-underline"
