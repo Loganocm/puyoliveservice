@@ -9,7 +9,12 @@ interface SettingsScreenProps {
   onBack: () => void;
 }
 
+import { BackButton } from '@/components/BackButton';
+
+// ...
+
 export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) {
+  // ... existing state and logic ...
   const [das, setDas] = useState(SettingsManager.das);
   const [arr, setArr] = useState(SettingsManager.arr);
   const [softDrop, setSoftDrop] = useState(SettingsManager.sdf);
@@ -23,15 +28,6 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
     if (key === 'masterVolume') {
       SoundManager.updateActiveVolumes();
     }
-
-    // Debounce save or save only on interaction end?
-    // Saving on every pixel drag (60fps) triggers synchronous localStorage write which lags UI.
-    // Ideally we save onEnd, but for now let's just NOT save here, or debounce.
-    // Given the simple structure, let's wrap save in a timeout or just skip it during drag?
-    // Better: Rely on a separate save trigger or just don't save per-pixel.
-    // Let's rely on the user stopping interaction.
-    // But we don't have onMouseUp easily mapped for all.
-    // Let's implement a simple debounce.
   };
 
   const saveSettings = () => {
@@ -94,6 +90,8 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
           backgroundSize: '40px 40px',
         }}
       />
+      
+      <BackButton onClick={onBack} />
 
       <div className="w-full max-w-xl px-8 relative z-10">
         <motion.h1 
@@ -161,16 +159,6 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
           >
             <Gamepad2 className="w-6 h-6 group-hover:text-[#FF5733] transition-colors" />
             CONTROLS
-          </motion.button>
-
-          <motion.button
-            className="w-full py-4 text-white/30 hover:text-white font-bold text-xs tracking-[0.2em] uppercase transition-colors duration-200 cursor-pointer"
-            onClick={onBack}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.4 }}
-          >
-            GO BACK
           </motion.button>
         </div>
       </div>

@@ -12,12 +12,12 @@ interface Player {
   winRate: number;
 }
 
-import { useEffect, useState } from 'react';
-import { APIClient } from '@/api/client';
+import { BackButton } from '@/components/BackButton';
 
 // ... imports
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
+  // ... existing state and logic ...
   const [players, setPlayers] = useState<Player[]>([]);
   const [userStats, setUserStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +79,8 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
           backgroundSize: '40px 40px',
         }}
       />
+      
+      <BackButton onClick={onBack} />
 
       <div className="w-full max-w-4xl px-8">
         <motion.h1 
@@ -165,16 +167,6 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
           </div>
         </motion.div>
         )}
-
-        <motion.button
-          className="w-full mt-12 px-6 py-4 text-white/30 hover:text-white font-bold text-xs tracking-[0.2em] uppercase transition-colors duration-200 cursor-pointer"
-          onClick={onBack}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
-        >
-          GO BACK
-        </motion.button>
       </div>
     </div>
   );

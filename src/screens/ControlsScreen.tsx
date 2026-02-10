@@ -9,15 +9,15 @@ interface ControlsScreenProps {
   onBack: () => void;
 }
 
+import { BackButton } from '@/components/BackButton';
+
+// ...
+
 export function ControlsScreen({ onBack }: ControlsScreenProps) {
+  // ...
   const [mode, setMode] = useState<'keyboard' | 'controller'>('keyboard');
 
   const [listeningFor, setListeningFor] = useState<string | null>(null);
-  // const [bindings, setBindings] = useState(...) // Unused, direct manager access used in render
-  // const [bindings, setBindings] = useState(() => mode === 'keyboard' ? ControlsManager.getAllBindings() : ControlsManager.getAllControllerBindings());
-
-  // Force refresh bindings when mode changes
-  // Force refresh bindings when mode changes
   const [, setUpdateTrigger] = useState(0);
 
   const handleReset = () => {
@@ -61,11 +61,6 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [listeningFor, mode]);
 
-  // Controller Listener (Simple Polling or Event)
-  // For now we only implement Keyboard re-binding fully requested in prompt "click on inputs to bind them".
-  // Controller binding usually requires Gamepad API polling. 
-  // I will focus on Keyboard binding first as it's the most common request context here.
-
   const actions: GameAction[] = ['moveLeft', 'moveRight', 'softDrop', 'hardDrop', 'rotateCCW', 'rotateCW'];
 
   const controls = actions.map(action => {
@@ -98,6 +93,8 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
           backgroundSize: '40px 40px',
         }}
       />
+      
+      <BackButton onClick={onBack} />
 
       <div className="w-full max-w-xl px-8">
         <motion.h1 
@@ -196,18 +193,6 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
             whileTap={{ scale: 0.98 }}
           >
             RESET TO DEFAULTS
-          </motion.button>
-
-          <motion.button
-            className="w-full px-6 py-3 text-white/60 hover:text-white font-bold text-sm tracking-wider uppercase transition-colors duration-200 cursor-pointer"
-            onClick={onBack}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.5 }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            BACK
           </motion.button>
         </div>
       </div>

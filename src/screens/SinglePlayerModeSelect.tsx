@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Clock, Target } from 'lucide-react';
+import { BackButton } from '@/components/BackButton';
 
 interface SinglePlayerModeSelectProps {
   onSelectMode: (mode: '3min' | '5min' | '10min' | 'practice') => void;
@@ -27,6 +28,8 @@ export function SinglePlayerModeSelect({ onSelectMode, onBack }: SinglePlayerMod
           backgroundSize: '40px 40px',
         }}
       />
+      
+      <BackButton onClick={onBack} />
 
       <div className="w-full max-w-md px-8">
         <motion.h1 

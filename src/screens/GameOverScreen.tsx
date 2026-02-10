@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { RotateCcw, LogOut, Trophy, Zap } from 'lucide-react';
+import { GameButton } from '../components/GameButton';
 
 interface GameOverScreenProps {
   score: number;
@@ -132,30 +133,22 @@ export function GameOverScreen({
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.4 }}
           >
-            <motion.button
-              className="w-full h-14 rounded-xl font-bold text-lg tracking-wider flex items-center justify-center gap-3"
-              style={{
-                background: `linear-gradient(135deg, ${titleColor}, ${titleColor}CC)`,
-                color: '#000',
-                boxShadow: `0 0 20px ${titleColor}40`,
-              }}
-              whileHover={{ scale: 1.02, boxShadow: `0 0 30px ${titleColor}60` }}
-              whileTap={{ scale: 0.98 }}
+            <GameButton
+              variant="primary"
               onClick={onRestart}
+              icon={RotateCcw}
+              className={!isWin && !isTimeTrial ? "!from-red-500 !to-red-600 !shadow-red-500/40" : ""}
             >
-              <RotateCcw className="w-5 h-5" />
               {restartLabel}
-            </motion.button>
+            </GameButton>
 
-            <motion.button
-              className="w-full h-14 rounded-xl font-bold text-lg tracking-wider flex items-center justify-center gap-3 bg-white/10 text-white/80 border border-white/20"
-              whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.15)' }}
-              whileTap={{ scale: 0.98 }}
+            <GameButton
+              variant={isMultiplayer ? "danger" : "secondary"}
               onClick={onExit}
+              icon={LogOut}
             >
-              <LogOut className="w-5 h-5" />
               EXIT
-            </motion.button>
+            </GameButton>
           </motion.div>
         </div>
       </motion.div>

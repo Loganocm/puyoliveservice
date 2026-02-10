@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { Play, RotateCcw, LogOut } from 'lucide-react';
+import { GameButton } from '../components/GameButton';
 
 interface PauseScreenProps {
   onResume: () => void;
@@ -35,13 +36,13 @@ export function PauseScreen({
           className="rounded-3xl p-8 backdrop-blur-xl"
           style={{
             background: 'linear-gradient(135deg, rgba(20,20,30,0.95), rgba(10,10,20,0.98))',
-            border: '2px solid rgba(255,255,255,0.2)',
-            boxShadow: '0 0 60px rgba(255,255,255,0.1), 0 25px 50px rgba(0,0,0,0.5)',
+            border: '2px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 0 60px rgba(255,255,255,0.05), 0 25px 50px rgba(0,0,0,0.5)',
           }}
         >
           {/* Title */}
           <motion.h1
-            className="text-4xl font-black text-center mb-8 tracking-wider text-white"
+            className="text-4xl font-black text-center mb-8 tracking-wider text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]"
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.1 }}
@@ -56,44 +57,29 @@ export function PauseScreen({
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.2 }}
           >
-            <motion.button
-              className="relative w-full h-14 rounded-xl font-bold text-lg tracking-wider flex items-center justify-center bg-gradient-to-r from-emerald-500 to-green-500 text-black"
-              style={{
-                boxShadow: '0 0 20px rgba(34, 197, 94, 0.4)',
-              }}
-              whileHover={{ scale: 1.02, boxShadow: '0 0 30px rgba(34, 197, 94, 0.6)' }}
-              whileTap={{ scale: 0.98 }}
+            <GameButton
+              variant="primary"
               onClick={onResume}
+              icon={Play}
             >
-              <div className="absolute left-6">
-                <Play className="w-5 h-5" />
-              </div>
               RESUME
-            </motion.button>
+            </GameButton>
 
-            <motion.button
-              className="relative w-full h-12 rounded-xl font-bold tracking-wider flex items-center justify-center bg-white/10 text-white/80 border border-white/20"
-              whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.15)' }}
-              whileTap={{ scale: 0.98 }}
+            <GameButton
+              variant="secondary"
               onClick={onRestart}
+              icon={RotateCcw}
             >
-              <div className="absolute left-6">
-                <RotateCcw className="w-4 h-4" />
-              </div>
               RESTART
-            </motion.button>
+            </GameButton>
 
-            <motion.button
-              className="relative w-full h-12 rounded-xl font-bold tracking-wider flex items-center justify-center bg-red-500/20 text-red-400 border border-red-500/30"
-              whileHover={{ scale: 1.02, backgroundColor: 'rgba(239, 68, 68, 0.3)' }}
-              whileTap={{ scale: 0.98 }}
+            <GameButton
+              variant="danger"
               onClick={onExit}
+              icon={LogOut}
             >
-              <div className="absolute left-6">
-                <LogOut className="w-4 h-4" />
-              </div>
               EXIT
-            </motion.button>
+            </GameButton>
           </motion.div>
         </div>
       </motion.div>
