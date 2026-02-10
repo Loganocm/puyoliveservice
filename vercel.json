@@ -7,6 +7,10 @@
         {
             "source": "/privacy",
             "destination": "/legal.html"
+        },
+        {
+            "source": "/about",
+            "destination": "/about.html"
         }
     ]
 }
