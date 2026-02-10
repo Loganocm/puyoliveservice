@@ -36,7 +36,6 @@
     "typescript": "^5.7.2"
   },
   "devDependencies": {
-    "@types/socket.io": "^3.0.1",
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",
     "vitest": "^2.1.8"
