@@ -207,18 +207,19 @@ export default function App() {
               </div>
             </motion.header>
 
+            {/* Centered Logo */}
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: hasVisitedMenu.current ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
+              className="flex justify-center px-8 pt-2 pb-4 z-10"
+            >
+              <img src={puyoHeaderLogo} alt="Puyo Live" className="w-full max-w-lg" />
+            </motion.div>
+
             {/* Main Menu */}
             <div className="relative z-10 flex flex-1 items-center justify-center px-8" style={{ minHeight: 'calc(100vh - 240px)' }}>
               <div className="w-full max-w-4xl space-y-6">
-                {/* Logo */}
-                <motion.div
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: hasVisitedMenu.current ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
-                  className="flex justify-center mb-4"
-                >
-                  <img src={puyoHeaderLogo} alt="Puyo Live" className="w-full max-w-lg" />
-                </motion.div>
                 {menuItems.map((item, index) => (
                   <motion.div
                     key={item.label}
