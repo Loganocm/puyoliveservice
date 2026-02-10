@@ -1,13 +1,15 @@
 
 // Use Vite's import.meta.glob to load all background images
-const bgModules = import.meta.glob('@/resources/backgrounds/*.jpg', { eager: true, as: 'url' });
+// Use relative path to avoid alias issues with glob
+const bgModules = import.meta.glob('../resources/backgrounds/*.jpg', { eager: true, as: 'url' });
 const backgrounds = Object.values(bgModules);
 
 class BackgroundManager {
     private currentMenuBg: string = '';
 
     constructor() {
-        console.log(`[BackgroundManager] Loaded ${backgrounds.length} backgrounds.`);
+        console.log(`[BackgroundManager] Loaded ${backgrounds.length} backgrounds from ../resources/backgrounds/*.jpg`);
+        console.log(`[BackgroundManager] Backgrounds:`, backgrounds);
     }
 
     /**
