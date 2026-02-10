@@ -28,13 +28,14 @@ export interface MatchStats {
     player2GarbageSent: number;
 }
 // V2 Replay System - Frame-based input recording for deterministic playback
-export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD';
-// L=Left, R=Right, CW=RotateCW, CC=RotateCCW, SD=SoftDropStart, SU=SoftDropStop, HD=HardDrop
+export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
+// L=Left, R=Right, CW=RotateCW, CC=RotateCCW, SD=SoftDropStart, SU=SoftDropStop, HD=HardDrop, G=GarbageRecv
 
 export interface ReplayInput {
     f: number;      // Frame number
     p: 0 | 1;       // Player index
     i: InputType;   // Input type
+    a?: number;     // Amount (for Garbage 'G')
 }
 
 export interface ReplayFile {
@@ -153,11 +154,12 @@ export class GameRoom {
     }
 
     // V2: Record frame-based input
-    recordInput(playerIndex: 0 | 1, inputType: InputType) {
+    recordInput(playerIndex: 0 | 1, inputType: InputType, amount?: number) {
         this.replayInputs.push({
             f: this.frameCount,
             p: playerIndex,
-            i: inputType
+            i: inputType,
+            a: amount
         });
     }
 

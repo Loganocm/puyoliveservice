@@ -29,6 +29,7 @@ import { GameOverlay } from '@/screens/GameOverlay';
 import { SceneManager } from '@/core/SceneManager';
 import { GameScene } from '@/scenes/GameScene';
 import { MenuScene } from '@/scenes/MenuScene';
+import { ProfileScreen } from '@/screens/ProfileScreen';
 
 type Screen = 'menu' | 'single' | 'multi' | 'leaderboard' | 'settings' | 'controls' | 'onboarding' | 'game';
 
@@ -36,6 +37,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('onboarding'); // Default to onboarding until auth check
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   // Restore reactive user state
   const [user, setUser] = useState<UserData | null>(AuthManager.currentUser as UserData | null);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -209,6 +211,15 @@ export default function App() {
                          </div>
                          <button
                             onClick={() => {
+                              setShowUserMenu(false);
+                              setShowProfile(true);
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
+                         >
+                           <User size={16} /> My Profile
+                         </button>
+                         <button
+                            onClick={() => {
                               AuthManager.logout();
                               setShowUserMenu(false);
                               setScreen('onboarding');
@@ -367,6 +378,10 @@ export default function App() {
           level={levelUpLevel} 
           onComplete={() => setShowLevelUp(false)} 
         />
+      )}
+
+      {showProfile && (
+        <ProfileScreen onClose={() => setShowProfile(false)} />
       )}
     </div>
   );

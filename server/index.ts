@@ -497,6 +497,13 @@ io.on('connection', (socket: Socket) => {
         room.recordChain(socket.id, data.chainLength);
         room.recordReplayEvent('chain', socket.id, { length: data.chainLength });
       }
+      // V2 Replay: Record garbage event
+      // Find opponent (who receives the garbage)
+      const senderIndex = room.getPlayerIndex(socket.id);
+      if (senderIndex !== -1) {
+        const targetIndex = senderIndex === 0 ? 1 : 0;
+        room.recordInput(targetIndex as 0 | 1, 'G', data.amount);
+      }
       room.recordReplayEvent('garbage', socket.id, { amount: data.amount });
     }
     // Send to everyone else in the room

@@ -115,15 +115,14 @@ export class GameEngine {
     public fallingDestinations: { c: number, r: number, destR: number }[] = []; // For normal gravity
     public garbageAnimationTimer = 0;
 
-    // Replay System
-    public replayData: { seed: number, events: any[] } = { seed: 0, events: [] };
+    // Replay System V2
+    public replayInputs: { f: number, i: string, a?: number }[] = [];
     public isReplaying: boolean = false;
     private replayCursor: number = 0;
 
     constructor(seed?: number) {
         // If no seed provided, generate one
         this.seed = seed ?? Math.floor(Math.random() * 2147483647);
-        this.replayData.seed = this.seed;
         this.board = new Board();
 
         // Warmup PRNG to avoid initialization bias
@@ -146,42 +145,37 @@ export class GameEngine {
 
     private currentBag: { main: PuyoColor, sub: PuyoColor }[] = [];
 
-    // Record an action at the current frame
+    // Record an action (Legacy/Unused in V2 client-side, handled by NetworkManager)
     private recordAction(type: string, data?: any) {
-        if (this.isReplaying) return;
-        this.replayData.events.push({
-            f: this.frameCount,
-            t: type,
-            d: data
-        });
+        // V2: Inputs are recorded by GameScene/NetworkManager sending 'record_input' to server.
+        // GameEngine does not need to store them locally unless we want local replay save.
     }
 
-    public getReplayData() {
-        return this.replayData;
-    }
-
-    public loadReplay(data: { seed: number, events: any[] }) {
+    public loadReplay(data: { seed: number, inputs: { f: number, i: string, a?: number }[] }) {
         this.seed = data.seed;
-        this.replayData = data;
+        this.replayInputs = data.inputs;
         this.isReplaying = true;
         this.replayCursor = 0;
         this.frameCount = 0;
         this.board = new Board();
         this.state = GameState.SPAWN;
+
+        // Reset PRNG
         this.seed = data.seed;
         this.random(); this.random(); this.random(); this.random();
-        this.currentBag = this.generateBag(true);
+
+        this.currentBag = this.generateBag(true); // First bag
         this.nextPieces = [];
-        // this.fillNextQueue(); // Helper likely missing or farther down
+        this.fillNextQueue();
     }
 
     public processReplayFrame() {
         if (!this.isReplaying) return;
 
-        while (this.replayCursor < this.replayData.events.length) {
-            const event = this.replayData.events[this.replayCursor];
-            if (event.f <= this.frameCount) {
-                this.executeReplayEvent(event);
+        while (this.replayCursor < this.replayInputs.length) {
+            const input = this.replayInputs[this.replayCursor];
+            if (input.f <= this.frameCount) {
+                this.executeReplayInput(input);
                 this.replayCursor++;
             } else {
                 break;
@@ -189,24 +183,16 @@ export class GameEngine {
         }
     }
 
-    private executeReplayEvent(event: any) {
-        switch (event.t) {
-            case 'move':
-                if (event.d === -1) this.movePiece(-1); // Assuming movePiece(-1) for left
-                else if (event.d === 1) this.movePiece(1); // Assuming movePiece(1) for right
-                break;
-            case 'rotateCW':
-                this.rotate(1); // Assuming rotate(1) for clockwise
-                break;
-            case 'rotateCCW':
-                this.rotate(-1); // Assuming rotate(-1) for counter-clockwise
-                break;
-            case 'softDrop':
-                this.softDrop = event.d;
-                break;
-            case 'addGarbage':
-                this.addGarbage(event.d);
-                break;
+    private executeReplayInput(input: { f: number, i: string, a?: number }) {
+        switch (input.i) {
+            case 'L': this.movePiece(-1); break;
+            case 'R': this.movePiece(1); break;
+            case 'CW': this.rotate(1); break;
+            case 'CC': this.rotate(-1); break;
+            case 'SD': this.softDrop = true; break;
+            case 'SU': this.softDrop = false; break;
+            case 'HD': this.hardDrop(); break;
+            case 'G': if (input.a) this.addGarbage(input.a); break;
         }
     }
 
@@ -607,6 +593,14 @@ export class GameEngine {
                 this.lockPiece();
             }
         }
+    }
+
+    public getSubPos(x: number, y: number, rot: number) {
+        const offsets = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+        return {
+            x: x + offsets[rot].x,
+            y: y + offsets[rot].y
+        };
     }
 
     private lockPiece() {

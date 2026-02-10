@@ -24,6 +24,7 @@ app.use((req, res, next) => {
 const allowedOrigins = [
   config.corsOrigin, // The one from ENV (e.g. "https://puyo.live")
   "http://localhost:5173",
+  "http://localhost:3000",
   "https://puyio.vercel.app",
   "https://puyo.live",
   "https://www.puyo.live",

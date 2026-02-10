@@ -313,7 +313,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
 
             {/* Ranked Banner */}
             <MenuBanner
-                title="TETRA LEAGUE"
+                title="RANKED"
                 description={AuthManager.isGuest ? "LOGIN REQUIRED TO PLAY RANKED" : "COMPETITIVE MATCHMAKING • CLIMB THE LADDER"}
                 icon={Trophy}
                 color="#FF5733"
