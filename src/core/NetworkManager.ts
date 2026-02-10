@@ -146,6 +146,10 @@ export class NetworkManager {
             console.error('Connection Error:', error);
         });
 
+        this.socket.on('room_list_update', (rooms: any[]) => {
+            this.emit('room_list_update', rooms);
+        });
+
         // Add handler for auth response
         this.socket.on('authenticated', (data: { success: boolean, user?: any, error?: string }) => {
             console.log('Socket Auth:', data);
@@ -260,6 +264,11 @@ export class NetworkManager {
         }
         console.log("NetworkManager: Requesting requeue from room", roomId);
         this.socket.emit('requeue', { roomId });
+    }
+
+    public static getRooms() {
+        if (!this.socket) return;
+        this.socket.emit('get_rooms');
     }
 
     public static on(event: string, callback: NetworkCallback) {

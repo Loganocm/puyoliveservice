@@ -35,7 +35,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
         APIClient.getMe().catch(() => null)
       ]);
 
-      const mappedPlayers = lbData.leaderboard.map((p: any, index: number) => ({
+      const mappedPlayers = lbData.leaderboard.map((p: any, _: number) => ({
         rank: p.rank,
         username: p.username,
         elo: p.elo_rating,

@@ -129,6 +129,9 @@ export class InputManager {
   }
 
   private pollGamepads() {
+    // Reset gamepad state for this frame to avoid sticky keys if controller disconnected
+    this.padKeys = {};
+
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     if (!gamepads) return;
 
@@ -139,7 +142,10 @@ export class InputManager {
       for (let i = 0; i < gp.buttons.length; i++) {
         const btn = gp.buttons[i];
         const code = `GP_${i}`;
-        this.padKeys[code] = btn.pressed;
+        // Use OR logic so if *any* controller presses it, it registers
+        if (btn.pressed) {
+          this.padKeys[code] = true;
+        }
       }
 
       // Analog Sticks -> D-Pad Mapping (Left Stick)

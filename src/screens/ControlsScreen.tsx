@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { useState, useEffect } from 'react';
 import { Keyboard, Gamepad2 } from 'lucide-react';
 import { ControlsManager } from '@/core/ControlsManager';
+import { Input } from '@/core/Input';
 import type { GameAction } from '@/core/ControlsManager';
 import { SoundManager } from '@/core/SoundManager';
 
@@ -48,11 +49,8 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
             return;
         }
 
-        // Bind it
-        // We know listeningFor is a valid action key string, but TS might not.
-        // Cast to GameAction
         ControlsManager.setKey(listeningFor as any, e.code);
-        SoundManager.play('click'); // Need confirm sound?
+        SoundManager.play('click');
         setListeningFor(null);
         setUpdateTrigger(prev => prev + 1);
     };
@@ -60,6 +58,58 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [listeningFor, mode]);
+
+  // Gamepad Listener for Binding
+  useEffect(() => {
+    if (!listeningFor || mode !== 'controller') return;
+
+    let animationFrameId: number;
+    let frameCount = 0;
+
+    const checkGamepad = () => {
+        // Debounce slightly to prevent immediate binding if user is holding button from nav
+        frameCount++;
+        if (frameCount < 10) {
+            animationFrameId = requestAnimationFrame(checkGamepad);
+            return;
+        }
+
+        const btn = Input.getLastPressedButton();
+        if (btn) {
+            ControlsManager.setControllerKey(listeningFor as any, btn);
+            SoundManager.play('click');
+            setListeningFor(null);
+            setUpdateTrigger(prev => prev + 1);
+        } else {
+            animationFrameId = requestAnimationFrame(checkGamepad);
+        }
+    };
+    
+    animationFrameId = requestAnimationFrame(checkGamepad);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [listeningFor, mode]);
+  
+  // Controller Connection Status
+  const [controllerConnected, setControllerConnected] = useState(false);
+  useEffect(() => {
+      const checkConnection = () => {
+          const gps = navigator.getGamepads();
+          const isConnected = !!gps[0] || !!gps[1] || !!gps[2] || !!gps[3];
+          setControllerConnected(isConnected);
+      };
+      const interval = setInterval(checkConnection, 1000);
+      checkConnection();
+      
+      window.addEventListener('gamepadconnected', checkConnection);
+      window.addEventListener('gamepaddisconnected', checkConnection);
+      
+      return () => {
+          clearInterval(interval);
+          window.removeEventListener('gamepadconnected', checkConnection);
+          window.removeEventListener('gamepaddisconnected', checkConnection);
+      };
+  }, []);
 
   const actions: GameAction[] = ['moveLeft', 'moveRight', 'softDrop', 'hardDrop', 'rotateCCW', 'rotateCW'];
 
@@ -140,12 +190,12 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
         {/* Info Text for Controller */}
         {mode === 'controller' && (
           <motion.div
-            className="text-xs text-white/40 text-center mb-6 font-medium"
+            className={`text-xs text-center mb-6 font-bold tracking-wider ${controllerConnected ? 'text-green-400' : 'text-red-400'}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            PRESS WHAT YOU WANT!
+            {controllerConnected ? 'GAMEPAD CONNECTED' : 'NO GAMEPAD DETECTED'}
           </motion.div>
         )}
 
