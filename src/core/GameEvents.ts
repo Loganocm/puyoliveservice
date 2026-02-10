@@ -20,6 +20,7 @@ type GameEventMap = {
     'match_ready': { opponent: { username: string; elo: number; avatar_url?: string } };
     'next_queue': { pieces: any[] }; // TBD structure
     'exit_game': void;
+    'menu_back': void;
     'user_update': any; // Should by User | null but circular dep risk if we import User from AuthManager. Using any for now or move types.
     'match_result': {
         matchId: number;

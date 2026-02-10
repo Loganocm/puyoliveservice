@@ -125,6 +125,33 @@ export default function App() {
     }
   }, [screen]);
 
+  // Handle Menu Navigation (Back)
+  useEffect(() => {
+    const handleBack = () => {
+        console.log('[App] Menu Back requested. Current screen:', screen);
+        if (screen === 'settings' || screen === 'leaderboard' || screen === 'single') {
+            setScreen('menu');
+        } else if (screen === 'controls') {
+            setScreen('settings');
+        } else if (showProfile) {
+            setShowProfile(false);
+        } else if (screen === 'multi') {
+            // MultiplayerLobby handles its own back logic via internal state usually,
+            // but if we are at root of lobby, we should go back to menu.
+            // We can check if a "private-room" section is open via DOM? No, that's brittle.
+            // Ideally MultiplayerLobby emits 'exit_multi' or we have a way to check.
+            // For now, let's allow App to handle 'multi' -> 'menu' ONLY if checked?
+            // Actually, we pass onBack to MultiplayerLobby. It renders a Back button.
+            // But if we press Escape, MultiplayerLobby should handle it.
+            // WE DO NOT HANDLE 'multi' HERE to avoid conflict.
+        }
+    };
+    GameEvents.on('menu_back', handleBack);
+    return () => {
+        GameEvents.off('menu_back', handleBack);
+    };
+  }, [screen, showProfile]);
+
   // Restore Auth Check
   useState(() => {
     const initAuth = async () => {
