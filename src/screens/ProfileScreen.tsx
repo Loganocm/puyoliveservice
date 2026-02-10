@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { APIClient } from '../api/client';
 import { AuthManager } from '../core/AuthManager';
-import { ReplayViewer } from './ReplayViewer';
 import { Clock, Calendar } from 'lucide-react';
 
 interface MatchHistoryEntry {
@@ -13,12 +12,11 @@ interface MatchHistoryEntry {
     duration_seconds: number;
 }
 
-export const ProfileScreen: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const ProfileScreen: React.FC<{ onClose: () => void; onWatchReplay: () => void }> = ({ onClose, onWatchReplay }) => {
     const [user, setUser] = useState(AuthManager.currentUser);
     const [matches, setMatches] = useState<MatchHistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'stats' | 'history'>('history');
-    const [selectedReplayId, setSelectedReplayId] = useState<number | null>(null);
 
     useEffect(() => {
         loadData();
@@ -41,10 +39,6 @@ export const ProfileScreen: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             setLoading(false);
         }
     };
-
-    if (selectedReplayId) {
-        return <ReplayViewer matchId={selectedReplayId} onClose={() => setSelectedReplayId(null)} />;
-    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto">
@@ -136,7 +130,24 @@ export const ProfileScreen: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                                         </div>
                                     </div>
                                     <button 
-                                        onClick={() => setSelectedReplayId(match.id)}
+                                        onClick={async () => {
+                                            if (loading) return;
+                                            try {
+                                                setLoading(true);
+                                                const replayData = await APIClient.getReplay(match.id);
+                                                onClose(); // Close profile modal
+                                                
+                                                // Initialize Replay Scene
+                                                const { SceneManager } = await import('../core/SceneManager');
+                                                const { ReplayScene } = await import('../scenes/ReplayScene');
+                                                SceneManager.changeScene(new ReplayScene(replayData));
+                                                
+                                                onWatchReplay();
+                                            } catch (e) {
+                                                console.error("Failed to load replay", e);
+                                                setLoading(false);
+                                            }
+                                        }}
                                         className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors border border-white/5"
                                     >
                                         Watch Replay

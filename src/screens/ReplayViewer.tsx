@@ -56,24 +56,26 @@ export const ReplayViewer: React.FC<ReplayViewerProps> = ({ matchId, onClose }) 
             try {
                 setLoading(true);
                 const data = await APIClient.getReplay(matchId);
+                
+                // Validate Data
+                if (!data || !data.inputs || !Array.isArray(data.inputs) || data.inputs.length === 0) {
+                     // Check if it's a legacy match (no replay data or old format)
+                     setError("Replay not available for this match (Legacy/Corrupt Data).");
+                     return;
+                }
+
+                if (data.version !== 2) {
+                     setError("This replay is from an older version and cannot be played.");
+                     return;
+                }
+
                 setReplayData(data);
-                setDuration(data.duration);
+                setDuration(data.duration || 0); // Handle missing duration
                 
                 // Init Engines
                 engine1Ref.current = new GameEngine(data.seed);
-                engine2Ref.current = new GameEngine(data.seed); // Same seed for now, valid if shared RNG?
-                // Wait, GameRoom uses ONE seed for both?
-                // GameRoom.ts: this.seed = this.matchStats.startedAt.getTime();
-                // GameEngine constructor takes seed.
-                // If both engines initialized with SAME seed, they will spawn SAME pieces.
-                // This is correct match behavior (shared bag usually, or same sequence).
-                // Actually Puyo VS usually has shared sequence.
+                engine2Ref.current = new GameEngine(data.seed); 
 
-                // Load Inputs
-                // Filter inputs for P1 (p=0) and P2 (p=1)
-                // Need to change Inputs type in GameEngine if not done
-                // GameEngine expects { f, i, a? }[]
-                
                 const inputs1 = data.inputs.filter((i: ReplayInput) => i.p === 0).map((i: ReplayInput) => ({ f: i.f, i: i.i, a: i.a }));
                 const inputs2 = data.inputs.filter((i: ReplayInput) => i.p === 1).map((i: ReplayInput) => ({ f: i.f, i: i.i, a: i.a }));
 
@@ -81,7 +83,8 @@ export const ReplayViewer: React.FC<ReplayViewerProps> = ({ matchId, onClose }) 
                 engine2Ref.current.loadReplay({ seed: data.seed, inputs: inputs2 });
 
             } catch (err: any) {
-                setError(err.message || "Failed to load replay");
+                console.error("Replay Load Error:", err);
+                setError("Replay not available.");
             } finally {
                 setLoading(false);
             }
@@ -248,11 +251,21 @@ export const ReplayViewer: React.FC<ReplayViewerProps> = ({ matchId, onClose }) 
         ctx.fillText(`Chain: ${engine.stats.maxChain}`, startX, startY - 30);
     };
 
-    if (loading) return <div className="fixed inset-0 bg-black/80 flex items-center justify-center text-white">Loading Replay...</div>;
-    if (error) return <div className="fixed inset-0 bg-black/80 flex items-center justify-center text-red-500">{error} <button onClick={onClose} className="ml-4 underline">Close</button></div>;
+    if (loading) return <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center text-white pointer-events-auto">Loading Replay...</div>;
+    if (error) return (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center text-white pointer-events-auto">
+            <div className="text-red-500 text-xl font-bold mb-4">{error}</div>
+            <button 
+                onClick={onClose} 
+                className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white font-bold transition-colors"
+            >
+                Close
+            </button>
+        </div>
+    );
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center pointer-events-auto">
             {/* Header */}
             <div className="absolute top-4 right-4">
                 <button onClick={onClose} className="text-white hover:text-red-500 transition"><X size={32} /></button>

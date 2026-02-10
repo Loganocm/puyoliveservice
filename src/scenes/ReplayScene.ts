@@ -1,11 +1,8 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
-import { SceneManager } from '../core/SceneManager';
-import { MenuScene } from './MenuScene';
 import { ReplayEngine, type ReplayFile } from '../core/ReplayEngine';
-import { UIManager } from '../ui/UIManager';
 import { CELL_SIZE, COLS, TOTAL_ROWS, HIDDEN_ROWS, PUYO_COLORS } from '../core/Constants';
-import { Input } from '../core/Input';
+import { GameEvents } from '../core/GameEvents';
 
 const VISIBLE_ROWS = TOTAL_ROWS - HIDDEN_ROWS;
 
@@ -27,7 +24,6 @@ export class ReplayScene implements IScene {
     private player1Label: Text;
     private player2Label: Text;
     private timeLabel: Text;
-    private speedLabel: Text;
     private pauseIndicator: Text;
 
     // Layout
@@ -42,13 +38,23 @@ export class ReplayScene implements IScene {
         this.replayEngine = new ReplayEngine(replayData);
 
         // Setup callbacks
-        this.replayEngine.onFrameUpdate = () => {
+        this.replayEngine.onFrameUpdate = (current, total) => {
+            // Emit update to React UI
+            GameEvents.emit('replay_update', {
+                currentFrame: current,
+                totalFrames: total,
+                isPaused: this.replayEngine.isPaused,
+                speed: this.replayEngine.playbackSpeed
+            });
             this.updateTimeLabel();
         };
 
         this.replayEngine.onGameOver = (winnerIndex) => {
             this.showGameOverOverlay(winnerIndex);
         };
+
+        // Listen for React UI Controls
+        GameEvents.on('replay_control', this.handleReplayControl);
 
         // Calculate board positions for side-by-side view
         this.boardWidth = COLS * CELL_SIZE;
@@ -118,13 +124,6 @@ export class ReplayScene implements IScene {
         this.timeLabel.y = this.boardY + this.boardHeight + 30;
         this.container.addChild(this.timeLabel);
 
-        // Speed display
-        this.speedLabel = new Text({ text: '1x', style: timeStyle });
-        this.speedLabel.anchor.set(0.5, 0);
-        this.speedLabel.x = window.innerWidth / 2 + 150;
-        this.speedLabel.y = this.boardY + this.boardHeight + 30;
-        this.container.addChild(this.speedLabel);
-
         // Pause indicator
         const pauseStyle = new TextStyle({
             fontFamily: 'Orbitron, sans-serif',
@@ -140,47 +139,33 @@ export class ReplayScene implements IScene {
         this.pauseIndicator.visible = false;
         this.container.addChild(this.pauseIndicator);
 
-        // Controls hint
-        const hintStyle = new TextStyle({
-            fontFamily: 'Orbitron, sans-serif',
-            fontSize: 14,
-            fill: '#888888'
-        });
-
-        const hint = new Text({ text: 'SPACE: Pause | ←→: Speed | ESC: Exit', style: hintStyle });
-        hint.anchor.set(0.5, 0);
-        hint.x = window.innerWidth / 2;
-        hint.y = this.boardY + this.boardHeight + 60;
-        this.container.addChild(hint);
-
-        // Setup keyboard handlers
-        this.setupKeyboard();
-
-        // Show replay controls UI
-        UIManager.showReplayControls();
+        // Speed Display (Optional, React Overlay handles it better now, but keep for debug)
+        // this.speedLabel... removed 
     }
 
-    private keyHandler = (e: KeyboardEvent): void => {
-        switch (e.code) {
-            case 'Space':
-                this.replayEngine.togglePause();
-                this.pauseIndicator.visible = this.replayEngine.isPaused;
+    private handleReplayControl = (cmd: { action: string, value?: number }) => {
+        switch (cmd.action) {
+            case 'play':
+                this.replayEngine.resume();
+                this.pauseIndicator.visible = false;
                 break;
-            case 'ArrowLeft':
-                this.changeSpeed(-0.5);
+            case 'pause':
+                this.replayEngine.pause();
+                this.pauseIndicator.visible = true;
                 break;
-            case 'ArrowRight':
-                this.changeSpeed(0.5);
+            case 'seek':
+                if (cmd.value !== undefined) {
+                    this.replayEngine.seekToFrame(cmd.value);
+                    this.updateTimeLabel();
+                }
                 break;
-            case 'Escape':
-                this.exitReplay();
+            case 'speed':
+                if (cmd.value !== undefined) {
+                    this.replayEngine.setSpeed(cmd.value);
+                }
                 break;
         }
     };
-
-    private setupKeyboard(): void {
-        window.addEventListener('keydown', this.keyHandler);
-    }
 
     private drawBoardBackground(g: Graphics): void {
         // Background
@@ -248,20 +233,6 @@ export class ReplayScene implements IScene {
         }
     }
 
-    private changeSpeed(delta: number): void {
-        const currentSpeed = this.replayEngine.playbackSpeed;
-        let newSpeed = currentSpeed + delta;
-
-        // Snap to common values
-        const snapPoints = [0.25, 0.5, 1, 2, 4];
-        newSpeed = snapPoints.reduce((prev, curr) =>
-            Math.abs(curr - newSpeed) < Math.abs(prev - newSpeed) ? curr : prev
-        );
-
-        this.replayEngine.setSpeed(newSpeed);
-        this.speedLabel.text = `${newSpeed}x`;
-    }
-
     private updateTimeLabel(): void {
         this.timeLabel.text = this.replayEngine.getTimeString();
     }
@@ -285,19 +256,7 @@ export class ReplayScene implements IScene {
         this.container.addChild(overlay);
     }
 
-    private exitReplay(): void {
-        UIManager.hideReplayControls();
-        UIManager.showMain();
-        SceneManager.changeScene(new MenuScene());
-    }
-
     update(dt: number): void {
-        // Handle input - check for pause action
-        if (Input.isActionPressed('pause')) {
-            this.replayEngine.togglePause();
-            this.pauseIndicator.visible = this.replayEngine.isPaused;
-        }
-
         // Update replay engine
         this.replayEngine.update(dt);
 
@@ -311,8 +270,7 @@ export class ReplayScene implements IScene {
     }
 
     destroy(): void {
-        window.removeEventListener('keydown', this.keyHandler);
-        UIManager.hideReplayControls();
+        GameEvents.off('replay_control', this.handleReplayControl);
         this.container.destroy({ children: true });
     }
 }

@@ -26,12 +26,13 @@ import { SettingsScreen } from '@/screens/SettingsScreen';
 import { ControlsScreen } from '@/screens/ControlsScreen';
 import { OnboardingScreen } from '@/screens/OnboardingScreen';
 import { GameOverlay } from '@/screens/GameOverlay';
+import { ReplayOverlay } from '@/screens/ReplayOverlay';
 import { SceneManager } from '@/core/SceneManager';
 import { GameScene } from '@/scenes/GameScene';
 import { MenuScene } from '@/scenes/MenuScene';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 
-type Screen = 'menu' | 'single' | 'multi' | 'leaderboard' | 'settings' | 'controls' | 'onboarding' | 'game';
+type Screen = 'menu' | 'single' | 'multi' | 'leaderboard' | 'settings' | 'controls' | 'onboarding' | 'game' | 'replay';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('onboarding'); // Default to onboarding until auth check
@@ -376,6 +377,17 @@ export default function App() {
              />
           </motion.div>
         )}
+
+        {screen === 'replay' && (
+            <motion.div key="replay" className="size-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <ReplayOverlay 
+                    onExit={() => {
+                        SceneManager.changeScene(new MenuScene());
+                        setScreen('menu');
+                    }}
+                />
+            </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Level Up Overlay */}
@@ -387,7 +399,13 @@ export default function App() {
       )}
 
       {showProfile && (
-        <ProfileScreen onClose={() => setShowProfile(false)} />
+        <ProfileScreen 
+            onClose={() => setShowProfile(false)} 
+            onWatchReplay={() => {
+                setShowProfile(false);
+                setScreen('replay');
+            }}
+        />
       )}
     </div>
   );

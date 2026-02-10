@@ -30,6 +30,17 @@ type GameEventMap = {
         elo_change: number;
         new_elo: number;
     };
+    // Replay Events
+    'replay_update': {
+        currentFrame: number;
+        totalFrames: number;
+        isPaused: boolean;
+        speed: number;
+    };
+    'replay_control': {
+        action: 'play' | 'pause' | 'seek' | 'speed' | 'exit';
+        value?: number; // frame for seek, multiplier for speed
+    };
 };
 
 class GameEventEmitter extends EventEmitter<GameEventMap> { }
