@@ -218,7 +218,7 @@ export default function App() {
             </motion.div>
 
             {/* Main Menu */}
-            <div className="relative z-10 flex flex-1 items-center justify-center px-8" style={{ minHeight: 'calc(100vh - 240px)' }}>
+            <div className="relative z-10 flex flex-1 items-center justify-center px-8">
               <div className="w-full max-w-4xl space-y-6">
                 {menuItems.map((item, index) => (
                   <motion.div
