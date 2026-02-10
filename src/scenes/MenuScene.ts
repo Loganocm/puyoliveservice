@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
-import { UIManager } from '../ui/UIManager';
+
 
 export class MenuScene implements IScene {
   container: Container;
