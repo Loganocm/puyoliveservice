@@ -6,6 +6,20 @@ export interface Player {
     authToken?: string;    // JWT token for API calls
 }
 
+export interface RoomSettings {
+    bestOf: 1 | 3 | 5;
+    maxPlayers: 2 | 3 | 4;
+    garbageMultiplier: number;
+    marginTime: number;
+}
+
+export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
+    bestOf: 1,
+    maxPlayers: 2,
+    garbageMultiplier: 1,
+    marginTime: 96,
+};
+
 export interface MatchStats {
     startedAt: Date;
     player1MaxChain: number;
@@ -53,6 +67,11 @@ export class GameRoom {
     matchStats: MatchStats | null = null;
     ranked: boolean = false;
     isPrivate: boolean = false;
+    settings: RoomSettings = { ...DEFAULT_ROOM_SETTINGS };
+
+    // Series tracking
+    seriesScore: Map<string, number> = new Map();  // socketId -> wins
+    currentGame: number = 1;
 
     // Match conclusion lock - prevents dual-win race conditions
     matchConcluded: boolean = false;
@@ -87,7 +106,7 @@ export class GameRoom {
     }
 
     addPlayer(player: Player): boolean {
-        if (this.players.size >= this.maxPlayers) return false;
+        if (this.players.size >= this.settings.maxPlayers) return false;
         this.players.set(player.id, player);
         return true;
     }
@@ -142,10 +161,10 @@ export class GameRoom {
         });
     }
 
-    // Get player index (0 or 1) from socket ID
-    getPlayerIndex(socketId: string): 0 | 1 {
+    // Get player index from socket ID (supports >2 players)
+    getPlayerIndex(socketId: string): number {
         const ids = Array.from(this.players.keys());
-        return ids[0] === socketId ? 0 : 1;
+        return ids.indexOf(socketId);
     }
 
     // Increment frame (called each game tick)
@@ -237,5 +256,39 @@ export class GameRoom {
             player1Id: players[0]?.userId,
             player2Id: players[1]?.userId
         };
+    }
+
+    // Update room settings (host only)
+    updateSettings(newSettings: Partial<RoomSettings>) {
+        this.settings = { ...this.settings, ...newSettings };
+        this.maxPlayers = this.settings.maxPlayers;
+    }
+
+    // Reset for next game in a series
+    resetForNextGame() {
+        this.matchConcluded = false;
+        this.conclusionLoser = null;
+        this.matchStats = null;
+        this.replayInputs = [];
+        this.frameCount = 0;
+        this.replayLog = [];
+        this.currentGame++;
+        // Reset all player ready states
+        for (const player of this.players.values()) {
+            player.ready = false;
+        }
+    }
+
+    // Get the player data formatted for client room_update events
+    getPlayersForClient(): any[] {
+        const playerArr = Array.from(this.players.values());
+        return playerArr.map((p, idx) => ({
+            id: p.id,
+            username: p.name,
+            ready: p.ready,
+            isHost: idx === 0,
+            elo: undefined,
+            userId: p.userId,
+        }));
     }
 }

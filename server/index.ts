@@ -337,8 +337,29 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.getRoom(roomId);
     if (room) {
       if (room.players.has(socket.id)) {
+        // Verify this is the host (first player)
+        const isHost = room.getPlayerIndex(socket.id) === 0;
+        if (!isHost) {
+          socket.emit('error', { message: 'Only the host can start the game' });
+          return;
+        }
+
+        // Check all players are ready
+        const allReady = Array.from(room.players.values()).every(p => p.ready);
+        if (!allReady) {
+          socket.emit('error', { message: 'All players must be ready' });
+          return;
+        }
+
+        // Need at least 2 players
+        if (room.playerCount < 2) {
+          socket.emit('error', { message: 'Need at least 2 players' });
+          return;
+        }
+
         console.log(`Starting game in room ${roomId}`);
-        io.to(roomId).emit('game_start', { seed: Date.now() });
+        room.startMatch();
+        io.to(roomId).emit('game_start', { seed: Date.now(), roomId: room.id });
       } else {
         console.warn(`Unauthorized start_game attempt by ${socket.id} for room ${roomId}`);
       }
@@ -388,8 +409,9 @@ io.on('connection', (socket: Socket) => {
       }));
       io.to(roomId).emit('room_update', {
         roomId: room.id,
-        players,
-        maxPlayers: room.maxPlayers
+        players: room.getPlayersForClient(),
+        maxPlayers: room.settings.maxPlayers,
+        settings: room.settings
       });
 
     } else {
@@ -397,11 +419,63 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  // Toggle ready state
+  socket.on('toggle_ready', (data: { roomId: string, ready: boolean }) => {
+    const room = roomManager.getRoom(data.roomId);
+    if (room && room.players.has(socket.id)) {
+      const player = room.players.get(socket.id)!;
+      player.ready = data.ready;
+      console.log(`Player ${socket.id} ready: ${data.ready} in room ${data.roomId}`);
+      // Broadcast updated room state
+      io.to(data.roomId).emit('room_update', {
+        roomId: room.id,
+        players: room.getPlayersForClient(),
+        maxPlayers: room.settings.maxPlayers,
+        settings: room.settings
+      });
+    }
+  });
+
+  // Get room details
+  socket.on('get_room_details', (data: { roomId: string }) => {
+    const room = roomManager.getRoom(data.roomId);
+    if (room) {
+      socket.emit('room_update', {
+        roomId: room.id,
+        players: room.getPlayersForClient(),
+        maxPlayers: room.settings.maxPlayers,
+        settings: room.settings
+      });
+    }
+  });
+
+  // Update room settings (host only)
+  socket.on('update_room_settings', (data: { roomId: string, settings: any }) => {
+    const room = roomManager.getRoom(data.roomId);
+    if (!room) return;
+    // Only the host (first player) can update settings
+    const isHost = room.getPlayerIndex(socket.id) === 0;
+    if (!isHost) {
+      socket.emit('error', { message: 'Only the host can change settings' });
+      return;
+    }
+    room.updateSettings(data.settings);
+    console.log(`Room ${data.roomId} settings updated:`, room.settings);
+    // Broadcast to all players
+    io.to(data.roomId).emit('room_settings_update', { settings: room.settings });
+    io.to(data.roomId).emit('room_update', {
+      roomId: room.id,
+      players: room.getPlayersForClient(),
+      maxPlayers: room.settings.maxPlayers,
+      settings: room.settings
+    });
+  });
+
   // V2 Replay: Record player inputs
   socket.on('record_input', (data: { roomId: string, input: string }) => {
     const room = roomManager.getRoom(data.roomId);
     if (room && room.matchStats) {
-      const playerIndex = room.getPlayerIndex(socket.id);
+      const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
       room.recordInput(playerIndex, data.input as any);
     }
   });
@@ -493,7 +567,7 @@ io.on('connection', (socket: Socket) => {
 
             // Only save replay if it was a distinct LOSS (not disconnect/abort)
             if (reason === 'lost') {
-              const winnerIndex = room.getPlayerIndex(winnerSocketId);
+              const winnerIndex = room.getPlayerIndex(winnerSocketId) as 0 | 1;
               if (room.replayInputs.length > 0) {
                 replayData = room.buildReplayFile(winnerIndex);
               } else {
@@ -559,12 +633,28 @@ io.on('connection', (socket: Socket) => {
       }
     }
 
-    if (reason === 'disconnect') {
-      room.removePlayer(loserSocketId);
-      if (room.playerCount === 0) {
-        roomManager.deleteRoom(room.id);
+    // Emit game_ended to all players so clients can clean up their lobby state
+    io.to(roomId).emit('game_ended', {
+      roomId: room.id,
+      reason
+    });
+
+    // Clean up: remove players from socket.io room and delete game room
+    // Give a short delay so clients can process game_ended
+    setTimeout(() => {
+      // Remove all players from socket.io room
+      const playerIds = Array.from(room.players.keys());
+      for (const pid of playerIds) {
+        const playerSocket = io.sockets.sockets.get(pid);
+        if (playerSocket) {
+          playerSocket.leave(roomId);
+        }
       }
-    }
+      // Delete the room
+      roomManager.deleteRoom(roomId);
+      console.log(`Room ${roomId} cleaned up after game end`);
+      broadcastRoomList();
+    }, 1000);
   };
 
   socket.on('player_lost', async (data: { roomId: string }) => {
@@ -581,7 +671,17 @@ io.on('connection', (socket: Socket) => {
       if (room.playerCount === 0) {
         roomManager.deleteRoom(data.roomId);
         console.log(`Room ${data.roomId} deleted (empty)`);
+      } else {
+        // Notify remaining players
+        io.to(data.roomId).emit('opponent_left', { id: socket.id });
+        io.to(data.roomId).emit('room_update', {
+          roomId: room.id,
+          players: room.getPlayersForClient(),
+          maxPlayers: room.settings.maxPlayers,
+          settings: room.settings
+        });
       }
+      broadcastRoomList();
     }
   });
 

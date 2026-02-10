@@ -1,8 +1,9 @@
 import { motion } from 'motion/react';
-import { Users, Play, LogOut, Check, X } from 'lucide-react';
+import { Users, Play, LogOut, Check, X, Settings, Copy, CheckCheck } from 'lucide-react';
 import { GameButton } from '@/components/GameButton';
 import { NetworkManager } from '@/core/NetworkManager';
 import { useEffect, useState } from 'react';
+import { useMenuInput } from '@/hooks/useMenuInput';
 
 interface RoomLobbyScreenProps {
     roomId: string;
@@ -20,16 +21,41 @@ interface PlayerInfo {
     avatarUrl?: string;
 }
 
+export interface RoomSettings {
+    bestOf: 1 | 3 | 5;
+    maxPlayers: 2 | 3 | 4;
+    garbageMultiplier: number;
+    marginTime: number;
+}
+
+const DEFAULT_SETTINGS: RoomSettings = {
+    bestOf: 1,
+    maxPlayers: 2,
+    garbageMultiplier: 1,
+    marginTime: 96,
+};
+
 export function RoomLobbyScreen({ roomId, isHost, onStart, onLeave }: RoomLobbyScreenProps) {
     const [players, setPlayers] = useState<PlayerInfo[]>([]);
     const [isReady, setIsReady] = useState(false);
+    const [settings, setSettings] = useState<RoomSettings>(DEFAULT_SETTINGS);
+    const [showSettings, setShowSettings] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [startError, setStartError] = useState<string | null>(null);
+
+    // Menu back navigation
+    useMenuInput({
+        onBack: () => {
+            onLeave();
+        }
+    }, [onLeave]);
 
     useEffect(() => {
         // Initial fetch
         NetworkManager.getRoomDetails(roomId);
 
         // Handle full room state update
-        const handleRoomUpdate = (data: { players: any[], maxPlayers: number }) => {
+        const handleRoomUpdate = (data: { players: any[], maxPlayers: number, settings?: RoomSettings }) => {
             console.log("Lobby: Room Update", data);
             setPlayers(data.players.map(p => ({
                 id: p.id,
@@ -39,18 +65,30 @@ export function RoomLobbyScreen({ roomId, isHost, onStart, onLeave }: RoomLobbyS
                 elo: p.elo,
                 avatarUrl: p.avatarUrl
             })));
+            if (data.settings) {
+                setSettings(data.settings);
+            }
         };
 
         const handleGameStart = () => {
             onStart();
         };
 
+        const handleSettingsUpdate = (data: { settings: RoomSettings }) => {
+            setSettings(data.settings);
+        };
+
+        const handleError = (data: { message: string }) => {
+            setStartError(data.message);
+            setTimeout(() => setStartError(null), 3000);
+        };
+
         // Listeners
         NetworkManager.on('room_update', handleRoomUpdate);
         NetworkManager.on('game_start', handleGameStart);
+        NetworkManager.on('room_settings_update', handleSettingsUpdate);
+        NetworkManager.on('error', handleError);
         
-        // We can also listen for 'player_joined' to trigger a refresh if needed, for robustness,
-        // but 'room_update' is broadcast on join/leave/ready toggles by the server now.
         const refreshRoom = () => NetworkManager.getRoomDetails(roomId);
         NetworkManager.on('player_joined', refreshRoom);
         NetworkManager.on('opponent_left', refreshRoom);
@@ -58,6 +96,8 @@ export function RoomLobbyScreen({ roomId, isHost, onStart, onLeave }: RoomLobbyS
         return () => {
              NetworkManager.off('room_update', handleRoomUpdate);
              NetworkManager.off('game_start', handleGameStart);
+             NetworkManager.off('room_settings_update', handleSettingsUpdate);
+             NetworkManager.off('error', handleError);
              NetworkManager.off('player_joined', refreshRoom);
              NetworkManager.off('opponent_left', refreshRoom);
         };
@@ -67,6 +107,21 @@ export function RoomLobbyScreen({ roomId, isHost, onStart, onLeave }: RoomLobbyS
         const newReadyState = !isReady;
         setIsReady(newReadyState);
         NetworkManager.toggleReady(roomId, newReadyState);
+    };
+
+    const handleCopyRoomId = () => {
+        navigator.clipboard.writeText(roomId).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    const allReady = players.length >= 2 && players.every(p => p.ready);
+
+    const updateSetting = <K extends keyof RoomSettings>(key: K, value: RoomSettings[K]) => {
+        const newSettings = { ...settings, [key]: value };
+        setSettings(newSettings);
+        NetworkManager.updateRoomSettings(roomId, newSettings);
     };
 
     return (
@@ -89,56 +144,206 @@ export function RoomLobbyScreen({ roomId, isHost, onStart, onLeave }: RoomLobbyS
                 animate={{ opacity: 1, scale: 1 }}
             >
                 {/* Header */}
-                <div className="flex justify-between items-center mb-12 border-b border-white/10 pb-6">
+                <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-6">
                     <div>
                         <h2 className="text-3xl font-black text-white tracking-tighter italic">LOBBY</h2>
-                        <div className="text-white/40 font-mono mt-1">ROOM ID: <span className="text-emerald-400 select-all">{roomId}</span></div>
+                        <button 
+                            onClick={handleCopyRoomId}
+                            className="text-white/40 font-mono mt-1 flex items-center gap-2 hover:text-white/60 transition-colors cursor-pointer group"
+                        >
+                            ROOM ID: <span className="text-emerald-400 select-all">{roomId}</span>
+                            {copied ? (
+                                <CheckCheck className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                                <Copy className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                        </button>
                     </div>
                     <div className="flex gap-4">
                         <div className="px-4 py-2 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
                             <Users className="w-4 h-4 text-white/60" />
-                            <span className="font-bold text-white">{players.length}/2</span>
+                            <span className="font-bold text-white">{players.length}/{settings.maxPlayers}</span>
                         </div>
+                        {isHost && (
+                            <button
+                                onClick={() => setShowSettings(!showSettings)}
+                                className={`px-4 py-2 rounded-lg border flex items-center gap-2 transition-all cursor-pointer ${
+                                    showSettings 
+                                        ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400' 
+                                        : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                                }`}
+                            >
+                                <Settings className="w-4 h-4" />
+                                <span className="font-bold text-sm">SETTINGS</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 
+                {/* Settings Panel (host only, collapsible) */}
+                {showSettings && isHost && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="mb-8 p-6 bg-white/5 border border-white/10 rounded-xl overflow-hidden"
+                    >
+                        <h3 className="text-sm font-black text-white/60 tracking-widest mb-4 uppercase">Room Settings</h3>
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Best Of */}
+                            <div>
+                                <label className="text-xs font-bold text-white/40 tracking-wider mb-2 block">BEST OF</label>
+                                <div className="flex gap-2">
+                                    {([1, 3, 5] as const).map(n => (
+                                        <button
+                                            key={n}
+                                            onClick={() => updateSetting('bestOf', n)}
+                                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all cursor-pointer ${
+                                                settings.bestOf === n 
+                                                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
+                                                    : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            BO{n}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Max Players */}
+                            <div>
+                                <label className="text-xs font-bold text-white/40 tracking-wider mb-2 block">MAX PLAYERS</label>
+                                <div className="flex gap-2">
+                                    {([2, 3, 4] as const).map(n => (
+                                        <button
+                                            key={n}
+                                            onClick={() => updateSetting('maxPlayers', n)}
+                                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all cursor-pointer ${
+                                                settings.maxPlayers === n 
+                                                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
+                                                    : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Garbage Multiplier */}
+                            <div>
+                                <label className="text-xs font-bold text-white/40 tracking-wider mb-2 block">GARBAGE MULTIPLIER</label>
+                                <div className="flex gap-2">
+                                    {[0.5, 1, 1.5, 2].map(n => (
+                                        <button
+                                            key={n}
+                                            onClick={() => updateSetting('garbageMultiplier', n)}
+                                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all cursor-pointer ${
+                                                settings.garbageMultiplier === n 
+                                                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
+                                                    : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {n}x
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Margin Time */}
+                            <div>
+                                <label className="text-xs font-bold text-white/40 tracking-wider mb-2 block">MARGIN TIME (sec)</label>
+                                <div className="flex gap-2">
+                                    {[60, 96, 128, 192].map(n => (
+                                        <button
+                                            key={n}
+                                            onClick={() => updateSetting('marginTime', n)}
+                                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all cursor-pointer ${
+                                                settings.marginTime === n 
+                                                    ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
+                                                    : 'bg-white/5 border border-white/10 text-white/60 hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {n}s
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Room Settings Display (guest view) */}
+                {!isHost && (
+                    <div className="mb-6 flex gap-4 flex-wrap">
+                        <div className="px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs font-bold text-white/50">
+                            BO{settings.bestOf}
+                        </div>
+                        <div className="px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs font-bold text-white/50">
+                            {settings.garbageMultiplier}x GARBAGE
+                        </div>
+                        <div className="px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs font-bold text-white/50">
+                            MARGIN {settings.marginTime}s
+                        </div>
+                    </div>
+                )}
+
                 {/* Player Slots */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-                    {/* Render empty slots if needed */}
-                    {[0, 1].map((idx) => {
+                <div className={`grid grid-cols-1 ${settings.maxPlayers <= 2 ? 'md:grid-cols-2' : settings.maxPlayers === 3 ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-4 mb-8`}>
+                    {Array.from({ length: settings.maxPlayers }).map((_, idx) => {
                         const player = players[idx];
                         return (
                             <div key={idx} className={`
-                                h-48 rounded-xl border-2 flex flex-col items-center justify-center gap-4 transition-all
-                                ${player ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-dashed border-white/10 bg-white/5'}
+                                h-44 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all
+                                ${player 
+                                    ? player.ready 
+                                        ? 'border-emerald-500/30 bg-emerald-500/5' 
+                                        : 'border-amber-500/20 bg-amber-500/5'
+                                    : 'border-dashed border-white/10 bg-white/5'}
                             `}>
                                 {player ? (
                                     <>
                                         <div className="relative">
-                                             <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-white/20 overflow-hidden">
-                                                {/* Avatar */}
-                                             </div>
+                                             <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-white/20 overflow-hidden" />
                                              {player.isHost && (
-                                                 <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full">HOST</div>
+                                                 <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full">HOST</div>
                                              )}
                                         </div>
                                         <div className="text-center">
-                                            <div className="font-bold text-xl text-white">{player.username}</div>
-                                            <div className="text-white/40 text-sm font-mono">{player.elo || 1000} ELO</div>
+                                            <div className="font-bold text-lg text-white">{player.username}</div>
+                                            <div className="text-white/40 text-xs font-mono">{player.elo || 1000} ELO</div>
+                                        </div>
+                                        {/* Ready Indicator */}
+                                        <div className={`flex items-center gap-1.5 text-xs font-bold tracking-wider ${
+                                            player.ready ? 'text-emerald-400' : 'text-amber-400'
+                                        }`}>
+                                            {player.ready ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                                            {player.ready ? 'READY' : 'NOT READY'}
                                         </div>
                                     </>
                                 ) : (
                                     <>
-                                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
-                                            <Users className="w-6 h-6 text-white/20" />
+                                        <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center">
+                                            <Users className="w-5 h-5 text-white/20" />
                                         </div>
-                                        <div className="text-white/20 font-bold tracking-widest">WAITING...</div>
+                                        <div className="text-white/20 font-bold text-sm tracking-widest">WAITING...</div>
                                     </>
                                 )}
                             </div>
                         );
                     })}
                 </div>
+
+                {/* Error Banner */}
+                {startError && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-center text-red-300 text-sm font-bold"
+                    >
+                        {startError}
+                    </motion.div>
+                )}
 
                 {/* Actions */}
                 <div className="flex justify-between items-center">
@@ -152,25 +357,26 @@ export function RoomLobbyScreen({ roomId, isHost, onStart, onLeave }: RoomLobbyS
                     </GameButton>
 
                     <div className="flex gap-4">
-                         {/* Toggle Ready Button (for Guest) or Start (for Host) */}
-                         {!isHost ? (
-                             <GameButton 
-                                variant={isReady ? 'primary' : 'secondary'}
-                                onClick={toggleReady}
-                                className="w-48"
-                                icon={isReady ? Check : X}
-                             >
-                                 {isReady ? 'READY!' : 'NOT READY'}
-                             </GameButton>
-                         ) : (
+                         {/* Ready Toggle (both host and guest) */}
+                         <GameButton 
+                            variant={isReady ? 'primary' : 'secondary'}
+                            onClick={toggleReady}
+                            className="w-48"
+                            icon={isReady ? Check : X}
+                         >
+                             {isReady ? 'READY!' : 'NOT READY'}
+                         </GameButton>
+
+                         {/* Start Button (host only) */}
+                         {isHost && (
                             <GameButton 
                                 variant="primary"
                                 onClick={() => NetworkManager.startGame(roomId)}
-                                disabled={players.length < 2} // TODO: Add check for opponent ready
-                                className="w-64"
+                                disabled={!allReady}
+                                className="w-56"
                                 icon={Play}
                             >
-                                START GAME
+                                {!allReady ? 'WAITING...' : 'START GAME'}
                             </GameButton>
                          )}
                     </div>

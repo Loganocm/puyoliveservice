@@ -117,6 +117,17 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
         setIsHost(true);
     };
 
+    // Game ended - clean up lobby state
+    const onGameEnded = (data: { roomId?: string }) => {
+        console.log("Lobby: Game Ended", data);
+        // Reset room state so we go back to lobby menu, not stale player list
+        setActiveRoomId(null);
+        setIsHost(false);
+        // Refresh room list
+        setIsLoadingRooms(true);
+        NetworkManager.getRooms();
+    };
+
     // Listeners
     NetworkManager.on('connect', onConnect);
     NetworkManager.on('disconnect', onDisconnect);
@@ -124,6 +135,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
     NetworkManager.on('room_list_update', onRoomListUpdate);
     NetworkManager.on('match_found', onMatchFound);
     NetworkManager.on('room_created', onRoomCreated);
+    NetworkManager.on('game_ended', onGameEnded);
 
     // Initial Rooms Fetch
     setIsLoadingRooms(true);
@@ -136,6 +148,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
         NetworkManager.off('room_list_update', onRoomListUpdate);
         NetworkManager.off('match_found', onMatchFound);
         NetworkManager.off('room_created', onRoomCreated);
+        NetworkManager.off('game_ended', onGameEnded);
     };
   }, []);
 
@@ -340,7 +353,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
                         >
                              <button 
                                 onClick={() => setShowCreateModal(true)}
-                                className="p-6 bg-white/5 border border-white/10 rounded-xl text-left hover:bg-white/10 hover:border-white/30 transition-all group"
+                                className="p-6 bg-white/5 border border-white/10 rounded-xl text-left hover:bg-white/10 hover:border-white/30 transition-all group cursor-pointer"
                              >
                                 <div className="flex items-center gap-3 mb-2 text-[#A855F7]">
                                     <Plus className="w-6 h-6" />
@@ -351,7 +364,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
                              
                              <button 
                                 onClick={() => handleJoinRoom()} 
-                                className="p-6 bg-white/5 border border-white/10 rounded-xl text-left hover:bg-white/10 hover:border-white/30 transition-all group"
+                                className="p-6 bg-white/5 border border-white/10 rounded-xl text-left hover:bg-white/10 hover:border-white/30 transition-all group cursor-pointer"
                              >
                                 <div className="flex items-center gap-3 mb-2 text-[#A855F7]">
                                     <Hash className="w-6 h-6" />

@@ -132,6 +132,15 @@ export class NetworkManager {
             this.emit('match_result', data);
         });
 
+        this.socket.on('game_ended', (data: any) => {
+            console.log("Network: Game Ended", data);
+            this.emit('game_ended', data);
+        });
+
+        this.socket.on('room_settings_update', (data: any) => {
+            this.emit('room_settings_update', data);
+        });
+
         this.socket.on('error', (data: { message: string }) => {
             console.error('[NetworkManager] Error:', data.message);
             this.emit('error', data);
@@ -278,6 +287,17 @@ export class NetworkManager {
     public static getRoomDetails(roomId: string) {
         if (!this.socket) return;
         this.socket.emit('get_room_details', { roomId });
+    }
+
+    public static updateRoomSettings(roomId: string, settings: any) {
+        if (!this.socket) return;
+        this.socket.emit('update_room_settings', { roomId, settings });
+    }
+
+    // Public method to emit to socket server (for components that need direct access)
+    public static emitToServer(event: string, data?: any) {
+        if (!this.socket) return;
+        this.socket.emit(event, data);
     }
 
     public static toggleReady(roomId: string, ready: boolean) {
