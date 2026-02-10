@@ -146,7 +146,7 @@ export class GameEngine {
     private currentBag: { main: PuyoColor, sub: PuyoColor }[] = [];
 
     // Record an action (Legacy/Unused in V2 client-side, handled by NetworkManager)
-    private recordAction(type: string, data?: any) {
+    private recordAction(_type: string, _data?: any) {
         // V2: Inputs are recorded by GameScene/NetworkManager sending 'record_input' to server.
         // GameEngine does not need to store them locally unless we want local replay save.
     }
