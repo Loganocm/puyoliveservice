@@ -241,6 +241,33 @@ export default function App() {
               </div>
             </div>
 
+            {/* About the Game – Semantic SEO Section */}
+            <section
+              aria-label="About Puyo Live"
+              className="relative z-10 px-8 py-8 max-w-4xl mx-auto"
+            >
+              <div
+                className="rounded-2xl border border-white/5 px-8 py-6"
+                style={{
+                  background: 'rgba(15, 15, 25, 0.6)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                <h2 className="text-sm font-bold uppercase tracking-widest text-white/50 mb-3">
+                  About the Game
+                </h2>
+                <p className="text-sm leading-relaxed text-white/40">
+                  <strong className="text-white/60">Puyo Live</strong> is a free, browser-based
+                  Puyo Puyo alternative built for competitive play. Experience classic match-4 puzzle
+                  mechanics with low-latency, real-time multiplayer — no download required. Master
+                  advanced techniques like <em>GTR</em>, <em>stairs</em>, and{' '}
+                  <em>sandwich chaining</em> to bury your opponents in garbage. Whether you're a
+                  casual player or a seasoned competitive stacker, Puyo Live delivers the fast-paced
+                  chain battles you love, right in your web browser.
+                </p>
+              </div>
+            </section>
+
             {/* Footer */}
             <PuyoFooter />
           </motion.div>
