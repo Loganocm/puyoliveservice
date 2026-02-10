@@ -6,6 +6,7 @@
     --color-puyo-yellow: #EAB308;
     --color-puyo-purple: #A855F7;
     --color-puyo-bg: #0a0a12;
+    --font-sans: 'Fredoka', sans-serif;
 }
 
 /* Custom Utilities that might not be covered by default utilities yet */
