@@ -24,7 +24,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
   // Queue State
   const [isSearching, setIsSearching] = useState(false);
   const [queueCounts, setQueueCounts] = useState({ ranked: 0, unranked: 0 });
-  const [matchStatus, setMatchStatus] = useState<string>('Idle');
+  // const [matchStatus, setMatchStatus] = useState<string>('Idle'); // Unused for now
 
   // VS Screen State
   const [showVSScreen, setShowVSScreen] = useState(false);
@@ -119,18 +119,18 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
       if (isSearching) {
           NetworkManager.leaveQueue();
           setIsSearching(false);
-          setMatchStatus('Idle');
+          // setMatchStatus('Idle');
       } else {
           // Join Logic
           NetworkManager.joinQueue(queueMode === 'ranked');
           setIsSearching(true);
-          setMatchStatus('Searching...');
+          // setMatchStatus('Searching...');
       }
   };
 
   const handleCreateRoom = () => {
       NetworkManager.createRoom();
-      setMatchStatus('Creating Room...');
+      // setMatchStatus('Creating Room...');
   };
 
   const handleJoinRoom = () => {

@@ -12,9 +12,9 @@ interface Player {
   winRate: number;
 }
 
+import { useState, useEffect } from 'react';
 import { BackButton } from '@/components/BackButton';
-
-// ... imports
+import { APIClient } from '@/core/APIClient';
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
   // ... existing state and logic ...
@@ -35,7 +35,7 @@ export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
         APIClient.getMe().catch(() => null)
       ]);
 
-      const mappedPlayers = lbData.leaderboard.map((p: any) => ({
+      const mappedPlayers = lbData.leaderboard.map((p: any, index: number) => ({
         rank: p.rank,
         username: p.username,
         elo: p.elo_rating,

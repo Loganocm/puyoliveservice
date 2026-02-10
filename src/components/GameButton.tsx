@@ -1,6 +1,6 @@
-import { motion, HTMLMotionProps } from 'motion/react';
-import { ReactNode } from 'react';
-import { LucideIcon } from 'lucide-react';
+import { motion, type HTMLMotionProps } from 'motion/react';
+import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '../utils/cn'; // Assuming you have a cn utility, if not I will use template literals or classnames
 
 interface GameButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {

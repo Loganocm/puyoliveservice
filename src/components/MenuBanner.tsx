@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Lock, LucideIcon } from 'lucide-react';
+import { Lock, type LucideIcon } from 'lucide-react';
 
 interface MenuBannerProps {
   title: string;
