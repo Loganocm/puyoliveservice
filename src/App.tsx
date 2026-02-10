@@ -48,6 +48,7 @@ export default function App() {
   useEffect(() => {
     // Select a random background for the menu
     const bg = backgroundManager.getRandomBackground();
+    console.log('[App] Setting menu background:', bg);
     backgroundManager.setMenuBackground(bg);
     setBgImage(bg);
   }, []);
