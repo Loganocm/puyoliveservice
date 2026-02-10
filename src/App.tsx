@@ -7,7 +7,7 @@ import {
   Swords, 
   User
 } from 'lucide-react';
-import { PuyoLogo, PuyoWordmark } from '@/components/PuyoLogo';
+import puyoHeaderLogo from '@/resources/puyoheader.svg';
 import { PuyoFooter } from '@/components/PuyoFooter';
 import { WaterFillButton } from '@/components/WaterFillButton';
 import { PlayerStatsPanel } from '@/components/PlayerStatsPanel';
@@ -152,12 +152,8 @@ export default function App() {
             <motion.header 
               initial={hasVisitedMenu.current ? { y: 0 } : { y: -100 }}
               animate={{ y: 0 }}
-              className="flex justify-between items-center px-8 py-6 z-20"
+              className="flex justify-end items-center px-8 py-6 z-20"
             >
-              <div className="flex items-center gap-3">
-                <PuyoLogo size="medium" />
-                <PuyoWordmark size="medium" />
-              </div>
               <div className="flex items-center gap-3">
                 <PlayerStatsPanel 
                   elo={user?.elo_rating || 1000}
@@ -214,6 +210,15 @@ export default function App() {
             {/* Main Menu */}
             <div className="relative z-10 flex flex-1 items-center justify-center px-8" style={{ minHeight: 'calc(100vh - 240px)' }}>
               <div className="w-full max-w-4xl space-y-6">
+                {/* Logo */}
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: hasVisitedMenu.current ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex justify-center mb-4"
+                >
+                  <img src={puyoHeaderLogo} alt="Puyo Live" className="w-full max-w-lg" />
+                </motion.div>
                 {menuItems.map((item, index) => (
                   <motion.div
                     key={item.label}
