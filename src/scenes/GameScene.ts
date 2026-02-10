@@ -1966,6 +1966,7 @@ export class GameScene implements IScene {
 
 
     destroy(): void {
+        console.log("[GameScene] Destroying...");
         document.removeEventListener('visibilitychange', this.handleVisibilityChange);
         if (this.afkTimer) clearInterval(this.afkTimer);
         this.container.destroy({ children: true });

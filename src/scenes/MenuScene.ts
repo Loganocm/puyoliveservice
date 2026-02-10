@@ -10,7 +10,7 @@ export class MenuScene implements IScene {
   }
 
   update(_delta: number): void {
-    UIManager.update();
+    // UIManager.update(); // Legacy UI disabled
   }
 
   destroy(): void {

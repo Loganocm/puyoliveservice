@@ -88,6 +88,7 @@ export class SceneManager {
     }
 
     this.currentScene = newScene;
+    console.log(`[SceneManager] Changed scene to ${newScene.constructor.name}`);
     this.app.stage.addChild(this.currentScene.container);
   }
 
