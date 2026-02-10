@@ -205,7 +205,13 @@ export default function App() {
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         className="absolute right-0 top-14 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 ring-1 ring-white/5"
                       >
-                         <div className="px-4 py-3 border-b border-white/5">
+                         <div 
+                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setShowProfile(true);
+                            }}
+                         >
                             <p className="text-sm font-bold text-white truncate">{user?.username || 'Guest'}</p>
                             <p className="text-xs text-white/40 truncate">{user?.email || 'No email linked'}</p>
                          </div>
