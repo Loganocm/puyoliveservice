@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+
 import { config } from './config/index.js';
 import { prisma } from './db/prisma.js';
 import routes from './routes/index.js';
@@ -84,17 +84,7 @@ app.use('/api', routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Initialize Socket.IO
-// Note: Detailed socket logic is handled by the standalone server in /server
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // Allow all origins for socket.io to avoid issues
-    methods: ["GET", "POST"],
-    credentials: false
-  },
-  pingTimeout: 60000,
-  pingInterval: 25000
-});
+
 
 // Start server function
 export async function startServer(): Promise<void> {
