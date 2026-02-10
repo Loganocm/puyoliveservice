@@ -5,15 +5,22 @@ const BASE_URL = 'https://game.puyo.live'; // Fallback
 
 export class APIClient {
     private static getBaseUrl(): string {
-        // Try to reuse the URL detected by NetworkManager, or fallback
-        let url = NetworkManager.serverUrl || BASE_URL;
-        // Ensure no trailing slash
-        if (url.endsWith('/')) url = url.slice(0, -1);
-        return url;
+        if (typeof window === 'undefined') return BASE_URL;
+
+        // Production / Staging
+        if (window.location.hostname !== 'localhost') {
+            return 'https://api.puyo.live';
+        }
+
+        // Local Development
+        // API is standardly on port 3000 or 3002 (Socket is 3001)
+        // Check env var or default to 3000
+        return import.meta.env.VITE_API_URL || 'http://localhost:3000';
     }
 
     public static async getLeaderboard(limit: number = 20, offset: number = 0): Promise<{ leaderboard: any[] }> {
         const url = `${this.getBaseUrl()}/api/leaderboard?limit=${limit}&offset=${offset}`;
+        console.log('[APIClient] Fetching leaderboard:', url);
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to fetch leaderboard');
         return await res.json();

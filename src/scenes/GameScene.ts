@@ -93,7 +93,7 @@ export class GameScene implements IScene {
     private isPaused: boolean = false;
     private escapeHoldTimer: number = 0;
     private readonly FORFEIT_HOLD_TIME = 1.5; // Seconds to hold escape to forfeit
-    private forfeitBar: Graphics | null = null;
+    private forfeitBar: Graphics;
     private replayData: any = null;
 
     // Bound handlers for GameEvents (for cleanup on destroy)
@@ -148,6 +148,10 @@ export class GameScene implements IScene {
         this.uiContainer.addChild(this.uiGraphics);
         this.uiContainer.addChild(this.damageGraphics);
         this.uiContainer.addChild(this.garbageTrayGraphics);
+
+        // Initialize Forfeit Bar (persistent)
+        this.forfeitBar = new Graphics();
+        this.uiContainer.addChild(this.forfeitBar);
 
         // this.damageBar removed (unused)
 
@@ -780,28 +784,11 @@ export class GameScene implements IScene {
     }
 
     private drawForfeitUI() {
+        // Always maintain the graphics instance, just clear if inactive
+        this.forfeitBar.clear();
+
         if (this.escapeHoldTimer <= 0) {
-            if (this.forfeitBar) {
-                this.forfeitBar.clear();
-            }
             return;
-        }
-
-        const pct = Math.min(this.escapeHoldTimer / this.FORFEIT_HOLD_TIME, 1.0);
-
-        const barW = 300;
-        const barH = 20;
-        const x = (1000 - barW) / 2;
-        const y = 600; // Bottom area
-
-        if (!this.forfeitBar) {
-            this.forfeitBar = new Graphics();
-            this.uiContainer.addChild(this.forfeitBar); // Attach to UI container
-        } else {
-            this.forfeitBar.clear();
-            this.uiContainer.addChild(this.forfeitBar); // Ensure on top
-            // Maybe Move to top?
-            this.uiContainer.setChildIndex(this.forfeitBar, this.uiContainer.children.length - 1);
         }
 
         // BG
@@ -1220,7 +1207,7 @@ export class GameScene implements IScene {
         this.damageGraphics.clear();
         this.garbageTrayGraphics.clear();
 
-        while (this.uiContainer.children.length > 3) {
+        while (this.uiContainer.children.length > 4) {
             const child = this.uiContainer.children[this.uiContainer.children.length - 1];
             this.uiContainer.removeChild(child);
             child.destroy();

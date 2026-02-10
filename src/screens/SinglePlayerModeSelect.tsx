@@ -62,15 +62,7 @@ export function SinglePlayerModeSelect({ onSelectMode, onBack }: SinglePlayerMod
           ))}
         </div>
 
-        <motion.button
-          className="w-full mt-12 px-6 py-4 text-white/30 hover:text-white font-bold text-xs tracking-[0.2em] uppercase transition-colors duration-200 cursor-pointer"
-          onClick={onBack}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
-          GO BACK
-        </motion.button>
+
       </div>
     </div>
   );
