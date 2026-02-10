@@ -43,6 +43,35 @@ class BackgroundManager {
     public getMenuBackground(): string {
         return this.currentMenuBg;
     }
+
+    private nextGameBg: string = '';
+
+    public prepareGameBackground(): string {
+        // Select a background distinct from the current menu one
+        this.nextGameBg = this.getRandomBackground(this.currentMenuBg);
+        return this.nextGameBg;
+    }
+
+    public getGameBackground(): string {
+        // Return prepared one, or generate new if consumed/missing
+        if (this.nextGameBg) {
+            const bg = this.nextGameBg;
+            // Optional: clear it so next game gets a new one? 
+            // Or keep it? User might want consistent background for a session?
+            // "randomized background for the gameplay screen" implies variety.
+            // Let's keep it for the session or until explicitly refreshed?
+            // Better: generate a new one for the *next* call if we consume this one?
+            // Actually, let's just return it. If we want rotation, we call prepareGameBackground() again.
+            return bg;
+        }
+        return this.getRandomBackground(this.currentMenuBg);
+    }
+
+    public async preload(url: string): Promise<void> {
+        if (!url) return;
+        // PixiJS Assets.load handles caching automatically
+        await import('pixi.js').then(pixi => pixi.Assets.load(url));
+    }
 }
 
 export const backgroundManager = new BackgroundManager();

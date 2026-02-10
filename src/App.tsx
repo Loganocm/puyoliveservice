@@ -27,6 +27,7 @@ import { GameOverlay } from '@/screens/GameOverlay';
 import { ReplayOverlay } from '@/screens/ReplayOverlay';
 import { TransitionParticles } from '@/components/TransitionParticles';
 import { SceneManager } from '@/core/SceneManager';
+import { ResourceManager } from '@/core/ResourceManager';
 import { GameScene } from '@/scenes/GameScene';
 import { MenuScene } from '@/scenes/MenuScene';
 import { ProfileScreen } from '@/screens/ProfileScreen';
@@ -80,6 +81,47 @@ export default function App() {
   useEffect(() => {
     if (screen === 'menu') {
        hasVisitedMenu.current = true;
+    }
+
+    if (screen === 'transition') {
+        const prepareGame = async () => {
+            const startTime = Date.now();
+            console.log("[App] Starting Transition. Waiting for assets...");
+
+            // 1. Wait for Game Core (ResourceManager) to be loaded
+            // Simple polling since it runs in parallel
+            while (!ResourceManager.loaded) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+            console.log("[App] Core Assets Loaded.");
+
+            // 2. Preload Menu Background
+            // We use the one we selected on mount
+            const bg = backgroundManager.getMenuBackground();
+            if (bg) {
+                console.log("[App] Preloading Menu Background:", bg);
+                await backgroundManager.preload(bg);
+            }
+
+            // 3. Preload Game Background (for instant start)
+            const gameBg = backgroundManager.prepareGameBackground();
+            if (gameBg) {
+                console.log("[App] Preloading Game Background:", gameBg);
+                await backgroundManager.preload(gameBg);
+            }
+
+            // 4. Ensure Minimum Duration (2s) for smooth effect
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, 2000 - elapsed);
+            console.log(`[App] Transition wait: ${remaining}ms`);
+            
+            if (remaining > 0) {
+                await new Promise(r => setTimeout(r, remaining));
+            }
+
+            setScreen('menu');
+        };
+        prepareGame();
     }
   }, [screen]);
 
@@ -363,9 +405,7 @@ export default function App() {
             <OnboardingScreen onComplete={(username) => {
               console.log('Onboarding Complete:', username);
               setScreen('transition');
-              setTimeout(() => {
-                  setScreen('menu');
-              }, 2000);
+              // Loading logic is now handled in the useEffect for 'transition' state
             }} />
           </motion.div>
         )}

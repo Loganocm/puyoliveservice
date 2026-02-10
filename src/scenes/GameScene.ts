@@ -121,8 +121,8 @@ export class GameScene implements IScene {
         this.staticBg.position.set(window.innerWidth / 2, window.innerHeight / 2);
         this.container.addChild(this.staticBg);
 
-        // Load Random Background
-        const bgUrl = backgroundManager.getRandomBackground(backgroundManager.getMenuBackground());
+        // Load Random Background (Pre-selected)
+        const bgUrl = backgroundManager.getGameBackground();
         console.log('[GameScene] Loading background:', bgUrl);
         if (bgUrl) {
             Assets.load(bgUrl).then((texture) => {

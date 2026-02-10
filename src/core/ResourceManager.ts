@@ -7,9 +7,11 @@ export class ResourceManager {
   private static sheetTexture: Texture;
   // public static backgroundTexture: Texture;
   private static puyoTextures: Map<string, Texture> = new Map();
+  public static loaded: boolean = false;
 
   public static async load() {
     this.sheetTexture = await Assets.load(puyoPng);
+    this.loaded = true;
     try {
       // Load the play background
       // this.backgroundTexture = await Assets.load(playbgPng);
