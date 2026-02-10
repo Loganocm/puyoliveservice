@@ -14,15 +14,9 @@ export class APIClient {
 
     public static async getLeaderboard(limit: number = 20, offset: number = 0): Promise<{ leaderboard: any[] }> {
         const url = `${this.getBaseUrl()}/api/leaderboard?limit=${limit}&offset=${offset}`;
-        try {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('Failed to fetch leaderboard');
-            return await res.json();
-        } catch (e) {
-            console.error('APIClient: getLeaderboard failed', e);
-            // Return mock/empty for now to prevent crash
-            return { leaderboard: [] };
-        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch leaderboard');
+        return await res.json();
     }
 
     public static async getMe(): Promise<any> {

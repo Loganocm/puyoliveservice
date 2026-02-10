@@ -4,7 +4,7 @@ import { Users, Loader2, Play, Hash, Plus, Trophy } from 'lucide-react';
 import { MenuBanner } from '@/components/MenuBanner';
 import { BackButton } from '@/components/BackButton';
 import { GameButton } from '@/components/GameButton';
-import { RoomList, RoomData } from '@/components/RoomList';
+import { RoomList, type RoomData } from '@/components/RoomList';
 import { NetworkManager } from '@/core/NetworkManager';
 import { AuthManager } from '@/core/AuthManager';
 import { SceneManager } from '@/core/SceneManager';
