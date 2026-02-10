@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: ${DB_NAME:-puyio_db}
     volumes:
-      - puyio-main_postgres_data:/var/lib/postgresql/data
+      - puyoliveservice_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 5s
@@ -46,7 +46,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: ghcr.io/loganocm/puyo-game:latest
+    image: ghcr.io/loganocm/puyio-game:latest
     networks:
       - puyo-net
     container_name: puyo-game
@@ -71,7 +71,7 @@ services:
     depends_on:
       - api
       - game-server
- #:3 :3
+ # :3 :3
   # --- Watchtower (auto-pulls new images from GHCR) ---
   watchtower:
     image: containrrr/watchtower:latest
@@ -86,7 +86,7 @@ services:
     command: --interval 300 --cleanup
 
 volumes:
-  puyio-main_postgres_data:
+  puyoliveservice_postgres_data:
     external: true
 
 
