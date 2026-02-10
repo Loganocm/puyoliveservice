@@ -212,7 +212,7 @@ export default function App() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: hasVisitedMenu.current ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="flex justify-center px-8 pt-2 pb-4 z-10"
+              className="flex justify-center px-8 pt-4 pb-4 z-10"
             >
               <img src={puyoHeaderLogo} alt="Puyo Live" className="w-full max-w-lg" />
             </motion.div>
