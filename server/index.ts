@@ -302,13 +302,35 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  socket.on('create_room', () => {
+  const broadcastRoomList = () => {
+    // Only send PUBLIC rooms to the lobby list
+    const rooms = roomManager.getAllRooms()
+      .filter(r => !r.isPrivate)
+      .map(r => ({
+        id: r.id,
+        name: `Room ${r.id.substring(0, 4)}`,
+        players: r.playerCount,
+        maxPlayers: r.maxPlayers,
+        status: r.matchStats ? 'playing' : 'waiting',
+        isPrivate: false
+      }));
+    io.emit('room_list_update', rooms);
+  };
+
+  socket.on('get_rooms', () => {
+    broadcastRoomList();
+  });
+
+  socket.on('create_room', (data: { isPrivate?: boolean } = {}) => {
     const room = roomManager.createRoom();
+    room.isPrivate = !!data.isPrivate;
+
     room.addPlayer({ id: socket.id, name: `Player ${socket.id.substring(0, 4)}`, ready: false });
     socket.join(room.id);
     socket.emit('room_created', { roomId: room.id });
-    console.log(`Room created: ${room.id}`);
+    console.log(`Room created: ${room.id} (Private: ${room.isPrivate})`);
     broadcastRoomUpdate(room.id);
+    broadcastRoomList();
   });
 
   socket.on('start_game', (roomId: string) => {

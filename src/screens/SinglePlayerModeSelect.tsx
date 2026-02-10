@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { Clock, Target } from 'lucide-react';
 import { BackButton } from '@/components/BackButton';
+import { useMenuInput } from '@/hooks/useMenuInput';
 
 interface SinglePlayerModeSelectProps {
   onSelectMode: (mode: '3min' | '5min' | '10min' | 'practice') => void;
@@ -8,6 +9,8 @@ interface SinglePlayerModeSelectProps {
 }
 
 export function SinglePlayerModeSelect({ onSelectMode, onBack }: SinglePlayerModeSelectProps) {
+  useMenuInput({ onBack }, [onBack]);
+
   const modes = [
     { id: '3min' as const, label: '3 MINUTES', icon: Clock },
     { id: '5min' as const, label: '5 MINUTES', icon: Clock },

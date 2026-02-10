@@ -18,10 +18,12 @@ interface MultiplayerLobbyProps {
 }
 
 import { RoomLobbyScreen } from '@/screens/RoomLobbyScreen';
+import { useMenuInput } from '@/hooks/useMenuInput';
 
 export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps) {
   const [queueMode, setQueueMode] = useState<'ranked' | 'unranked'>(AuthManager.isGuest ? 'unranked' : 'ranked');
   const [showPrivateOptions, setShowPrivateOptions] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [isConnected, setIsConnected] = useState(NetworkManager.isConnected);
   
   // Room List State
@@ -137,6 +139,36 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
     };
   }, []);
 
+
+
+  // Menu Navigation Hook
+  useMenuInput({
+    onBack: () => {
+        if (showCreateModal) {
+            setShowCreateModal(false);
+            return;
+        }
+        if (showPrivateOptions) {
+            setShowPrivateOptions(false);
+            return;
+        }
+        if (isSearching) {
+            handleToggleSearch(); // Cancel search
+            return;
+        }
+        if (activeRoomId) {
+            // Handled by RoomLobbyScreen if it was a separate component with its own hook?
+            // But here we conditionally render RoomLobbyScreen.
+            // If RoomLobbyScreen handles its own input, we shouldn't handle it here IF it's rendered.
+            // See below return.
+            return; 
+        }
+        
+        // Default: Go back to main menu
+        onBack();
+    }
+  }, [showCreateModal, showPrivateOptions, isSearching, activeRoomId, onBack]);
+
   const handleToggleSearch = () => {
       if (isSearching) {
           NetworkManager.leaveQueue();
@@ -148,9 +180,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
       }
   };
 
-  const handleCreateRoom = () => {
-      NetworkManager.createRoom();
-  };
+
 
   const handleJoinRoom = (roomId?: string) => {
       let targetId = roomId;
@@ -309,7 +339,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
                             className="overflow-hidden grid grid-cols-2 gap-4 pl-4"
                         >
                              <button 
-                                onClick={handleCreateRoom}
+                                onClick={() => setShowCreateModal(true)}
                                 className="p-6 bg-white/5 border border-white/10 rounded-xl text-left hover:bg-white/10 hover:border-white/30 transition-all group"
                              >
                                 <div className="flex items-center gap-3 mb-2 text-[#A855F7]">
@@ -366,6 +396,65 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
               }
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Create Room Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowCreateModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#1a1a24] border border-white/10 p-8 rounded-3xl shadow-2xl w-full max-w-md"
+            >
+              <h3 className="text-3xl font-black text-white mb-6 italic text-center">CREATE ROOM</h3>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <button
+                  onClick={() => {
+                    NetworkManager.createRoom(false); // Public
+                    setShowCreateModal(false);
+                  }}
+                  className="p-6 rounded-xl bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 border border-emerald-500/30 hover:border-emerald-400 hover:from-emerald-500/30 transition-all group text-left"
+                >
+                  <div className="flex items-center gap-3 mb-1">
+                    <Users className="w-6 h-6 text-emerald-400" />
+                    <span className="font-bold text-white text-lg tracking-wider">PUBLIC ROOM</span>
+                  </div>
+                  <p className="text-emerald-200/60 text-sm">Visible to everyone in the lobby list.</p>
+                </button>
+
+                <button
+                  onClick={() => {
+                    NetworkManager.createRoom(true); // Private
+                    setShowCreateModal(false);
+                  }}
+                  className="p-6 rounded-xl bg-gradient-to-r from-purple-500/20 to-purple-500/5 border border-purple-500/30 hover:border-purple-400 hover:from-purple-500/30 transition-all group text-left"
+                >
+                  <div className="flex items-center gap-3 mb-1">
+                    <Hash className="w-6 h-6 text-purple-400" />
+                    <span className="font-bold text-white text-lg tracking-wider">PRIVATE ROOM</span>
+                  </div>
+                  <p className="text-purple-200/60 text-sm">Hidden from lobby. Invite via Room ID.</p>
+                </button>
+              </div>
+
+              <div className="mt-6 flex justify-center">
+                <GameButton variant="secondary" onClick={() => setShowCreateModal(false)}>
+                  CANCEL
+                </GameButton>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

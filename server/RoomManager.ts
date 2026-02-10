@@ -26,6 +26,10 @@ export class RoomManager {
     deleteRoom(roomId: string) {
         this.rooms.delete(roomId);
     }
+
+    getAllRooms(): GameRoom[] {
+        return Array.from(this.rooms.values());
+    }
 }
 
 export const roomManager = new RoomManager();

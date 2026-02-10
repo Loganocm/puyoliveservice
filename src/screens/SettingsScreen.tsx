@@ -10,10 +10,13 @@ interface SettingsScreenProps {
 }
 
 import { BackButton } from '@/components/BackButton';
+import { useMenuInput } from '@/hooks/useMenuInput';
 
 // ...
 
 export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) {
+  useMenuInput({ onBack }, [onBack]);
+
   // ... existing state and logic ...
   const [das, setDas] = useState(SettingsManager.das);
   const [arr, setArr] = useState(SettingsManager.arr);

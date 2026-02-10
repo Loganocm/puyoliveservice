@@ -15,8 +15,10 @@ interface Player {
 import { useState, useEffect } from 'react';
 import { BackButton } from '@/components/BackButton';
 import { APIClient } from '@/core/APIClient';
+import { useMenuInput } from '@/hooks/useMenuInput';
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
+  useMenuInput({ onBack }, [onBack]);
   // ... existing state and logic ...
   const [players, setPlayers] = useState<Player[]>([]);
   const [userStats, setUserStats] = useState<any>(null);

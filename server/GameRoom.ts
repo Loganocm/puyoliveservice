@@ -52,6 +52,7 @@ export class GameRoom {
     maxPlayers: number = 2;
     matchStats: MatchStats | null = null;
     ranked: boolean = false;
+    isPrivate: boolean = false;
 
     // Match conclusion lock - prevents dual-win race conditions
     matchConcluded: boolean = false;
@@ -65,6 +66,7 @@ export class GameRoom {
 
     // Legacy (kept for backwards compat during transition)
     replayLog: ReplayEventLegacy[] = [];
+
 
 
     constructor(id: string) {

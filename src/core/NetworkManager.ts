@@ -169,9 +169,9 @@ export class NetworkManager {
         this.socket.emit('authenticate', { token });
     }
 
-    public static createRoom() {
+    public static createRoom(isPrivate: boolean = false) {
         if (!this.socket) return;
-        this.socket.emit('create_room');
+        this.socket.emit('create_room', { isPrivate });
     }
 
     public static joinQueue(ranked: boolean = false) {

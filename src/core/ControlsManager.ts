@@ -1,4 +1,4 @@
-export type GameAction = 'moveLeft' | 'moveRight' | 'softDrop' | 'hardDrop' | 'rotateCCW' | 'rotateCW' | 'pause';
+export type GameAction = 'moveLeft' | 'moveRight' | 'softDrop' | 'hardDrop' | 'rotateCCW' | 'rotateCW' | 'pause' | 'menuBack' | 'menuConfirm';
 
 interface KeyBindings {
     moveLeft: string;
@@ -8,6 +8,8 @@ interface KeyBindings {
     rotateCCW: string;
     rotateCW: string;
     pause: string;
+    menuBack: string;
+    menuConfirm: string;
 }
 
 interface ControllerBindings {
@@ -18,6 +20,8 @@ interface ControllerBindings {
     rotateCCW: string;
     rotateCW: string;
     pause: string;
+    menuBack: string;
+    menuConfirm: string;
 }
 
 // Map button index to standarized name (Gamepad API Standard Mapping)
@@ -46,7 +50,9 @@ export class ControlsManager {
         hardDrop: 'Space',
         rotateCCW: 'KeyZ',
         rotateCW: 'KeyX',
-        pause: 'Escape'
+        pause: 'Escape',
+        menuBack: 'Escape',
+        menuConfirm: 'Enter'
     };
 
     private static readonly DEFAULT_BINDINGS: KeyBindings = {
@@ -56,7 +62,9 @@ export class ControlsManager {
         hardDrop: 'Space',
         rotateCCW: 'KeyZ',
         rotateCW: 'KeyX',
-        pause: 'Escape'
+        pause: 'Escape',
+        menuBack: 'Escape',
+        menuConfirm: 'Enter'
     };
 
     private static controllerBindings: ControllerBindings = {
@@ -66,7 +74,9 @@ export class ControlsManager {
         hardDrop: 'GP_3',  // Y (Xbox) / Triangle (PS)
         rotateCCW: 'GP_1', // B (Xbox) / Circle (PS)
         rotateCW: 'GP_0',  // A (Xbox) / Cross (PS)
-        pause: 'GP_9'      // Start (Xbox/PS)
+        pause: 'GP_9',     // Start (Xbox/PS)
+        menuBack: 'GP_1',  // B (Xbox) / Circle (PS)
+        menuConfirm: 'GP_0' // A (Xbox) / Cross (PS)
     };
 
     private static readonly DEFAULT_CONTROLLER_BINDINGS: ControllerBindings = {
@@ -76,7 +86,9 @@ export class ControlsManager {
         hardDrop: 'GP_3',  // Y (Xbox) / Triangle (PS)
         rotateCCW: 'GP_1',
         rotateCW: 'GP_0',
-        pause: 'GP_9'      // Start (Xbox/PS)
+        pause: 'GP_9',      // Start (Xbox/PS)
+        menuBack: 'GP_1',
+        menuConfirm: 'GP_0'
     };
 
     public static getKey(action: GameAction): string {
@@ -202,7 +214,9 @@ export class ControlsManager {
             hardDrop: 'Hard Drop',
             rotateCCW: 'Rotate CCW',
             rotateCW: 'Rotate CW',
-            pause: 'Pause'
+            pause: 'Pause',
+            menuBack: 'Back / Cancel',
+            menuConfirm: 'Confirm / Select'
         };
 
         return actionNames[action];

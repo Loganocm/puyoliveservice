@@ -11,14 +11,23 @@ interface ControlsScreenProps {
 }
 
 import { BackButton } from '@/components/BackButton';
+import { useMenuInput } from '@/hooks/useMenuInput';
 
 // ...
 
 export function ControlsScreen({ onBack }: ControlsScreenProps) {
   // ...
   const [mode, setMode] = useState<'keyboard' | 'controller'>('keyboard');
-
   const [listeningFor, setListeningFor] = useState<string | null>(null);
+
+  useMenuInput({
+    onBack: () => {
+        if (!listeningFor) {
+            onBack();
+        }
+    }
+  }, [listeningFor, onBack]);
+
   const [, setUpdateTrigger] = useState(0);
 
   const handleReset = () => {
