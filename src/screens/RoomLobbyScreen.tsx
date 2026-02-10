@@ -1,10 +1,8 @@
 import { motion } from 'motion/react';
 import { Users, Play, LogOut, Check, X } from 'lucide-react';
 import { GameButton } from '@/components/GameButton';
-import { MenuBanner } from '@/components/MenuBanner';
 import { NetworkManager } from '@/core/NetworkManager';
 import { useEffect, useState } from 'react';
-import type { RoomData } from './MultiplayerLobby';
 
 interface RoomLobbyScreenProps {
     roomId: string;

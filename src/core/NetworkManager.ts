@@ -270,6 +270,11 @@ export class NetworkManager {
         this.socket.emit('requeue', { roomId });
     }
 
+    public static getRooms() {
+        if (!this.socket) return;
+        this.socket.emit('get_rooms');
+    }
+
     public static getRoomDetails(roomId: string) {
         if (!this.socket) return;
         this.socket.emit('get_room_details', { roomId });
