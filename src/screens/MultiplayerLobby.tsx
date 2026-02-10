@@ -17,6 +17,8 @@ interface MultiplayerLobbyProps {
   onStartGame?: () => void;
 }
 
+import { RoomLobbyScreen } from '@/screens/RoomLobbyScreen';
+
 export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps) {
   const [queueMode, setQueueMode] = useState<'ranked' | 'unranked'>(AuthManager.isGuest ? 'unranked' : 'ranked');
   const [showPrivateOptions, setShowPrivateOptions] = useState(false);
@@ -29,7 +31,10 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
   // Queue State
   const [isSearching, setIsSearching] = useState(false);
   const [queueCounts, setQueueCounts] = useState({ ranked: 0, unranked: 0 });
-  // const [matchStatus, setMatchStatus] = useState<string>('Idle'); // Unused for now
+
+  // Lobby State (for Custom Games)
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [isHost, setIsHost] = useState(false);
 
   // VS Screen State
   const [showVSScreen, setShowVSScreen] = useState(false);
@@ -72,7 +77,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
         console.log("Lobby: Match Found!", data);
         setIsSearching(false);
         
-        // Store room ID for later
+        // Matchmaking matches go straight to VS screen -> Game
         pendingRoomId.current = data.roomId;
         setVsRanked(data.ranked || false);
         
@@ -103,14 +108,11 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
         setShowVSScreen(true);
     };
 
-
     const onRoomCreated = (data: { roomId: string }) => {
         console.log("Lobby: Room Created", data);
-        // For now, auto-join self? Usually server puts creator in room.
-        // We might want to show a "Waiting Room" UI here instead of starting immediately?
-        // But for this simplified flow, let's jump in.
-        SceneManager.changeScene(new GameScene(data.roomId));
-        if (onStartGame) onStartGame();
+        // Custom Game: Go to Lobby Screen
+        setActiveRoomId(data.roomId);
+        setIsHost(true);
     };
 
     // Listeners
@@ -133,33 +135,24 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
         NetworkManager.off('match_found', onMatchFound);
         NetworkManager.off('room_created', onRoomCreated);
     };
-  }, [onStartGame]);
+  }, []);
 
   const handleToggleSearch = () => {
       if (isSearching) {
           NetworkManager.leaveQueue();
           setIsSearching(false);
-// setMatchStatus('Searching...');
       } else {
           // Join Logic
           NetworkManager.joinQueue(queueMode === 'ranked');
           setIsSearching(true);
-          // setMatchStatus('Searching...');
       }
   };
 
   const handleCreateRoom = () => {
       NetworkManager.createRoom();
-      // setMatchStatus included in logic removed
   };
 
   const handleJoinRoom = (roomId?: string) => {
-      // If called from button without ID, prompt. If from list, use ID.
-      // The button currently calls it with event object if not careful, but we can wrapper it.
-      // Actually, standard onClick passes event.
-      // Let's check type or just use a separate handler for the prompt one if needed, 
-      // but simpler: check if roomId is string.
-      
       let targetId = roomId;
       if (typeof targetId !== 'string') {
           targetId = prompt("Enter Room ID:") || undefined;
@@ -167,22 +160,41 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
 
       if (targetId) {
           NetworkManager.joinRoom(targetId);
-          // Optimistic switch or wait for event?
-          // Since we listen for 'match_found' or 'room_joined' (from existing logic), 
-          // we might just wait. But existing logic often did immediate switch.
-          // Let's try immediate switch to GameScene for now, as NetworkManager.joinRoom is fire-and-forget in current implementation
-          // unless we add a callback or wait for socket event.
-          // The 'match_found' listener above handles the switch for matchmaking.
-          // For direct join, we might need to handle 'player_joined' if we are the joiner?
-          // NetworkManager.ts says: socket.on('player_joined') -> emit 'player_joined'
-          // We probably need to listen to that to know if WE joined?
-          // Actually, 'room_created' and 'match_found' are handled.
-          // Let's assume for now we just switch.
-          
-          SceneManager.changeScene(new GameScene(targetId));
-          if (onStartGame) onStartGame();
+          // For joining custom room, we assume success and go to lobby
+          // Ideally we wait for a 'joined_room' event, but 'player_joined' might fire?
+          // Let's set active immediately
+          setActiveRoomId(targetId);
+          setIsHost(false);
       }
   };
+
+  const handleLobbyStart = () => {
+      // Triggered by Lobby Screen when game actually starts (e.g. Host clicked start)
+      if (activeRoomId) {
+           SceneManager.changeScene(new GameScene(activeRoomId));
+           if (onStartGame) onStartGame();
+      }
+  };
+
+  const handleLobbyLeave = () => {
+      if (activeRoomId) {
+          NetworkManager.leaveRoom(activeRoomId);
+          setActiveRoomId(null);
+          setIsHost(false);
+      }
+  };
+
+  // Render Lobby Screen if in a room
+  if (activeRoomId) {
+      return (
+          <RoomLobbyScreen 
+              roomId={activeRoomId} 
+              isHost={isHost} 
+              onStart={handleLobbyStart}
+              onLeave={handleLobbyLeave}
+          />
+      );
+  }
 
   return (
     <div className="size-full relative overflow-hidden bg-transparent flex items-center justify-center pointer-events-auto">
@@ -236,7 +248,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
                 </motion.div>
             )}
         </AnimatePresence>
-
+        
         <div className="w-full max-w-4xl grid grid-cols-1 gap-4">
             {/* Quick Play Banner */}
             <MenuBanner
@@ -247,11 +259,9 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
                 gradient="linear-gradient(135deg, rgba(59,130,246,0.4) 0%, transparent 100%)"
                 onClick={() => {
                     setQueueMode('unranked');
-                    if (!isSearching) { // If not searching, start
-                        // Note: state update is async, so we might need a useEffect or just call joinQueue directly with 'false'
+                    if (!isSearching) {
                          NetworkManager.joinQueue(false); // false = unranked
                          setIsSearching(true);
-                         // setMatchStatus('Searching...');
                     }
                 }}
                 playerCount={queueCounts.unranked}
@@ -271,7 +281,6 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
                     if (!isSearching) {
                         NetworkManager.joinQueue(true); // true = ranked
                         setIsSearching(true);
-                        // setMatchStatus('Searching...');
                     }
                 }}
                 playerCount={queueCounts.ranked}

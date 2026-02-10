@@ -261,12 +261,54 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  // Helper to broadcast room state to all players in the room
+  const broadcastRoomUpdate = (roomId: string) => {
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+
+    const players = Array.from(room.players.values()).map(p => ({
+      id: p.id,
+      username: p.name,
+      ready: p.ready,
+      isHost: room.getPlayerIndex(p.id) === 0, // Assume first player is host
+      userId: p.userId,
+      elo: undefined, // Add logic if available
+      avatarUrl: undefined // Add if available in Player struct
+    }));
+
+    io.to(roomId).emit('room_update', {
+      roomId: room.id,
+      players,
+      maxPlayers: room.maxPlayers
+    });
+  };
+
+  socket.on('get_room_details', (data: { roomId: string }) => {
+    const room = roomManager.getRoom(data.roomId);
+    if (room) {
+      broadcastRoomUpdate(data.roomId); // Just broadcast to everyone to be safe/lazy, or emit back to socket
+    }
+  });
+
+  socket.on('toggle_ready', (data: { roomId: string, ready: boolean }) => {
+    const room = roomManager.getRoom(data.roomId);
+    if (room) {
+      const player = room.players.get(socket.id);
+      if (player) {
+        player.ready = data.ready;
+        console.log(`Player ${player.name} in room ${data.roomId} is now ${data.ready ? 'READY' : 'NOT READY'}`);
+        broadcastRoomUpdate(data.roomId);
+      }
+    }
+  });
+
   socket.on('create_room', () => {
     const room = roomManager.createRoom();
     room.addPlayer({ id: socket.id, name: `Player ${socket.id.substring(0, 4)}`, ready: false });
     socket.join(room.id);
     socket.emit('room_created', { roomId: room.id });
     console.log(`Room created: ${room.id}`);
+    broadcastRoomUpdate(room.id);
   });
 
   socket.on('start_game', (roomId: string) => {
@@ -313,6 +355,21 @@ io.on('connection', (socket: Socket) => {
       socket.join(roomId);
       console.log(`${socket.id} joined room ${roomId}`);
       io.to(roomId).emit('player_joined', { id: socket.id, count: room.playerCount });
+
+      // Broadcast full room update for lobby
+      const players = Array.from(room.players.values()).map(p => ({
+        id: p.id,
+        username: p.name,
+        ready: p.ready,
+        isHost: room.getPlayerIndex(p.id) === 0,
+        userId: p.userId
+      }));
+      io.to(roomId).emit('room_update', {
+        roomId: room.id,
+        players,
+        maxPlayers: room.maxPlayers
+      });
+
     } else {
       socket.emit('error', { message: 'Room full' });
     }

@@ -7,7 +7,6 @@ import { config } from './config/index.js';
 import { prisma } from './db/prisma.js';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/index.js';
-// import { initializeSocket } from './socket/index.js';
 
 export const app = express();
 const httpServer = createServer(app);
@@ -86,6 +85,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Initialize Socket.IO
+// Note: Detailed socket logic is handled by the standalone server in /server
 const io = new Server(httpServer, {
   cors: {
     origin: "*", // Allow all origins for socket.io to avoid issues
@@ -95,10 +95,6 @@ const io = new Server(httpServer, {
   pingTimeout: 60000,
   pingInterval: 25000
 });
-
-// Socket.IO removed (moved to standalone server)
-// initializeSocket(io);
-// console.log('🔌 Socket.IO Initialized');
 
 // Start server function
 export async function startServer(): Promise<void> {

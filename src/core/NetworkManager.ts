@@ -150,6 +150,10 @@ export class NetworkManager {
             this.emit('room_list_update', rooms);
         });
 
+        this.socket.on('room_update', (data: any) => {
+            this.emit('room_update', data);
+        });
+
         // Add handler for auth response
         this.socket.on('authenticated', (data: { success: boolean, user?: any, error?: string }) => {
             console.log('Socket Auth:', data);
@@ -266,9 +270,14 @@ export class NetworkManager {
         this.socket.emit('requeue', { roomId });
     }
 
-    public static getRooms() {
+    public static getRoomDetails(roomId: string) {
         if (!this.socket) return;
-        this.socket.emit('get_rooms');
+        this.socket.emit('get_room_details', { roomId });
+    }
+
+    public static toggleReady(roomId: string, ready: boolean) {
+        if (!this.socket) return;
+        this.socket.emit('toggle_ready', { roomId, ready });
     }
 
     public static on(event: string, callback: NetworkCallback) {
@@ -276,7 +285,17 @@ export class NetworkManager {
             this.listeners.set(event, []);
         }
         this.listeners.get(event)!.push(callback);
+
+        // Ensure we listen for this event on the socket if it's set up
+        if (this.socket && !this.socket.hasListeners(event)) {
+            // Forward socket event to our listeners
+            // Note: We already set up most specific listeners in connect(), 
+            // but for dynamic ones like 'room_update', we might need to add them.
+            // However, our connect() method sets up specific handlers that emit to our internal listeners.
+            // We should add 'room_update' to the connect method instead to be consistent.
+        }
     }
+
 
     public static off(event: string, callback: NetworkCallback) {
         if (!this.listeners.has(event)) return;

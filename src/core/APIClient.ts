@@ -1,4 +1,3 @@
-import { NetworkManager } from './NetworkManager';
 import { AuthManager } from './AuthManager';
 
 const BASE_URL = 'https://game.puyo.live'; // Fallback

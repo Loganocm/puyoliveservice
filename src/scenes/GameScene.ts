@@ -791,6 +791,13 @@ export class GameScene implements IScene {
             return;
         }
 
+        const pct = Math.min(this.escapeHoldTimer / this.FORFEIT_HOLD_TIME, 1.0);
+
+        const barW = 300;
+        const barH = 20;
+        const x = (1000 - barW) / 2;
+        const y = 600; // Bottom area
+
         // BG
         this.forfeitBar.rect(x, y, barW, barH);
         this.forfeitBar.fill({ color: 0x000000, alpha: 0.8 });
