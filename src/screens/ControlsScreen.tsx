@@ -86,7 +86,7 @@ export function ControlsScreen({ onBack }: ControlsScreenProps) {
   });
 
   return (
-    <div className="size-full relative overflow-hidden bg-[#0a0a12] flex items-center justify-center">
+    <div className="size-full relative overflow-hidden bg-transparent flex items-center justify-center">
       {/* Background effects */}
       <div 
         className="absolute inset-0 opacity-[0.03] pointer-events-none"

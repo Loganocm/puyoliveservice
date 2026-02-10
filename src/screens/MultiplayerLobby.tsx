@@ -148,7 +148,7 @@ export function MultiplayerLobby({ onBack, onStartGame }: MultiplayerLobbyProps)
   };
 
   return (
-    <div className="size-full relative overflow-hidden bg-[#0a0a12] flex items-center justify-center pointer-events-auto">
+    <div className="size-full relative overflow-hidden bg-transparent flex items-center justify-center pointer-events-auto">
       {/* Background effects */}
       <div 
         className="absolute inset-0 opacity-[0.03]"
