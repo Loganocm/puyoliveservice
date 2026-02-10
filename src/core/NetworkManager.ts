@@ -7,7 +7,7 @@ export class NetworkManager {
     public static isConnected: boolean = false;
     private static listeners: Map<string, NetworkCallback[]> = new Map();
 
-    public static serverUrl: string = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://game.puyo.live' : 'http://localhost:3000');
+    public static serverUrl: string = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:3000' : 'https://game.puyo.live');
 
     public static connect(url: string | null = null) {
         // If already connected, skip
@@ -33,8 +33,8 @@ export class NetworkManager {
                 import.meta.env.VITE_SERVER_URL;
 
             if (!url) {
-                if (window.location.hostname === 'localhost') {
-                    url = 'http://localhost:3001';
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    url = 'http://localhost:3000';
                 } else {
                     // Production: use the dedicated game subdomain
                     url = 'https://game.puyo.live';

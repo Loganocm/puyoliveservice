@@ -1052,15 +1052,7 @@ export class GameEngine {
         return !this.canMove(0, 1);
     }
 
-    private getSubPos(x: number, y: number, rot: number) {
-        const offsets = [
-            { x: 0, y: -1 }, // Top
-            { x: 1, y: 0 },  // Right
-            { x: 0, y: 1 },  // Bottom
-            { x: -1, y: 0 }  // Left
-        ];
-        return { x: x + offsets[rot].x, y: y + offsets[rot].y };
-    }
+
 
     public changeState(newState: GameState) {
         this.state = newState;

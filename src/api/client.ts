@@ -1,5 +1,8 @@
 export class APIClient {
-    private static baseUrl = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://api.puyo.live/api' : 'http://localhost:3001/api');
+    private static baseUrl = import.meta.env.VITE_API_URL ||
+        (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://localhost:8080/api'
+            : 'https://api.puyo.live/api');
 
     private static async request(endpoint: string, options: RequestInit = {}) {
         const token = localStorage.getItem('puyolive_token');

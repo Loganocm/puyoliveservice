@@ -3,7 +3,7 @@ import { GameEngine } from '../core/GameEngine';
 import { APIClient } from '../api/client';
 import { PuyoColor, COLS, TOTAL_ROWS, HIDDEN_ROWS } from '../core/Constants';
 import { X, Play, Pause } from 'lucide-react';
-import { Button } from '../components/Button'; // Ensure this exists or use HTML button
+// Button import removed // Ensure this exists or use HTML button
 
 // Duplicate types since we can't import from server easily
 type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
@@ -216,7 +216,7 @@ export const ReplayViewer: React.FC<ReplayViewerProps> = ({ matchId, onClose }) 
         // Draw Active Piece
         if (engine.activePiece) {
             const { x, y, mainColor, subColor, rot } = engine.activePiece;
-            const sub = engine.getSubPos(x, y, rot); // Need this helper public?
+            // const sub = engine.getSubPos(x, y, rot); // Helper available if needed
             // activePiece pos x,y is MAIN.
             // sub pos depends on rot.
             // offsets: 0:(0,-1), 1:(1,0), 2:(0,1), 3:(-1,0)
