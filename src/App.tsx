@@ -8,6 +8,9 @@ import {
   User
 } from 'lucide-react';
 import puyoHeaderLogo from '@/resources/puyoheader.svg';
+import bg1 from '@/resources/felix-mittermeier-milky-way-5295160.jpg';
+import bg2 from '@/resources/chiemseherin-milky-way-8149815.jpg';
+import bg3 from '@/resources/charlvera-polar-lights-5858656.jpg';
 import { PuyoFooter } from '@/components/PuyoFooter';
 import { WaterFillButton } from '@/components/WaterFillButton';
 import { PlayerStatsPanel } from '@/components/PlayerStatsPanel';
@@ -37,6 +40,14 @@ export default function App() {
   const [user, setUser] = useState<UserData | null>(AuthManager.currentUser as UserData | null);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
+  const [bgImage, setBgImage] = useState<string>('');
+
+  // Set random background on component mount
+  useEffect(() => {
+    const backgrounds = [bg1, bg2, bg3];
+    const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
+    setBgImage(randomBg);
+  }, []);
   
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
@@ -139,6 +150,12 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen bg-transparent overflow-hidden font-sans text-white z-50 pointer-events-none">
+      {bgImage && screen !== 'game' && (
+         <div 
+           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-60"
+           style={{ backgroundImage: `url(${bgImage})` }}
+         />
+      )}
       <AnimatePresence mode="popLayout">
         {screen === 'menu' && (
           <motion.div 
