@@ -1558,26 +1558,8 @@ export class GameScene implements IScene {
             // Draw Static Background - fills entire viewport
             // Draw Static Background - fills entire viewport
             // staticBg is a Sprite now, managed by resizeBackground() and texture loading.
-            // We do NOT plain clear/draw rects on it every frame unless we want to clear children (dim overlay).
 
-            // If we have a texture, we just ensure it's positioned (resize handles this).
-            // We just need to ensure the dim overlay is present if not already.
-
-            // Actually, staticBg is a Container/Sprite. 
-            // If we want to support fallback (no texture), we might need a Graphics child.
-
-            // Let's simplify: 
-            // If texture is loaded, staticBg shows it.
-            // We need a dim overlay ON TOP of it.
-
-            // Ensure dim overlay exists
-            // We can't easily check children type without casting, but we can name it.
-
-            // Alternative: Just use a separate Graphics for dimming in the container, ABOVE staticBg.
-            // But staticBg is added to this.container.
-
-            // Let's just fix the crash first:
-            // this.staticBg is a Sprite. It does NOT have .clear(), .rect(), .fill().
+            // Fallback if texture is missing or invalid
 
             if (!this.staticBg.texture || this.staticBg.texture === Texture.WHITE) {
                 // Fallback: Use a simple colored texture or nothing?

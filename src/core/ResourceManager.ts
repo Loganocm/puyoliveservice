@@ -1,7 +1,7 @@
 import { Assets, Texture, Rectangle, groupD8 } from 'pixi.js';
 import { PuyoColor } from './Constants';
 import puyoPng from '../resources/puyo.png';
-import playbgPng from '../resources/playbg.png';
+// // import playbgPng from '../resources/playbg.png'; // Removed per user request // Removed per user request
 
 export class ResourceManager {
   private static sheetTexture: Texture;
@@ -12,7 +12,8 @@ export class ResourceManager {
     this.sheetTexture = await Assets.load(puyoPng);
     try {
       // Load the play background
-      this.backgroundTexture = await Assets.load(playbgPng);
+      // this.backgroundTexture = await Assets.load(playbgPng);
+      this.backgroundTexture = Texture.WHITE;
     } catch (e) {
       console.warn("Failed to load high-res background, falling back/ignoring", e);
       // Fallback or empty? dynamic graphics will be used if this is null usually,
