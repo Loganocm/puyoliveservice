@@ -105,7 +105,7 @@ export class GameEngine {
     public onGarbageGenerated?: (amount: number) => void; // "Ojama" / Garbage
     public onGarbageOffset?: (amount: number) => void;
     public onChainStep?: (chain: number) => void;
-    public onPieceLock?: () => void;
+    public onPieceLock?: (cells: { c: number, r: number }[]) => void;
     public onBoardChange?: () => void;
     public onActivePieceUpdate?: () => void; // For multiplayer sync
     public onPieceSpawn?: () => void;
@@ -664,6 +664,9 @@ export class GameEngine {
         this.board.grid[sub.x][sub.y] = subColor;
         this.board.handleBigPuyo(x, y);
         this.board.handleBigPuyo(sub.x, sub.y);
+
+        // Notify renderer of landed cells for animation
+        this.onPieceLock?.([{ c: x, r: y }, { c: sub.x, r: sub.y }]);
 
         // Broadcast board state immediately on piece lock (critical for MP sync)
         this.onBoardChange?.();

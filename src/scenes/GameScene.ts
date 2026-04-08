@@ -58,6 +58,9 @@ export class GameScene implements IScene {
     private floatingTexts: FloatingText[] = [];
     private shakeStrength: number = 0;
 
+    // Landing jiggle animation: key = col * 100 + row, value = progress 0..1
+    private landingAnims: Map<number, number> = new Map();
+
     // Persistent UI Graphics (reused each frame to prevent memory churn)
     private uiGraphics: Graphics;
     private damageGraphics: Graphics;
@@ -407,6 +410,7 @@ export class GameScene implements IScene {
         this.accumulator = 0;
         this.particles = [];
         this.floatingTexts = [];
+        this.landingAnims.clear();
 
         this.engine.onPieceSpawn = () => {
             this.nextQueueAnimation = 1.0;
@@ -490,6 +494,12 @@ export class GameScene implements IScene {
         this.engine.onScoreChange = (score) => {
             if (this.roomId) {
                 NetworkManager.sendScore(this.roomId, score);
+            }
+        };
+
+        this.engine.onPieceLock = (cells) => {
+            for (const cell of cells) {
+                this.landingAnims.set(cell.c * 100 + cell.r, 0);
             }
         };
 
@@ -754,6 +764,20 @@ export class GameScene implements IScene {
             this.graphics.position.set(bx + sx, by + sy);
             this.puyoContainer.position.set(bx + sx, by + sy);
             this.effectContainer.position.set(bx + sx, by + sy);
+
+            // Tick landing jiggle animations
+            if (this.landingAnims.size > 0) {
+                const speed = delta / 12; // ~12 frames (200ms) total duration
+                for (const [key, t] of this.landingAnims) {
+                    const next = t + speed;
+                    if (next >= 1) {
+                        this.landingAnims.delete(key);
+                    } else {
+                        this.landingAnims.set(key, next);
+                    }
+                }
+            }
+
             this.draw();
             this.drawUI();
             this.drawForfeitUI(); // Draw progress bar if holding
@@ -1643,13 +1667,31 @@ export class GameScene implements IScene {
 
         // Connected puyos overlap slightly to seal gaps; isolated puyos fit exactly
         const overlap = connections > 0 ? 4 : 0;
-        sprite.width = CELL_SIZE + overlap;
-        sprite.height = CELL_SIZE + overlap;
-        sprite.anchor.set(0.5);
+        const baseW = CELL_SIZE + overlap;
+        const baseH = CELL_SIZE + overlap;
 
+        sprite.anchor.set(0.5);
         sprite.x = drawX + CELL_SIZE / 2;
         sprite.y = drawY + CELL_SIZE / 2;
         sprite.alpha = alpha;
+
+        // Landing jiggle: squash horizontally, stretch vertically then spring back
+        const animKey = c * 100 + r;
+        const t = this.landingAnims.get(animKey);
+        if (t !== undefined) {
+            // Damped sine wave: amplitude decays as t goes 0→1
+            const amp = (1 - t) * 0.18;
+            const wave = Math.sin(t * Math.PI * 3); // ~1.5 full oscillations
+            const scaleX = 1 + amp * wave;   // wider on first bounce
+            const scaleY = 1 - amp * wave;   // shorter on first bounce
+            sprite.width = baseW * scaleX;
+            sprite.height = baseH * scaleY;
+            // Anchor bottom so squash pushes down, not center
+            sprite.y = drawY + CELL_SIZE / 2 + (baseH * (1 - scaleY)) * 0.25;
+        } else {
+            sprite.width = baseW;
+            sprite.height = baseH;
+        }
 
         this.puyoContainer.addChild(sprite);
     }
