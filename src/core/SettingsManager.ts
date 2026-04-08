@@ -32,6 +32,10 @@ export class SettingsManager {
   // Defaulting to true is safer for preventing accidental drops on spawn
   public static softDropProtection = true;
 
+  // Screen Shake Intensity (0 to 100, default 40 = subtle)
+  // 0 = Off, 100 = Full intensity
+  public static screenShake = 40;
+
   public static save() {
     localStorage.setItem('puyolive_settings', JSON.stringify({
       das: this.das,
@@ -40,7 +44,8 @@ export class SettingsManager {
       are: this.are,
       lineClearDelay: this.lineClearDelay,
       masterVolume: this.masterVolume,
-      softDropProtection: this.softDropProtection
+      softDropProtection: this.softDropProtection,
+      screenShake: this.screenShake
     }));
   }
 
@@ -67,6 +72,7 @@ export class SettingsManager {
         }
       }
       if (parsed.softDropProtection !== undefined) this.softDropProtection = parsed.softDropProtection;
+      if (parsed.screenShake !== undefined) this.screenShake = parsed.screenShake;
     } else {
       this.save();
     }

@@ -1,20 +1,23 @@
-import { motion } from 'motion/react';
-import { useState } from 'react';
-import { Gamepad2 } from 'lucide-react';
-import { SettingsManager } from '@/core/SettingsManager';
-import { SoundManager } from '@/core/SoundManager';
+import { motion } from "motion/react";
+import { useState } from "react";
+import { Gamepad2 } from "lucide-react";
+import { SettingsManager } from "@/core/SettingsManager";
+import { SoundManager } from "@/core/SoundManager";
 
 interface SettingsScreenProps {
   onOpenControls: () => void;
   onBack: () => void;
 }
 
-import { BackButton } from '@/components/BackButton';
-import { useMenuInput } from '@/hooks/useMenuInput';
+import { BackButton } from "@/components/BackButton";
+import { useMenuInput } from "@/hooks/useMenuInput";
 
 // ...
 
-export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) {
+export function SettingsScreen({
+  onOpenControls,
+  onBack,
+}: SettingsScreenProps) {
   useMenuInput({ onBack }, [onBack]);
 
   // ... existing state and logic ...
@@ -22,13 +25,21 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
   const [arr, setArr] = useState(SettingsManager.arr);
   const [softDrop, setSoftDrop] = useState(SettingsManager.sdf);
   const [masterVol, setMasterVol] = useState(SettingsManager.masterVolume);
+  const [screenShake, setScreenShake] = useState(SettingsManager.screenShake);
+  const [activeTab, setActiveTab] = useState<"handling" | "effects">(
+    "handling",
+  );
 
-  const updateSetting = (setter: (val: number) => void, key: keyof typeof SettingsManager, value: number) => {
+  const updateSetting = (
+    setter: (val: number) => void,
+    key: keyof typeof SettingsManager,
+    value: number,
+  ) => {
     setter(value);
     // @ts-ignore - Dynamic access to static properties
     SettingsManager[key] = value;
-    
-    if (key === 'masterVolume') {
+
+    if (key === "masterVolume") {
       SoundManager.updateActiveVolumes();
     }
   };
@@ -37,67 +48,83 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
     SettingsManager.save();
   };
 
-  const settings = [
-    { 
-      id: 'das', 
-      label: 'DAS', 
-      description: 'DELAYED AUTO SHIFT', 
-      value: das, 
-      setValue: (v: number) => updateSetting(setDas, 'das', v), 
-      min: 0, 
+  const handlingSettings = [
+    {
+      id: "das",
+      label: "DAS",
+      description: "DELAYED AUTO SHIFT",
+      value: das,
+      setValue: (v: number) => updateSetting(setDas, "das", v),
+      min: 0,
       max: 100,
-      color: '#FF5733'
+      color: "#FF5733",
     },
-    { 
-      id: 'arr', 
-      label: 'ARR', 
-      description: 'AUTO REPEAT RATE', 
-      value: arr, 
-      setValue: (v: number) => updateSetting(setArr, 'arr', v), 
-      min: 0, 
+    {
+      id: "arr",
+      label: "ARR",
+      description: "AUTO REPEAT RATE",
+      value: arr,
+      setValue: (v: number) => updateSetting(setArr, "arr", v),
+      min: 0,
       max: 100,
-      color: '#FF5733'
+      color: "#FF5733",
     },
-    { 
-      id: 'softDrop', 
-      label: 'SOFT DROP', 
-      description: 'VELOCITY', 
-      value: softDrop, 
-      setValue: (v: number) => updateSetting(setSoftDrop, 'sdf', v), 
-      min: 0, 
+    {
+      id: "softDrop",
+      label: "SOFT DROP",
+      description: "VELOCITY",
+      value: softDrop,
+      setValue: (v: number) => updateSetting(setSoftDrop, "sdf", v),
+      min: 0,
       max: 100,
-      color: '#FF5733'
-    },
-    { 
-      id: 'masterVol', 
-      label: 'MASTER VOL.', 
-      description: '', 
-      value: masterVol, 
-      setValue: (v: number) => updateSetting(setMasterVol, 'masterVolume', v), 
-      min: 0, 
-      max: 100,
-      color: '#FF5733'
+      color: "#FF5733",
     },
   ];
+
+  const effectsSettings = [
+    {
+      id: "masterVol",
+      label: "MASTER VOL.",
+      description: "AUDIO VOLUME",
+      value: masterVol,
+      setValue: (v: number) => updateSetting(setMasterVol, "masterVolume", v),
+      min: 0,
+      max: 100,
+      color: "#FF5733",
+    },
+    {
+      id: "screenShake",
+      label: "SCREEN SHAKE",
+      description: "INTENSITY",
+      value: screenShake,
+      setValue: (v: number) => updateSetting(setScreenShake, "screenShake", v),
+      min: 0,
+      max: 100,
+      color: "#FF5733",
+    },
+  ];
+
+  const settings =
+    activeTab === "handling" ? handlingSettings : effectsSettings;
 
   return (
     <div className="size-full relative overflow-hidden bg-transparent flex items-center justify-center">
       {/* Background effects */}
-      <div 
+      <div
         className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: `
             linear-gradient(rgba(6,182,212,0.3) 1px, transparent 1px),
             linear-gradient(90deg, rgba(6,182,212,0.3) 1px, transparent 1px)
           `,
-          backgroundSize: '40px 40px',
+          backgroundSize: "40px 40px",
         }}
       />
-      
+
       <BackButton onClick={onBack} />
 
       <div className="w-full max-w-xl px-8 relative z-10">
-        <motion.h1 
+        <motion.h1
           className="text-5xl font-black text-white mb-12 tracking-tighter text-center italic drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -105,6 +132,33 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
         >
           SETTINGS
         </motion.h1>
+
+        {/* Tab Buttons */}
+        <motion.div
+          className="flex gap-2 mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+        >
+          {(
+            [
+              ["handling", "HANDLING"],
+              ["effects", "EFFECTS"],
+            ] as const
+          ).map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-3 text-sm font-black tracking-widest rounded-xl border transition-all duration-200 cursor-pointer ${
+                activeTab === tab
+                  ? "bg-[#FF5733]/20 border-[#FF5733]/60 text-[#FF5733] shadow-[0_0_15px_rgba(255,87,51,0.2)]"
+                  : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/70"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </motion.div>
 
         {/* Settings Sliders */}
         <motion.div
@@ -122,12 +176,19 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
             >
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <div className="text-base font-black text-white tracking-widest">{setting.label}</div>
+                  <div className="text-base font-black text-white tracking-widest">
+                    {setting.label}
+                  </div>
                   {setting.description && (
-                    <div className="text-[10px] font-bold text-white/40 tracking-[0.2em] mt-1">{setting.description}</div>
+                    <div className="text-[10px] font-bold text-white/40 tracking-[0.2em] mt-1">
+                      {setting.description}
+                    </div>
                   )}
                 </div>
-                <div className="text-2xl font-black" style={{ color: setting.color }}>
+                <div
+                  className="text-2xl font-black"
+                  style={{ color: setting.color }}
+                >
                   {setting.value}
                 </div>
               </div>

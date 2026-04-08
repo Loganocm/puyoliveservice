@@ -106,6 +106,9 @@ export class GameEngine {
     public onGarbageOffset?: (amount: number) => void;
     public onChainStep?: (chain: number) => void;
     public onPieceLock?: (cells: { c: number, r: number }[]) => void;
+    public onGravityLanded?: (cells: { c: number, r: number }[]) => void;
+    public onHardDrop?: (cells: { c: number, r: number }[]) => void;
+    public onAllClear?: () => void;
     public onBoardChange?: () => void;
     public onActivePieceUpdate?: () => void; // For multiplayer sync
     public onPieceSpawn?: () => void;
@@ -381,16 +384,22 @@ export class GameEngine {
             this.activePiece.y += 1;
             dropped++;
         }
+        // Capture cells before lock for hard drop animation
+        const hdMain = { c: this.activePiece.x, r: this.activePiece.y };
+        const hdSub = this.getSubPos(this.activePiece.x, this.activePiece.y, this.activePiece.rot);
+        const hdCells = [{ c: hdMain.c, r: hdMain.r }, { c: hdSub.x, r: hdSub.y }];
         if (dropped > 0) {
             this.onActivePieceUpdate?.();
             // Immediately lock without waiting for lockDelay
             this.lockPiece();
+            this.onHardDrop?.(hdCells);
             this.stats.score += dropped; // Tiny bonus
             return true;
         }
         // Even if didn't drop (already on ground), hard drop usually locks?
         // Standard behavior: Hard Drop on ground -> Lock.
         this.lockPiece();
+        this.onHardDrop?.(hdCells);
         this.recordAction('hardDrop');
         return true;
     }
@@ -708,12 +717,16 @@ export class GameEngine {
 
         if (this.stateTimer > scaledDelay) {
             this.stateTimer = 0;
+            // Capture landing destinations before clearing
+            const landed = this.fallingDestinations.map(f => ({ c: f.c, r: f.destR }));
             this.fallingDestinations = []; // Clear visual cache
             const fell = this.board.applyGravity();
             // Should always fall if destinations > 0, but good to check return
             if (!fell) {
                 this.changeState(GameState.CHECK_MATCH);
             } else {
+                // Notify renderer of landed cells for jiggle
+                if (landed.length > 0) this.onGravityLanded?.(landed);
                 // Gravity applied, layout changed.
                 // MUST sync with network so opponent sees pieces fall.
                 this.onBoardChange?.();
@@ -820,29 +833,20 @@ export class GameEngine {
         // Falling Logic
         let allDone = true;
 
-        const speed = 60.0; // INSTANT (60 rows per frame)
-        // Optimization: If speed is super high, just snap everything instantly
-        const instant = true;
+        const speed = 1.5; // rows per frame — smooth visible fall
 
-        if (instant) {
-            for (const garb of this.fallingGarbage) {
-                garb.r = garb.destR;
+        for (const garb of this.fallingGarbage) {
+            if (garb.delay > 0) {
+                garb.delay -= this.dt;
+                allDone = false;
+                continue;
             }
-            allDone = true;
-        } else {
-            for (const garb of this.fallingGarbage) {
-                if (garb.delay > 0) {
-                    garb.delay -= this.dt;
-                    allDone = false;
-                    continue;
-                }
 
-                if (garb.r < garb.destR) {
-                    garb.r += speed * this.dt;
-                    allDone = false;
-                    if (garb.r >= garb.destR) {
-                        garb.r = garb.destR; // Snap
-                    }
+            if (garb.r < garb.destR) {
+                garb.r += speed * this.dt;
+                allDone = false;
+                if (garb.r >= garb.destR) {
+                    garb.r = garb.destR; // Snap
                 }
             }
         }
@@ -885,7 +889,19 @@ export class GameEngine {
 
             this.changeState(GameState.POP_ANIM);
         } else {
-            // Chain End
+            // Chain End — check for All Clear (board empty)
+            if (this.stats.chainCount > 0) {
+                let boardEmpty = true;
+                for (let c = 0; c < COLS && boardEmpty; c++) {
+                    for (let r = 0; r < TOTAL_ROWS; r++) {
+                        if (this.board.grid[c][r] !== PuyoColor.None) { boardEmpty = false; break; }
+                    }
+                }
+                if (boardEmpty) {
+                    this.onAllClear?.();
+                }
+            }
+
             // Convert remaining nuisance in tray to committed garbage
             if (this.nuisanceTray > 0) {
                 // Convert Nuisance Points to Rocks
@@ -998,7 +1014,7 @@ export class GameEngine {
 
     // --- Helpers ---
 
-    private getChainScaledDuration(baseDuration: number): number {
+    public getChainScaledDuration(baseDuration: number): number {
         // Exponential scaling: each chain step adds progressively more delay
         // Chain 1: 1x, Chain 2: 1.3x, Chain 3: 1.7x, Chain 4: 2.3x, Chain 5: 3.1x, etc.
         // Formula: baseDuration * (1 + 0.3 * (1.3^(chainCount - 1)))

@@ -22,11 +22,11 @@ interface Particle {
     life: number; maxLife: number;
 }
 
-interface FloatingText {
-    x: number; y: number;
-    text: string;
-    life: number;
-    vy: number;
+interface TrackedText {
+    pixiText: Text;
+    elapsed: number;
+    duration: number;
+    vy: number; // pixels per second
 }
 
 export class GameScene implements IScene {
@@ -41,6 +41,7 @@ export class GameScene implements IScene {
     private uiContainer: Container;
     // private damageBar: Graphics; // Removed unused property
     private opponentContainer: Container;
+    private opponentBorderGraphics: Graphics;
     private settingsOverlay!: SettingsOverlay;
     private xMarkerSprite!: AnimatedSprite;
 
@@ -55,16 +56,28 @@ export class GameScene implements IScene {
     // Effects
     private particles: Particle[] = [];
     private particleGraphics: Graphics; // Persistent graphics for zero-allocation rendering
-    private floatingTexts: FloatingText[] = [];
+    private trackedTexts: TrackedText[] = [];
     private shakeStrength: number = 0;
 
-    // Landing jiggle animation: key = col * 100 + row, value = progress 0..1
-    private landingAnims: Map<number, number> = new Map();
+    // Landing jiggle animation: key = col * 100 + row, value = { t: progress 0..1, gcx/gcy: group center in pixels }
+    private landingAnims: Map<number, { t: number, gcx: number, gcy: number }> = new Map();
+
+    // Spawn animation: progress 0..1 (scale-up on new piece)
+    private spawnAnim: number = -1;
+
+    // Pop animation progress: 0..1 during POP_ANIM state (for shrink/flash)
+    private popAnimProgress: number = 0;
 
     // Persistent UI Graphics (reused each frame to prevent memory churn)
     private uiGraphics: Graphics;
     private damageGraphics: Graphics;
     private garbageTrayGraphics: Graphics;
+
+    // Pooled UI text objects (created once, updated each frame to avoid expensive Text creation)
+    private statLabels: Text[] = [];
+    private statValues: Text[] = [];
+    private nextLabel: Text | null = null;
+    private nextSprites: Sprite[] = [];
 
     private roomId?: string;
     private gameMessage: string = "";
@@ -91,6 +104,8 @@ export class GameScene implements IScene {
     private afkTimer: any = null;
     private afkCheckStart: number = 0;
     private readonly AFK_LIMIT = 20000; // 20 seconds
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    private hasErrorText: boolean = false;
 
     private nextQueueAnimation: number = 0; // 1.0 -> 0.0 sliding animation
 
@@ -183,6 +198,11 @@ export class GameScene implements IScene {
         this.opponentContainer.position.set(40, 520);
         this.opponentContainer.scale.set(0.45); // Half size
 
+        // Persistent graphics for opponent border (reused, not recreated each frame)
+        this.opponentBorderGraphics = new Graphics();
+        this.opponentBorderGraphics.rect(0, 0, COLS * CELL_SIZE, (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE);
+        this.opponentBorderGraphics.stroke({ color: 0xffffff, width: 4, alpha: 0.8 });
+
         // Init X Marker
         const xMarkerTextures = ResourceManager.getXMarkerTextures();
         this.xMarkerSprite = new AnimatedSprite(xMarkerTextures);
@@ -197,6 +217,9 @@ export class GameScene implements IScene {
 
         // Apply initial positioning (will be updated on resize)
         this.updateLayout();
+
+        // Create pooled UI text objects (avoids expensive Text creation each frame)
+        this.initUIPool();
 
         // Initialize Engine
         this.setupEngine();
@@ -310,7 +333,9 @@ export class GameScene implements IScene {
             // If we don't reconnect in 5s, THEN Game Over
             if (this.afkTimer) clearInterval(this.afkTimer); // Re-use this variable or create new?
             // Let's create a dedicated reconnectTimer property if needed, but for now specific timer:
-            setTimeout(() => {
+            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = setTimeout(() => {
+                if (this.container?.destroyed) return; // Guard against destroyed scene
                 if (this.roomId && !NetworkManager.isConnected && this.engine.state !== GameState.GAMEOVER) {
                     console.log("[GameScene] Reconnect timed out. Game Over.");
                     this.gameMessage = "CONNECTION LOST";
@@ -330,6 +355,7 @@ export class GameScene implements IScene {
                     NetworkManager.authenticate(token);
                     // Small delay to let auth complete, then rejoin
                     setTimeout(() => {
+                        if (this.container?.destroyed) return;
                         if (this.roomId && this.engine.state !== GameState.GAMEOVER) {
                             console.log("[GameScene] Attempting to rejoin room:", this.roomId);
                             NetworkManager.joinRoom(this.roomId);
@@ -392,6 +418,59 @@ export class GameScene implements IScene {
 
     }
 
+    private initUIPool() {
+        const labelStyle = {
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontSize: 14,
+            fontWeight: 'bold' as const,
+            fill: 0xaaaaaa,
+            letterSpacing: 2,
+            dropShadow: { color: 0x000000, blur: 2, distance: 1, angle: Math.PI / 4, alpha: 0.6 }
+        };
+        const valueStyle = {
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontSize: 32,
+            fontWeight: 'bold' as const,
+            fill: 0xffffff,
+            dropShadow: { color: 0x000000, blur: 3, distance: 1, angle: Math.PI / 4, alpha: 0.8 }
+        };
+
+        // 4 stat slots: SCORE, MAX CHAIN, CLEARED, TIME (time may be hidden)
+        const statNames = ['SCORE', 'MAX CHAIN', 'CLEARED', 'TIME'];
+        for (let i = 0; i < statNames.length; i++) {
+            const lbl = new Text({ text: statNames[i], resolution: 2, style: labelStyle });
+            lbl.anchor.set(0.5);
+            lbl.visible = false;
+            this.uiContainer.addChild(lbl);
+            this.statLabels.push(lbl);
+
+            const val = new Text({ text: '0', resolution: 2, style: valueStyle });
+            val.anchor.set(0.5);
+            val.visible = false;
+            this.uiContainer.addChild(val);
+            this.statValues.push(val);
+        }
+
+        // NEXT label
+        this.nextLabel = new Text({
+            text: 'NEXT',
+            resolution: 2,
+            style: { fontFamily: 'Arial', fontSize: 16, fontWeight: '900' as const, fill: 0xFF5733, letterSpacing: 2 }
+        });
+        this.nextLabel.anchor.set(0.5);
+        this.nextLabel.visible = false;
+        this.uiContainer.addChild(this.nextLabel);
+
+        // 4 next piece sprites (2 pieces × main+sub)
+        for (let i = 0; i < 4; i++) {
+            const sp = new Sprite();
+            sp.anchor.set(0.5);
+            sp.visible = false;
+            this.uiContainer.addChild(sp);
+            this.nextSprites.push(sp);
+        }
+    }
+
     setupEngine() {
         if (this.replayData) {
             console.log("Starting Replay Mode");
@@ -409,11 +488,14 @@ export class GameScene implements IScene {
         this.elapsedTime = 0;
         this.accumulator = 0;
         this.particles = [];
-        this.floatingTexts = [];
+        this.trackedTexts = [];
         this.landingAnims.clear();
+        this.spawnAnim = -1;
+        this.popAnimProgress = 0;
 
         this.engine.onPieceSpawn = () => {
             this.nextQueueAnimation = 1.0;
+            this.spawnAnim = 0; // Start spawn scale-up animation
         };
 
         this.engine.onChainStep = (chain) => {
@@ -426,6 +508,7 @@ export class GameScene implements IScene {
             if (state === GameState.POP_ANIM) {
                 SoundManager.play('pop');
                 this.spawnParticles();
+                this.popAnimProgress = 0; // Reset pop animation
             }
 
             if (state === GameState.GAMEOVER) {
@@ -454,8 +537,8 @@ export class GameScene implements IScene {
         };
 
         this.engine.onGarbageGenerated = (amount) => {
-            // Visual feedback for sending attack
-            if (amount > 0) {
+            // Visual feedback for sending attack (multiplayer only)
+            if (amount > 0 && this.roomId) {
                 this.spawnFloatingText(300, 200, `ATTACK! +${amount}`, 0xff6600);
             }
 
@@ -465,9 +548,8 @@ export class GameScene implements IScene {
         };
 
         this.engine.onGarbageOffset = (amount) => {
-            if (amount > 0) {
+            if (amount > 0 && this.roomId) {
                 this.spawnFloatingText(300, 300, `OFFSET! -${amount}`, 0x00ff00);
-                // Optional: Play sound
             }
         };
 
@@ -498,9 +580,77 @@ export class GameScene implements IScene {
         };
 
         this.engine.onPieceLock = (cells) => {
+            // Flood-fill from locked cells to find entire connected same-color groups
+            const board = this.engine.board;
+            const visited = new Set<number>();
+            const allCells: { c: number, r: number }[] = [];
+
             for (const cell of cells) {
-                this.landingAnims.set(cell.c * 100 + cell.r, 0);
+                const color = board.grid[cell.c][cell.r];
+                if (color === PuyoColor.None) continue;
+                // BFS flood-fill for this color
+                const queue: { c: number, r: number }[] = [cell];
+                const key0 = cell.c * 100 + cell.r;
+                if (visited.has(key0)) continue;
+                visited.add(key0);
+                while (queue.length > 0) {
+                    const cur = queue.pop()!;
+                    allCells.push(cur);
+                    const adj = [
+                        { c: cur.c, r: cur.r - 1 },
+                        { c: cur.c + 1, r: cur.r },
+                        { c: cur.c, r: cur.r + 1 },
+                        { c: cur.c - 1, r: cur.r },
+                    ];
+                    for (const n of adj) {
+                        const nk = n.c * 100 + n.r;
+                        if (!visited.has(nk) && board.isValid(n.c, n.r) && board.grid[n.c][n.r] === color) {
+                            visited.add(nk);
+                            queue.push(n);
+                        }
+                    }
+                }
             }
+            if (allCells.length === 0) return;
+            // Compute group center across all connected cells
+            let gcx = 0, gcy = 0;
+            for (const cell of allCells) {
+                gcx += cell.c * CELL_SIZE + CELL_SIZE / 2;
+                gcy += (cell.r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
+            }
+            gcx /= allCells.length;
+            gcy /= allCells.length;
+            for (const cell of allCells) {
+                this.landingAnims.set(cell.c * 100 + cell.r, { t: 0, gcx, gcy });
+            }
+        };
+
+        this.engine.onGravityLanded = (cells) => {
+            // Jiggle puyos that just settled after a chain pop
+            if (cells.length === 0) return;
+            let gcx = 0, gcy = 0;
+            for (const cell of cells) {
+                gcx += cell.c * CELL_SIZE + CELL_SIZE / 2;
+                gcy += (cell.r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
+            }
+            gcx /= cells.length;
+            gcy /= cells.length;
+            for (const cell of cells) {
+                this.landingAnims.set(cell.c * 100 + cell.r, { t: 0, gcx, gcy });
+            }
+        };
+
+        this.engine.onHardDrop = () => {
+            // Bigger jiggle + screen shake for hard drops
+            this.shakeStrength = Math.max(this.shakeStrength, 6);
+        };
+
+        this.engine.onAllClear = () => {
+            // Board is completely empty after a chain — show celebration text
+            const boardWidth = COLS * CELL_SIZE;
+            const boardHeight = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
+            this.spawnFloatingText(boardWidth / 2, boardHeight / 2, 'ALL CLEAR!', 0xFFD700, 1.5);
+            this.shakeStrength = Math.max(this.shakeStrength, 10);
         };
 
         // Send initial state
@@ -747,13 +897,15 @@ export class GameScene implements IScene {
                 if (this.nextQueueAnimation < 0) this.nextQueueAnimation = 0;
             }
 
-            // Screen Shake
+            // Screen Shake (scaled by user setting 0-100)
             let sx = 0, sy = 0;
             if (this.shakeStrength > 0) {
                 this.shakeStrength -= delta * 0.5;
                 if (this.shakeStrength < 0) this.shakeStrength = 0;
-                sx = (Math.random() - 0.5) * this.shakeStrength;
-                sy = (Math.random() - 0.5) * this.shakeStrength;
+                const shakeMul = SettingsManager.screenShake / 100;
+                const str = this.shakeStrength * shakeMul;
+                sx = (Math.random() - 0.5) * str;
+                sy = (Math.random() - 0.5) * str;
             }
 
             // Re-calculate positions (PPT style - minimal top margin)
@@ -768,14 +920,26 @@ export class GameScene implements IScene {
             // Tick landing jiggle animations
             if (this.landingAnims.size > 0) {
                 const speed = delta / 12; // ~12 frames (200ms) total duration
-                for (const [key, t] of this.landingAnims) {
-                    const next = t + speed;
+                for (const [key, anim] of this.landingAnims) {
+                    const next = anim.t + speed;
                     if (next >= 1) {
                         this.landingAnims.delete(key);
                     } else {
-                        this.landingAnims.set(key, next);
+                        anim.t = next;
                     }
                 }
+            }
+
+            // Tick spawn animation (scale-up over ~8 frames / ~133ms)
+            if (this.spawnAnim >= 0 && this.spawnAnim < 1) {
+                this.spawnAnim += delta / 8;
+                if (this.spawnAnim >= 1) this.spawnAnim = -1; // done
+            }
+
+            // Tick pop animation progress
+            if (this.engine.state === GameState.POP_ANIM) {
+                const scaledDuration = this.engine.getChainScaledDuration(this.engine.POP_ANIM_DURATION);
+                this.popAnimProgress = Math.min(1, this.engine.stateTimer / scaledDuration);
             }
 
             this.draw();
@@ -783,13 +947,16 @@ export class GameScene implements IScene {
             this.drawForfeitUI(); // Draw progress bar if holding
         } catch (e: any) {
             console.error("GameScene Update Error:", e);
-            const errText = new Text({
-                text: `UPDATE ERROR:\n${e.message}`,
-                resolution: 2,
-                style: { fill: 'orange', fontSize: 16 }
-            });
-            errText.y = 100;
-            this.container.addChild(errText);
+            if (!this.hasErrorText) {
+                this.hasErrorText = true;
+                const errText = new Text({
+                    text: `UPDATE ERROR:\n${e.message}`,
+                    resolution: 2,
+                    style: { fill: 'orange', fontSize: 16 }
+                });
+                errText.y = 100;
+                this.container.addChild(errText);
+            }
         }
     }
 
@@ -1071,71 +1238,38 @@ export class GameScene implements IScene {
     }
 
     drawStatsPanel() {
-        // Left Dashboard (x ~100-200)
+        // Left Dashboard (x ~100-200) — reuse pooled Text objects
         const leftX = 140;
-        let cY = 120; // Starting Y
+        let cY = 120;
 
-        const createStat = (label: string, value: string | number) => {
-            // Label - clean, crisp styling
-            const lbl = new Text({
-                text: label,
-                resolution: 2, // High DPI text
-                style: {
-                    fontFamily: 'Arial, Helvetica, sans-serif',
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    fill: 0xaaaaaa,
-                    letterSpacing: 2,
-                    dropShadow: {
-                        color: 0x000000,
-                        blur: 2,
-                        distance: 1,
-                        angle: Math.PI / 4,
-                        alpha: 0.6
-                    }
-                }
-            });
-            lbl.anchor.set(0.5);
+        const updateStat = (index: number, label: string, value: string | number, labelColor: number = 0xaaaaaa, valueColor: number = 0xffffff) => {
+            const lbl = this.statLabels[index];
+            const val = this.statValues[index];
+            lbl.text = label;
+            lbl.style.fill = labelColor;
             lbl.x = leftX;
             lbl.y = cY;
-            this.uiContainer.addChild(lbl);
+            lbl.visible = true;
 
-            // Background Card for Value - slightly more opaque
+            // Background Card for Value
             const cardW = 140;
             const cardH = 50;
             this.uiGraphics.rect(leftX - cardW / 2, cY + 20, cardW, cardH);
             this.uiGraphics.fill({ color: 0x0a0a12, alpha: 0.7 });
             this.uiGraphics.stroke({ color: 0xffffff, width: 1, alpha: 0.15 });
 
-            // Value - crisp white with subtle shadow
-            const val = new Text({
-                text: value.toString(),
-                resolution: 2, // High DPI text
-                style: {
-                    fontFamily: 'Arial, Helvetica, sans-serif',
-                    fontSize: 32,
-                    fontWeight: 'bold',
-                    fill: 0xffffff,
-                    dropShadow: {
-                        color: 0x000000,
-                        blur: 3,
-                        distance: 1,
-                        angle: Math.PI / 4,
-                        alpha: 0.8
-                    }
-                }
-            });
-            val.anchor.set(0.5);
+            val.text = value.toString();
+            val.style.fill = valueColor;
             val.x = leftX;
             val.y = cY + 45;
-            this.uiContainer.addChild(val);
+            val.visible = true;
 
-            cY += 110; // Spacing
+            cY += 110;
         };
 
-        createStat("SCORE", this.engine.stats.score);
-        createStat("MAX CHAIN", this.engine.stats.maxChain);
-        createStat("CLEARED", this.engine.stats.puyosCleared);
+        updateStat(0, 'SCORE', this.engine.stats.score);
+        updateStat(1, 'MAX CHAIN', this.engine.stats.maxChain);
+        updateStat(2, 'CLEARED', this.engine.stats.puyosCleared);
 
         // Time (if enabled)
         if (this.timeLimit > 0) {
@@ -1143,142 +1277,72 @@ export class GameScene implements IScene {
             const m = Math.floor(remaining / 60);
             const s = Math.floor(remaining % 60);
             const timeStr = `${m}:${s.toString().padStart(2, '0')}`;
-
-            // Draw Time distinctively with glow effect
-            const lbl = new Text({
-                text: "TIME",
-                resolution: 2, // High DPI text
-                style: {
-                    fontFamily: 'Arial, Helvetica, sans-serif',
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    fill: 0xFFAA00,
-                    letterSpacing: 2,
-                    dropShadow: {
-                        color: 0x000000,
-                        blur: 2,
-                        distance: 1,
-                        angle: Math.PI / 4,
-                        alpha: 0.6
-                    }
-                }
-            });
-            lbl.anchor.set(0.5);
-            lbl.x = leftX;
-            lbl.y = cY;
-            this.uiContainer.addChild(lbl);
-
             const isLow = remaining < 30;
-            const val = new Text({
-                text: timeStr,
-                resolution: 2, // High DPI text
-                style: {
-                    fontFamily: 'Arial, Helvetica, sans-serif',
-                    fontSize: 36,
-                    fontWeight: 'bold',
-                    fill: isLow ? 0xFF5555 : 0xFFAA00,
-                    dropShadow: {
-                        color: isLow ? 0x550000 : 0x553300,
-                        blur: 4,
-                        distance: 2,
-                        angle: Math.PI / 4,
-                        alpha: 0.8
-                    }
-                }
-            });
-            val.anchor.set(0.5);
-            val.x = leftX;
-            val.y = cY + 45;
-            this.uiContainer.addChild(val);
+            updateStat(3, 'TIME', timeStr, 0xFFAA00, isLow ? 0xFF5555 : 0xFFAA00);
+        } else {
+            this.statLabels[3].visible = false;
+            this.statValues[3].visible = false;
         }
     }
 
     drawNextQueue() {
-        const queueX = 760; // Center of right panel (closer to board: 680 is edge)
+        const queueX = 760;
         const queueY = 150;
 
-        // Label
-        const label = new Text({
-            text: "NEXT",
-            resolution: 2, // High DPI text
-            style: {
-                fontFamily: 'Arial',
-                fontSize: 16,
-                fontWeight: '900',
-                fill: 0xFF5733, // Orange accent
-                letterSpacing: 2
-            }
-        });
-        label.anchor.set(0.5); // Center text
-        label.x = queueX;      // Align with queue center
-        label.y = queueY - 40;
-        this.uiContainer.addChild(label);
+        // Reuse persistent NEXT label
+        if (this.nextLabel) {
+            this.nextLabel.x = queueX;
+            this.nextLabel.y = queueY - 40;
+            this.nextLabel.visible = true;
+        }
 
-        // Primary Slot Frame (Restored)
-        // const pSize = 100;
+        // Primary Slot Frame
         const boxW = 100;
         const boxH = 80;
-        const pX = queueX - (boxW / 2); // Center box on queueX
-        const pY = queueY; // Top of box at queueY (or center? pieces are at queueY + 40)
-
-        // Adjust box to center around the piece spawn point (queueY + 40 is piece Y)
-        // Let's create a box centered on the piece.
-        // Piece Y is queueY + 40. Box height 80.
-        // So Box Top = (queueY + 40) - 40 = queueY.
-
+        const pX = queueX - (boxW / 2);
+        const pY = queueY;
         this.uiGraphics.rect(pX, pY, boxW, boxH);
         this.uiGraphics.fill({ color: 0x000000, alpha: 0.3 });
         this.uiGraphics.stroke({ color: 0xFF5733, width: 2 });
 
-
-
-        // Secondary Slots (Optional Visuals)
-        /*
-        const sX = queueX + 70;
-        const sY = queueY + 20;
-        */
-
-        // Draw Pieces
+        // Draw Pieces using pooled sprites
         const limit = Math.min(this.engine.nextPieces.length, 2);
+        const ICON_BASE = 32;
 
-        for (let i = 0; i < limit; i++) {
+        for (let i = 0; i < 2; i++) {
+            const subSprite = this.nextSprites[i * 2];
+            const mainSprite = this.nextSprites[i * 2 + 1];
+
+            if (i >= limit) {
+                subSprite.visible = false;
+                mainSprite.visible = false;
+                continue;
+            }
+
             const p = this.engine.nextPieces[i];
-
-            // Desired display sizes (resolution-independent)
-            const ICON_BASE = 32; // Reference size matching original 32px sprite design
             let tx: number, ty: number, spacing: number, displaySize: number;
 
             if (i === 0) {
-                // Primary next piece
-                tx = queueX;
-                ty = queueY + 40;
-                displaySize = ICON_BASE * 1.35; // ~43px
-                spacing = 45;
+                tx = queueX; ty = queueY + 40;
+                displaySize = ICON_BASE * 1.35; spacing = 45;
             } else {
-                // Secondary next piece
-                tx = queueX + 100;
-                ty = queueY + 40;
-                displaySize = ICON_BASE * 0.9; // ~29px
-                spacing = 30;
+                tx = queueX + 100; ty = queueY + 40;
+                displaySize = ICON_BASE * 0.9; spacing = 30;
             }
 
-            // Draw Sub (Left)
-            const subSprite = new Sprite(ResourceManager.getPuyoTexture(p.sub, 0));
-            subSprite.anchor.set(0.5);
+            subSprite.texture = ResourceManager.getPuyoTexture(p.sub, 0);
             subSprite.x = tx - (spacing / 2);
             subSprite.y = ty;
             subSprite.width = displaySize;
             subSprite.height = displaySize;
-            this.uiContainer.addChild(subSprite);
+            subSprite.visible = true;
 
-            // Draw Main (Right)
-            const mainSprite = new Sprite(ResourceManager.getPuyoTexture(p.main, 0));
-            mainSprite.anchor.set(0.5);
+            mainSprite.texture = ResourceManager.getPuyoTexture(p.main, 0);
             mainSprite.x = tx + (spacing / 2);
             mainSprite.y = ty;
             mainSprite.width = displaySize;
             mainSprite.height = displaySize;
-            this.uiContainer.addChild(mainSprite);
+            mainSprite.visible = true;
         }
     }
 
@@ -1287,11 +1351,7 @@ export class GameScene implements IScene {
         this.damageGraphics.clear();
         this.garbageTrayGraphics.clear();
 
-        while (this.uiContainer.children.length > 4) {
-            const child = this.uiContainer.children[this.uiContainer.children.length - 1];
-            this.uiContainer.removeChild(child);
-            child.destroy();
-        }
+        // No dynamic child cleanup needed — all UI elements are pooled/persistent
 
         this.drawStatsPanel();
         this.drawDamageMeter();
@@ -1308,33 +1368,8 @@ export class GameScene implements IScene {
         // Draw border rect with outer stroke alignment
         this.uiGraphics.rect(borderX, borderY, boardWidth, visibleHeight);
         this.uiGraphics.stroke({ color: 0xffffff, width: 4, alpha: 1.0, alignment: 1 });
-        // this.drawGarbageTray(); // TODO: Add to stats panel or top of board? PuyoUsually puts it above board.
 
-        // Chain Text Overlay
-        if (this.engine.stats.chainCount > 1) {
-            const chainText = new Text({
-                text: `${this.engine.stats.chainCount} Chain!`,
-                resolution: 2, // High DPI text
-                style: new TextStyle({
-                    fontFamily: 'Arial',
-                    fontSize: 40,
-                    fontWeight: 'bold',
-                    fill: 'yellow',
-                    stroke: { color: 'red', width: 4 },
-                    dropShadow: {
-                        color: 'black',
-                        blur: 2,
-                        distance: 4,
-                        angle: Math.PI / 4,
-                        alpha: 0.5
-                    }
-                })
-            });
-            chainText.anchor.set(0.5);
-            chainText.x = 520;
-            chainText.y = 750; // Bottom center
-            this.uiContainer.addChild(chainText);
-        }
+        // Chain text is now handled by spawnChainText -> spawnFloatingText (animated)
     }
 
     // NOTE: Pause menu, game over screen, and win screen are now handled by React components
@@ -1384,14 +1419,17 @@ export class GameScene implements IScene {
     }
 
     drawOpponent() {
-        this.opponentContainer.removeChildren();
+        // Destroy all children from previous frame (prevent memory leak)
+        // Skip the persistent border graphics
+        const opChildren = this.opponentContainer.removeChildren();
+        for (let i = 0; i < opChildren.length; i++) {
+            if (opChildren[i] !== this.opponentBorderGraphics && opChildren[i] !== this.opponentScoreText) {
+                opChildren[i].destroy();
+            }
+        }
 
-        // Draw Border
-        const g = new Graphics();
-        g.rect(0, 0, COLS * CELL_SIZE, (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE);
-        // g.fill({ color: 0x000000, alpha: 0.5 }); // REMOVED GHOST RECTANGLE SOURCE
-        g.stroke({ color: 0xffffff, width: 4, alpha: 0.8 }); // Increased visibility for competitive feel
-        this.opponentContainer.addChild(g);
+        // Re-add persistent border
+        this.opponentContainer.addChild(this.opponentBorderGraphics);
 
         const checkOpponentColor = (c: number, r: number, color: PuyoColor): boolean => {
             if (!this.opponentBoard.isValid(c, r)) return false;
@@ -1602,7 +1640,13 @@ export class GameScene implements IScene {
             // And remove the offending lines.
 
             this.graphics.clear();
-            this.puyoContainer.removeChildren();
+
+            // Destroy all puyo sprites from previous frame (prevent memory leak)
+            // Skip the persistent xMarkerSprite when destroying
+            const children = this.puyoContainer.removeChildren();
+            for (let i = 0; i < children.length; i++) {
+                if (children[i] !== this.xMarkerSprite) children[i].destroy();
+            }
 
             // Draw Background (Visible Area)
             const visibleHeight = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
@@ -1643,12 +1687,15 @@ export class GameScene implements IScene {
             this.drawEffects();
         } catch (e: any) {
             console.error("GameScene Draw Error:", e);
-            const errText = new Text({
-                text: `RENDER ERROR:\n${e.message}`,
-                resolution: 2,
-                style: { fill: 'red', fontSize: 16 }
-            });
-            this.container.addChild(errText);
+            if (!this.hasErrorText) {
+                this.hasErrorText = true;
+                const errText = new Text({
+                    text: `RENDER ERROR:\n${e.message}`,
+                    resolution: 2,
+                    style: { fill: 'red', fontSize: 16 }
+                });
+                this.container.addChild(errText);
+            }
         }
     }
 
@@ -1657,7 +1704,7 @@ export class GameScene implements IScene {
         return this.engine.board.grid[c][r] === color;
     }
 
-    drawPuyo(c: number, r: number, color: PuyoColor, connections: number, alpha: number = 1.0) {
+    drawPuyo(c: number, r: number, color: PuyoColor, connections: number, alpha: number = 1.0, scale: number = 1.0) {
         // Allow drawing in hidden rows (r < HIDDEN_ROWS) logic handled by drawY
         const drawY = (r - HIDDEN_ROWS) * CELL_SIZE;
         const drawX = c * CELL_SIZE;
@@ -1667,8 +1714,8 @@ export class GameScene implements IScene {
 
         // Connected puyos overlap slightly to seal gaps; isolated puyos fit exactly
         const overlap = connections > 0 ? 4 : 0;
-        const baseW = CELL_SIZE + overlap;
-        const baseH = CELL_SIZE + overlap;
+        const baseW = (CELL_SIZE + overlap) * scale;
+        const baseH = (CELL_SIZE + overlap) * scale;
 
         sprite.anchor.set(0.5);
         sprite.x = drawX + CELL_SIZE / 2;
@@ -1676,18 +1723,21 @@ export class GameScene implements IScene {
         sprite.alpha = alpha;
 
         // Landing jiggle: squash horizontally, stretch vertically then spring back
-        const animKey = c * 100 + r;
-        const t = this.landingAnims.get(animKey);
-        if (t !== undefined) {
+        const animKey = Math.round(c) * 100 + Math.round(r);
+        const anim = this.landingAnims.get(animKey);
+        if (anim !== undefined) {
             // Damped sine wave: amplitude decays as t goes 0→1
-            const amp = (1 - t) * 0.18;
-            const wave = Math.sin(t * Math.PI * 3); // ~1.5 full oscillations
+            const amp = (1 - anim.t) * 0.18;
+            const wave = Math.sin(anim.t * Math.PI * 3); // ~1.5 full oscillations
             const scaleX = 1 + amp * wave;   // wider on first bounce
             const scaleY = 1 - amp * wave;   // shorter on first bounce
             sprite.width = baseW * scaleX;
             sprite.height = baseH * scaleY;
-            // Anchor bottom so squash pushes down, not center
-            sprite.y = drawY + CELL_SIZE / 2 + (baseH * (1 - scaleY)) * 0.25;
+            // Scale position relative to group center so connected puyos move as one unit
+            const sx = sprite.x;
+            const sy = sprite.y;
+            sprite.x = anim.gcx + (sx - anim.gcx) * scaleX;
+            sprite.y = anim.gcy + (sy - anim.gcy) * scaleY + (baseH * (1 - scaleY)) * 0.25;
         } else {
             sprite.width = baseW;
             sprite.height = baseH;
@@ -1758,23 +1808,13 @@ export class GameScene implements IScene {
         const cx = tx / group.length;
         const cy = ty / group.length;
 
-        this.floatingTexts.push({
-            x: cx,
-            y: cy,
-            text: `${chain} Chain!`,
-            life: 2.0,
-            vy: -0.5
-        });
-
-        if (chain > 1) {
-            this.floatingTexts.push({
-                x: cx, y: cy - 30,
-                text: "NICE!", life: 2.0, vy: -0.8
-            });
+        // Minimal chain indicator — only show for chains >= 2
+        if (chain >= 2) {
+            this.spawnFloatingText(cx, cy, `${chain} Chain`, 0xFFFF00, 0.75 + chain * 0.15);
         }
     }
 
-    spawnFloatingText(x: number, y: number, text: string, color: number) {
+    spawnFloatingText(x: number, y: number, text: string, color: number, duration: number = 0.75) {
         const style = new TextStyle({
             fontFamily: 'Rajdhani',
             fontSize: 40,
@@ -1795,30 +1835,25 @@ export class GameScene implements IScene {
         txt.y = y;
         this.effectContainer.addChild(txt);
 
-        // Simple animation loop closure
-        const animate = () => {
-            // Safety check if scene/text destroyed
-            if (!this.container || this.container.destroyed) return;
-            if (txt.destroyed) return;
-
-            txt.y -= 2;
-            txt.alpha -= 0.015;
-            if (txt.alpha <= 0) {
-                txt.destroy();
-            } else {
-                requestAnimationFrame(animate);
-            }
-        };
-        requestAnimationFrame(animate);
+        // Track in game loop (time-based, ~duration seconds)
+        this.trackedTexts.push({
+            pixiText: txt,
+            elapsed: 0,
+            duration, // seconds
+            vy: -80, // pixels per second (upward drift)
+        });
     }
 
     updateEffects(delta: number) {
-        // Particles
+        // dt in seconds (delta is in frames at 60fps, so delta/60 = seconds)
+        const dtSec = delta / 60;
+
+        // Particles (fixed: multiply velocity by delta)
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.2;
+            p.x += p.vx * delta;
+            p.y += p.vy * delta;
+            p.vy += 0.2 * delta;
             p.life -= 0.03 * delta;
 
             if (p.life <= 0) {
@@ -1826,9 +1861,30 @@ export class GameScene implements IScene {
             }
         }
 
-        // FloatingTexts are now self-managing via requestAnimationFrame loops started in spawnFloatingText
-        // We only clear the list here if we want to track them, but currently we rely on closures.
-        // Old Logic removed to prevent double-update.
+        // Tracked floating texts (time-based)
+        for (let i = this.trackedTexts.length - 1; i >= 0; i--) {
+            const tt = this.trackedTexts[i];
+            tt.elapsed += dtSec;
+            const progress = Math.min(1, tt.elapsed / tt.duration);
+
+            tt.pixiText.y += tt.vy * dtSec;
+            // Fade out in the last 40% of lifetime
+            if (progress > 0.6) {
+                tt.pixiText.alpha = 1 - ((progress - 0.6) / 0.4);
+            }
+            // Scale-in pop at start
+            if (progress < 0.1) {
+                const s = 0.5 + (progress / 0.1) * 0.5;
+                tt.pixiText.scale.set(s);
+            } else {
+                tt.pixiText.scale.set(1);
+            }
+
+            if (tt.elapsed >= tt.duration) {
+                tt.pixiText.destroy();
+                this.trackedTexts.splice(i, 1);
+            }
+        }
     }
 
     drawEffects() {
@@ -1841,21 +1897,63 @@ export class GameScene implements IScene {
                 this.particleGraphics.fill({ color: p.color, alpha: p.life / p.maxLife });
             }
         }
-
-        // Floating texts manage themselves via independent Sprites/Update loops
     }
 
     drawBoard() {
         const board = this.engine.board;
+
+        // Build lookup for gravity interpolation during FALLING state
+        const fallingLookup = new Map<number, number>(); // key = c*100+r -> destR
+        let fallingProgress = 0;
+        if (this.engine.state === GameState.FALLING && this.engine.fallingDestinations.length > 0) {
+            const scaledDelay = this.engine.getChainScaledDuration(this.engine.FALL_STEP_DELAY);
+            fallingProgress = Math.min(1, this.engine.stateTimer / scaledDelay);
+            // Ease-in (accelerating fall, like gravity)
+            fallingProgress = fallingProgress * fallingProgress;
+            for (const f of this.engine.fallingDestinations) {
+                fallingLookup.set(f.c * 100 + f.r, f.destR);
+            }
+        }
+
+        // Build lookup for pop animation during POP_ANIM state
+        const poppingSet = new Set<number>();
+        if (this.engine.state === GameState.POP_ANIM && this.engine.matchedPuyos.length > 0) {
+            for (const group of this.engine.matchedPuyos) {
+                for (const p of group) {
+                    poppingSet.add(p.c * 100 + p.r);
+                }
+            }
+        }
+
         for (let c = 0; c < COLS; c++) {
-            for (let r = 0; r < TOTAL_ROWS; r++) { // Draw all rows including hidden
+            for (let r = 0; r < TOTAL_ROWS; r++) {
                 const color = board.grid[c][r];
                 if (color !== PuyoColor.None) {
                     let connections = 0;
-                    if (this.checkColor(c, r - 1, color)) connections |= 1; // Top
-                    if (this.checkColor(c + 1, r, color)) connections |= 2; // Right
-                    if (this.checkColor(c, r + 1, color)) connections |= 4; // Bottom
-                    if (this.checkColor(c - 1, r, color)) connections |= 8; // Left
+                    if (this.checkColor(c, r - 1, color)) connections |= 1;
+                    if (this.checkColor(c + 1, r, color)) connections |= 2;
+                    if (this.checkColor(c, r + 1, color)) connections |= 4;
+                    if (this.checkColor(c - 1, r, color)) connections |= 8;
+
+                    const key = c * 100 + r;
+
+                    // Pop animation: flash and shrink matched puyos
+                    if (poppingSet.has(key)) {
+                        const popT = this.popAnimProgress;
+                        // Flash: alternate alpha rapidly, then shrink
+                        const flash = Math.sin(popT * Math.PI * 6) * 0.3 + 0.7;
+                        const shrink = popT < 0.6 ? 1.0 : 1.0 - ((popT - 0.6) / 0.4);
+                        this.drawPuyo(c, r, color, connections, flash, shrink);
+                        continue;
+                    }
+
+                    // Gravity interpolation: smoothly move falling puyos
+                    const destR = fallingLookup.get(key);
+                    if (destR !== undefined) {
+                        const visualR = r + (destR - r) * fallingProgress;
+                        this.drawPuyo(c, visualR, color, connections);
+                        continue;
+                    }
 
                     this.drawPuyo(c, r, color, connections);
                 }
@@ -1865,9 +1963,7 @@ export class GameScene implements IScene {
         // Falling Garbage Animation
         if (this.engine.fallingGarbage && this.engine.fallingGarbage.length > 0) {
             for (const garb of this.engine.fallingGarbage) {
-                // Garbage typically has connection 0 (isolated or special texture)
-                // Only draw if it's active (delay passed) or we want to show it waiting at top
-                if (garb.delay <= 10) { // arbitrary Small Threshold or just draw all
+                if (garb.delay <= 10) {
                     this.drawPuyo(garb.c, garb.r, PuyoColor.Garbage, 0);
                 }
             }
@@ -1909,8 +2005,12 @@ export class GameScene implements IScene {
         const sx = offsets[rot].x;
         const sy = offsets[rot].y;
 
-        this.drawPuyo(x, y, mainColor, mainConn);
-        this.drawPuyo(x + sx, y + sy, subColor, subConn);
+        // Spawn scale-up animation
+        const spawnScale = this.spawnAnim >= 0 ? 0.5 + this.spawnAnim * 0.5 : 1.0;
+        const spawnAlpha = this.spawnAnim >= 0 ? this.spawnAnim : 1.0;
+
+        this.drawPuyo(x, y, mainColor, mainConn, spawnAlpha, spawnScale);
+        this.drawPuyo(x + sx, y + sy, subColor, subConn, spawnAlpha, spawnScale);
     }
 
     drawGhostPiece() {
@@ -1981,6 +2081,7 @@ export class GameScene implements IScene {
         console.log("[GameScene] Destroying...");
         document.removeEventListener('visibilitychange', this.handleVisibilityChange);
         if (this.afkTimer) clearInterval(this.afkTimer);
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.container.destroy({ children: true });
 
         // Network listeners unbind
