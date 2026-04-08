@@ -30,6 +30,7 @@ export class SceneManager {
       clearBeforeRender: true,
       preserveDrawingBuffer: false,
       preference: 'webgl',
+      roundPixels: true,
       resizeTo: window // Auto-resize with window
     });
 

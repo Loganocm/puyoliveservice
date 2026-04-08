@@ -9,6 +9,11 @@ export class ResourceManager {
   private static puyoTextures: Map<string, Texture> = new Map();
   public static loaded: boolean = false;
 
+  /** Returns the pixel size of one sprite cell in the sheet (e.g. 32 for 512px, 80 for 1280px). */
+  public static get spriteSize(): number {
+    return this.sheetTexture ? this.sheetTexture.width / 16 : 32;
+  }
+
   public static async load() {
     this.sheetTexture = await Assets.load(puyoPng);
     this.loaded = true;
@@ -74,7 +79,7 @@ export class ResourceManager {
     // Auto-detect size if needed, but simpler to fix it.
     const size = this.sheetTexture.width / 16;
 
-    // Add 0.5 pixel inset to prevent texture bleeding from adjacent sprites
+    // Inset by half a pixel to prevent texture bleeding from adjacent sprites
     const inset = 0.5;
     const rect = new Rectangle(
       col * size + inset,
@@ -96,7 +101,7 @@ export class ResourceManager {
     const key = `${row}_${col}`;
     if (this.puyoTextures.has(key)) return this.puyoTextures.get(key)!;
 
-    // Add 0.5 pixel inset to prevent texture bleeding
+    // Inset by half a pixel to prevent texture bleeding from adjacent sprites
     const inset = 0.5;
     const rect = new Rectangle(
       col * size + inset,

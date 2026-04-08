@@ -512,8 +512,8 @@ export class GameScene implements IScene {
         const scale = Math.min(screenW / baseW, screenH / baseH);
 
         // Center the wrapper on screen
-        const offsetX = (screenW - baseW * scale) / 2;
-        const offsetY = (screenH - baseH * scale) / 2;
+        const offsetX = Math.round((screenW - baseW * scale) / 2);
+        const offsetY = Math.round((screenH - baseH * scale) / 2);
 
         // Position and scale the wrapper - this transforms ALL game content together
         this.gameContentWrapper.position.set(offsetX, offsetY);
@@ -1220,20 +1220,22 @@ export class GameScene implements IScene {
         for (let i = 0; i < limit; i++) {
             const p = this.engine.nextPieces[i];
 
-            let tx, ty, scale, spacing;
+            // Desired display sizes (resolution-independent)
+            const ICON_BASE = 32; // Reference size matching original 32px sprite design
+            let tx: number, ty: number, spacing: number, displaySize: number;
 
             if (i === 0) {
-                // Primary - 10% bigger (1.2 -> ~1.35), closer (45 -> 38 reverted)
+                // Primary next piece
                 tx = queueX;
                 ty = queueY + 40;
-                scale = 1.35;
-                spacing = 45; // Reverted to original spacing
+                displaySize = ICON_BASE * 1.35; // ~43px
+                spacing = 45;
             } else {
-                // Secondary - 10% bigger (0.8 -> ~0.9), closer (30 -> 26 reverted)
+                // Secondary next piece
                 tx = queueX + 100;
                 ty = queueY + 40;
-                scale = 0.9;
-                spacing = 30; // Reverted to original spacing
+                displaySize = ICON_BASE * 0.9; // ~29px
+                spacing = 30;
             }
 
             // Draw Sub (Left)
@@ -1241,7 +1243,8 @@ export class GameScene implements IScene {
             subSprite.anchor.set(0.5);
             subSprite.x = tx - (spacing / 2);
             subSprite.y = ty;
-            subSprite.scale.set(scale);
+            subSprite.width = displaySize;
+            subSprite.height = displaySize;
             this.uiContainer.addChild(subSprite);
 
             // Draw Main (Right)
@@ -1249,7 +1252,8 @@ export class GameScene implements IScene {
             mainSprite.anchor.set(0.5);
             mainSprite.x = tx + (spacing / 2);
             mainSprite.y = ty;
-            mainSprite.scale.set(scale);
+            mainSprite.width = displaySize;
+            mainSprite.height = displaySize;
             this.uiContainer.addChild(mainSprite);
         }
     }
@@ -1277,13 +1281,8 @@ export class GameScene implements IScene {
         const borderX = this.graphics.x;
         const borderY = this.graphics.y;
 
-        // Puyo sprites are 1.05x scale, meaning 63px in 60px cells
-        // Overflow = (63 - 60) / 2 = 1.5px per side
-        // Add 2px padding to safely contain all sprites
-        const padding = 2;
-
-        // Draw border rect expanded by padding, with outer stroke alignment
-        this.uiGraphics.rect(borderX - padding, borderY - padding, boardWidth + padding * 2, visibleHeight + padding * 2);
+        // Draw border rect with outer stroke alignment
+        this.uiGraphics.rect(borderX, borderY, boardWidth, visibleHeight);
         this.uiGraphics.stroke({ color: 0xffffff, width: 4, alpha: 1.0, alignment: 1 });
         // this.drawGarbageTray(); // TODO: Add to stats panel or top of board? PuyoUsually puts it above board.
 
@@ -1348,16 +1347,14 @@ export class GameScene implements IScene {
                 sprite.x = drawX;
                 sprite.y = trayY;
 
-                // Scale if needed? Icons in sprite sheet usually match cell size (32 or 48)
-                // We want them smallish in tray?
-                // The `getGarbageIconTexture` cuts a full cell size (e.g. 32x32).
-                // Let's scale slightly if our UI desires (tray area).
-                sprite.scale.set(1.0); // Keep 1:1 for pixel art crispness
+                // Force icons to consistent 32px display size regardless of sheet resolution
+                sprite.width = 32;
+                sprite.height = 32;
 
                 this.uiContainer.addChild(sprite);
 
                 remaining -= icon.val;
-                drawX += texture.width + 2; // Spacing
+                drawX += 32 + 2; // Spacing at display size
             }
         }
     }
@@ -1384,24 +1381,14 @@ export class GameScene implements IScene {
             const texture = ResourceManager.getPuyoTexture(color, connections);
             const sprite = new Sprite(texture);
 
-            // Use same scale+offset approach as main player to eliminate gaps
-            const scale = (CELL_SIZE / 32) * 1.05;
-            sprite.scale.set(scale);
+            // Connected puyos overlap slightly to seal gaps; isolated puyos fit exactly
+            const overlap = connections > 0 ? 4 : 0;
+            sprite.width = CELL_SIZE + overlap;
+            sprite.height = CELL_SIZE + overlap;
             sprite.anchor.set(0.5);
 
-            // Calculate offset based on connections to eliminate gaps
-            // Connection bitmask: UP=1, RIGHT=2, DOWN=4, LEFT=8
-            const OFFSET = 1.5;
-            let offsetX = 0;
-            let offsetY = 0;
-
-            if (connections & 1) offsetY -= OFFSET; // UP
-            if (connections & 4) offsetY += OFFSET; // DOWN
-            if (connections & 2) offsetX += OFFSET; // RIGHT
-            if (connections & 8) offsetX -= OFFSET; // LEFT
-
-            sprite.x = c * CELL_SIZE + CELL_SIZE / 2 + offsetX;
-            sprite.y = (r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2 + offsetY;
+            sprite.x = c * CELL_SIZE + CELL_SIZE / 2;
+            sprite.y = (r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
             sprite.alpha = alpha;
             this.opponentContainer.addChild(sprite);
         };
@@ -1517,13 +1504,14 @@ export class GameScene implements IScene {
                 sprite.x = drawX;
                 sprite.y = trayY - (CELL_SIZE); // Draw above the board
 
-                // Keep 1:1 scale relative to container (which is already scaled 0.5)
-                sprite.scale.set(1.0);
+                // Force icons to 32px display size
+                sprite.width = 32;
+                sprite.height = 32;
 
                 this.opponentContainer.addChild(sprite);
 
                 remaining -= icon.val;
-                drawX += texture.width + 2;
+                drawX += 32 + 2;
             }
         }
     }
@@ -1604,12 +1592,9 @@ export class GameScene implements IScene {
             // Draw main box starting from 0 (visible rows only)
             const boardWidth = COLS * CELL_SIZE;
 
-            // Puyo sprites are 1.05x scale (63px in 60px cells), overflow by 1.5px per side
-            // Expand background by 2px on each side to contain them
-            const padding = 2;
-
-            // Draw expanded background (border drawn separately in uiGraphics on top of puyos)
-            this.graphics.rect(-padding, -padding, boardWidth + padding * 2, visibleHeight + padding * 2);
+            // Sprites fit exactly within cells, no extra padding needed
+            // Draw board background
+            this.graphics.rect(0, 0, boardWidth, visibleHeight);
 
             // Dark background for playfield visibility
             this.graphics.fill({ color: 0x000000, alpha: 0.75 });
@@ -1656,24 +1641,14 @@ export class GameScene implements IScene {
         const texture = ResourceManager.getPuyoTexture(color, connections);
         const sprite = new Sprite(texture);
 
-        // Slightly larger scale to help with gaps
-        const scale = (CELL_SIZE / 32) * 1.05;
-        sprite.scale.set(scale);
+        // Connected puyos overlap slightly to seal gaps; isolated puyos fit exactly
+        const overlap = connections > 0 ? 4 : 0;
+        sprite.width = CELL_SIZE + overlap;
+        sprite.height = CELL_SIZE + overlap;
         sprite.anchor.set(0.5);
 
-        // Calculate offset based on connections to eliminate gaps
-        // Connection bitmask: UP=1, RIGHT=2, DOWN=4, LEFT=8
-        const OFFSET = 1.5; // Pixels to shift towards each connection
-        let offsetX = 0;
-        let offsetY = 0;
-
-        if (connections & 1) offsetY -= OFFSET; // UP - shift up
-        if (connections & 4) offsetY += OFFSET; // DOWN - shift down
-        if (connections & 2) offsetX += OFFSET; // RIGHT - shift right
-        if (connections & 8) offsetX -= OFFSET; // LEFT - shift left
-
-        sprite.x = drawX + CELL_SIZE / 2 + offsetX;
-        sprite.y = drawY + CELL_SIZE / 2 + offsetY;
+        sprite.x = drawX + CELL_SIZE / 2;
+        sprite.y = drawY + CELL_SIZE / 2;
         sprite.alpha = alpha;
 
         this.puyoContainer.addChild(sprite);
@@ -1700,12 +1675,7 @@ export class GameScene implements IScene {
                     if (this.checkColor(p.c, p.r + 1, color)) connections |= 4; // Bottom
                     if (this.checkColor(p.c - 1, p.r, color)) connections |= 8; // Left
 
-                    // Apply same offsets as drawPuyo to close the gaps
-                    const OFFSET = 1.5;
-                    if (connections & 1) cy -= OFFSET;
-                    if (connections & 4) cy += OFFSET;
-                    if (connections & 2) cx += OFFSET;
-                    if (connections & 8) cx -= OFFSET;
+                    // Particle spawns at cell center (no offset needed with exact-fit sprites)
                 }
 
                 totalX += cx;
