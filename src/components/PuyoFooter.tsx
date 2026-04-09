@@ -1,5 +1,5 @@
-import { motion } from 'motion/react';
-import { Sparkles } from 'lucide-react';
+import { motion } from "motion/react";
+import { Sparkles } from "lucide-react";
 
 export function PuyoFooter() {
   return (
@@ -18,12 +18,12 @@ export function PuyoFooter() {
         <motion.div
           className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-white/10"
           style={{
-            background: 'rgba(99, 102, 241, 0.05)',
-            backdropFilter: 'blur(10px)',
+            background: "rgba(99, 102, 241, 0.05)",
+            backdropFilter: "blur(10px)",
           }}
-          whileHover={{ 
+          whileHover={{
             scale: 1.02,
-            borderColor: 'rgba(99, 102, 241, 0.2)',
+            borderColor: "rgba(99, 102, 241, 0.2)",
           }}
           transition={{ duration: 0.2 }}
         >
@@ -35,47 +35,47 @@ export function PuyoFooter() {
 
       {/* Center - Social/Links */}
       <div className="flex items-center gap-2">
-        {/* Discord & Twitter (Buttons) */}
-        {['Discord', 'Twitter'].map((link, index) => (
-          <motion.button
-            key={link}
-            className="px-3 py-1.5 rounded-md text-xs font-bold text-white/60 hover:text-white border border-white/5 cursor-pointer"
-            style={{
-              background: 'rgba(255, 255, 255, 0.02)',
-              backdropFilter: 'blur(10px)',
-            }}
-            whileHover={{ 
-              scale: 1.03,
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
-            }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.7 + index * 0.05 }}
-          >
-            {link}
-          </motion.button>
-        ))}
+        {/* Discord */}
+        <motion.a
+          href="https://discord.gg/PkPdZJufDN"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3 py-1.5 rounded-md text-xs font-bold text-white/60 hover:text-white border border-white/5 cursor-pointer no-underline"
+          style={{
+            background: "rgba(255, 255, 255, 0.02)",
+            backdropFilter: "blur(10px)",
+          }}
+          whileHover={{
+            scale: 1.03,
+            background: "rgba(255, 255, 255, 0.05)",
+            borderColor: "rgba(255, 255, 255, 0.1)",
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.7 }}
+        >
+          Discord
+        </motion.a>
         {/* About / Legal Link */}
         <motion.a
-            href="/about"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-md text-xs font-bold text-white/60 hover:text-white border border-white/5 cursor-pointer flex items-center justify-center no-underline"
-            style={{
-              background: 'rgba(255, 255, 255, 0.02)',
-              backdropFilter: 'blur(10px)',
-            }}
-            whileHover={{ 
-              scale: 1.03,
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
-            }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.8 }}
+          href="/about"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3 py-1.5 rounded-md text-xs font-bold text-white/60 hover:text-white border border-white/5 cursor-pointer flex items-center justify-center no-underline"
+          style={{
+            background: "rgba(255, 255, 255, 0.02)",
+            backdropFilter: "blur(10px)",
+          }}
+          whileHover={{
+            scale: 1.03,
+            background: "rgba(255, 255, 255, 0.05)",
+            borderColor: "rgba(255, 255, 255, 0.1)",
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.8 }}
         >
-            About
+          About
         </motion.a>
       </div>
 
@@ -93,10 +93,12 @@ export function PuyoFooter() {
             ease: "easeInOut",
           }}
           style={{
-            boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)',
+            boxShadow: "0 0 6px rgba(16, 185, 129, 0.6)",
           }}
         />
-        <span className="text-xs font-bold text-white/60">All systems operational</span>
+        <span className="text-xs font-bold text-white/60">
+          All systems operational
+        </span>
       </div>
     </motion.footer>
   );
