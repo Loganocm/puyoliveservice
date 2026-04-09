@@ -184,8 +184,22 @@ export const ProfileScreen: React.FC<{
                           replayData.version !== 2 ||
                           !Array.isArray(replayData.inputs) ||
                           replayData.inputs.length === 0 ||
-                          !replayData.duration
+                          !replayData.duration ||
+                          !Number.isFinite(replayData.seed) ||
+                          !Number.isFinite(replayData.fps) ||
+                          !Array.isArray(replayData.players) ||
+                          replayData.players.length < 2
                         ) {
+                          console.warn(
+                            "[Replay] Validation failed:",
+                            JSON.stringify({
+                              hasData: !!replayData,
+                              version: replayData?.version,
+                              isInputsArray: Array.isArray(replayData?.inputs),
+                              inputCount: replayData?.inputs?.length,
+                              duration: replayData?.duration,
+                            }),
+                          );
                           alert(
                             "This replay was recorded with an older version and cannot be played.\n\nNew matches will have working replays!",
                           );

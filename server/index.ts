@@ -482,11 +482,14 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // V2 Replay: Tick frame counter (called by host/authoritative client)
+  // V2 Replay: Tick frame counter (only player 0 is authoritative to prevent double-counting)
   socket.on('tick_frame', (data: { roomId: string }) => {
     const room = roomManager.getRoom(data.roomId);
     if (room && room.matchStats) {
-      room.tick();
+      const playerIndex = room.getPlayerIndex(socket.id);
+      if (playerIndex === 0) {
+        room.tick();
+      }
     }
   });
 
@@ -785,6 +788,45 @@ io.on('connection', (socket: Socket) => {
     console.log(`🎮 Puyo Game Server running on port ${port}`);
     console.log(`📡 URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`}`);
   });
+
+  // Stale room cleanup — runs every 5 minutes
+  const STALE_ROOM_INTERVAL = 5 * 60 * 1000;
+  const IDLE_ROOM_MAX_AGE = 30 * 60 * 1000;    // 30 min for rooms with no active match
+  const ACTIVE_ROOM_MAX_AGE = 2 * 60 * 60 * 1000; // 2 hours safety net for active matches
+
+  setInterval(() => {
+    const now = Date.now();
+    const rooms = roomManager.getAllRooms();
+    for (const room of rooms) {
+      const age = now - room.createdAt;
+      const isPlaying = !!room.matchStats;
+      const isEmpty = room.playerCount === 0;
+
+      if (isEmpty || (!isPlaying && age > IDLE_ROOM_MAX_AGE) || (isPlaying && age > ACTIVE_ROOM_MAX_AGE)) {
+        console.log(`[Cleanup] Removing stale room ${room.id} (age=${Math.round(age / 60000)}min, players=${room.playerCount}, playing=${isPlaying})`);
+        // Notify any remaining players
+        io.to(room.id).emit('room_closed', { reason: 'Room timed out due to inactivity' });
+        // Remove players from socket.io room
+        for (const pid of room.players.keys()) {
+          const playerSocket = io.sockets.sockets.get(pid);
+          if (playerSocket) playerSocket.leave(room.id);
+        }
+        roomManager.deleteRoom(room.id);
+      }
+    }
+    // Broadcast updated room list after cleanup
+    const publicRooms = roomManager.getAllRooms()
+      .filter(r => !r.isPrivate)
+      .map(r => ({
+        id: r.id,
+        name: `Room ${r.id.substring(0, 4)}`,
+        players: r.playerCount,
+        maxPlayers: r.maxPlayers,
+        status: r.matchStats ? 'playing' : 'waiting',
+        isPrivate: false
+      }));
+    io.emit('room_list_update', publicRooms);
+  }, STALE_ROOM_INTERVAL);
 
   // Check API health in background
   try {

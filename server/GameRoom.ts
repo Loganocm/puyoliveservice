@@ -87,7 +87,8 @@ export class GameRoom {
     // Legacy (kept for backwards compat during transition)
     replayLog: ReplayEventLegacy[] = [];
 
-
+    // Room lifecycle
+    createdAt: number = Date.now();
 
     constructor(id: string) {
         this.id = id;

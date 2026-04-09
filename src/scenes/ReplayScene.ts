@@ -198,6 +198,23 @@ export class ReplayScene implements IScene {
             this.showGameOverOverlay(winnerIndex);
         };
 
+        // Re-hook engine events after seek rebuilds engines
+        this.replayEngine.onEngineReset = () => {
+            this.hookEngineEvents(0);
+            this.hookEngineEvents(1);
+        };
+
+        // Start paused — ReplayOverlay will resume once mounted
+        this.replayEngine.pause();
+
+        // Emit initial state so overlay gets totalFrames immediately
+        GameEvents.emit('replay_update', {
+            currentFrame: 0,
+            totalFrames: replayData.duration,
+            isPaused: true,
+            speed: this.replayEngine.playbackSpeed,
+        });
+
         // React UI controls
         GameEvents.on('replay_control', this.handleReplayControl);
     }
@@ -255,10 +272,8 @@ export class ReplayScene implements IScene {
                 break;
             case 'seek':
                 if (cmd.value !== undefined) {
-                    // Re-hook engine events after seek rebuilds engines
+                    // seekToFrame rebuilds engines; onEngineReset re-hooks events
                     this.replayEngine.seekToFrame(cmd.value);
-                    this.hookEngineEvents(0);
-                    this.hookEngineEvents(1);
                     // Reset animation state
                     this.animStates[0] = { landingAnims: new Map(), spawnAnim: -1, popAnimProgress: 0, particles: [], trackedTexts: [], prevState: GameState.SPAWN };
                     this.animStates[1] = { landingAnims: new Map(), spawnAnim: -1, popAnimProgress: 0, particles: [], trackedTexts: [], prevState: GameState.SPAWN };

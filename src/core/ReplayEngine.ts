@@ -1,12 +1,13 @@
 import { GameEngine } from './GameEngine';
 
 // Replay input types (must match server)
-export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD';
+export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
 
 export interface ReplayInput {
     f: number;      // Frame number
     p: 0 | 1;       // Player index
     i: InputType;   // Input type
+    a?: number;     // Amount (for Garbage 'G')
 }
 
 export interface ReplayPlayer {
@@ -33,13 +34,15 @@ export function isReplayFileV2(data: any): data is ReplayFile {
 
 /**
  * ReplayEngine - Deterministic playback of recorded games
- * Simulates both players' games simultaneously using recorded inputs
+ * Uses a fixed timestep accumulator so playback runs at real-time
+ * regardless of monitor refresh rate.
  */
 export class ReplayEngine {
     private engines: [GameEngine, GameEngine];
     private replayData: ReplayFile;
     private currentFrame: number = 0;
     private inputCursor: number = 0;
+    private accumulator: number = 0;
 
     // Playback state
     private _isPaused: boolean = false;
@@ -49,6 +52,7 @@ export class ReplayEngine {
     // Callbacks
     public onFrameUpdate?: (frame: number, total: number) => void;
     public onGameOver?: (winnerIndex: 0 | 1 | null) => void;
+    public onEngineReset?: () => void;
 
     constructor(replayData: ReplayFile) {
         this.replayData = replayData;
@@ -96,36 +100,44 @@ export class ReplayEngine {
     }
 
     /**
-     * Main update loop - call each frame
+     * Main update loop - call each render frame with Pixi deltaTime.
+     * Uses fixed timestep: accumulates dt and processes logical frames
+     * at exactly 1.0 per game frame (60fps), regardless of monitor refresh rate.
      */
     update(dt: number = 1.0): void {
         if (this._isPaused || this._isComplete) return;
 
-        // Process inputs at correct frame
-        while (this.inputCursor < this.replayData.inputs.length) {
-            const input = this.replayData.inputs[this.inputCursor];
-            if (input.f <= this.currentFrame) {
-                this.executeInput(input);
-                this.inputCursor++;
-            } else {
-                break;
+        this.accumulator += dt * this._playbackSpeed;
+
+        // Process logical frames at a fixed rate
+        while (this.accumulator >= 1.0 && !this._isComplete) {
+            this.accumulator -= 1.0;
+
+            // Process inputs at correct frame
+            while (this.inputCursor < this.replayData.inputs.length) {
+                const input = this.replayData.inputs[this.inputCursor];
+                if (input.f <= this.currentFrame) {
+                    this.executeInput(input);
+                    this.inputCursor++;
+                } else {
+                    break;
+                }
+            }
+
+            // Advance both engines by exactly 1 logical frame
+            this.engines[0].update(1.0);
+            this.engines[1].update(1.0);
+
+            this.currentFrame++;
+
+            // Check for completion
+            if (this.currentFrame >= this.replayData.duration) {
+                this._isComplete = true;
+                this.onGameOver?.(this.replayData.winner);
             }
         }
 
-        // Advance both engines
-        const scaledDt = dt * this._playbackSpeed;
-        this.engines[0].update(scaledDt);
-        this.engines[1].update(scaledDt);
-
-        this.currentFrame++;
-
-        // Check for completion
-        if (this.currentFrame >= this.replayData.duration) {
-            this._isComplete = true;
-            this.onGameOver?.(this.replayData.winner);
-        }
-
-        // Callback
+        // Callback — once per render frame (not per logical frame)
         this.onFrameUpdate?.(this.currentFrame, this.replayData.duration);
     }
 
@@ -156,6 +168,9 @@ export class ReplayEngine {
                 break;
             case 'HD':
                 engine.hardDrop();
+                break;
+            case 'G':
+                engine.addGarbage(input.a ?? 0);
                 break;
         }
     }
@@ -188,11 +203,21 @@ export class ReplayEngine {
         engine2.isReplaying = true;
         this.engines = [engine1, engine2];
 
+        // Let the scene re-hook events on the new engines
+        this.onEngineReset?.();
+
         this.currentFrame = 0;
         this.inputCursor = 0;
+        this.accumulator = 0;
         this._isComplete = false;
 
-        // Fast-forward to target
+        // Suppress callbacks during fast-forward
+        const savedFrameUpdate = this.onFrameUpdate;
+        const savedGameOver = this.onGameOver;
+        this.onFrameUpdate = undefined;
+        this.onGameOver = undefined;
+
+        // Fast-forward to target frame
         const wasPaused = this._isPaused;
         this._isPaused = false;
 
@@ -201,6 +226,11 @@ export class ReplayEngine {
         }
 
         this._isPaused = wasPaused;
+
+        // Restore callbacks and fire one update
+        this.onFrameUpdate = savedFrameUpdate;
+        this.onGameOver = savedGameOver;
+        this.onFrameUpdate?.(this.currentFrame, this.replayData.duration);
     }
 
     /**

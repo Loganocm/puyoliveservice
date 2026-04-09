@@ -100,6 +100,8 @@ export class GameScene implements IScene {
     private seed?: number;
     private opponentId?: string;
 
+    // Fixed timestep accumulator for server tick_frame (ensures 60 logical fps recording)
+    private tickFrameAccumulator: number = 0;
 
     private afkTimer: any = null;
     private afkCheckStart: number = 0;
@@ -127,6 +129,9 @@ export class GameScene implements IScene {
         this.replayData = replayData;
 
         console.log(`[GameScene] Initializing. Room: ${roomId}, Seed: ${seed}, Opponent: ${opponentId}`);
+        if (roomId) {
+            console.log(`[GameScene] Multiplayer mode. Replay recording ENABLED. tickFrame/recordInput will fire each frame.`);
+        }
 
         // Visibility / AFK Handler
         document.addEventListener('visibilitychange', this.handleVisibilityChange);
@@ -810,8 +815,13 @@ export class GameScene implements IScene {
 
 
                 // V2 Replay: Tick frame counter on server for multiplayer
+                // Fixed timestep: only tick at 60 logical fps, not per render frame
                 if (this.roomId && !this.replayData) {
-                    NetworkManager.tickFrame(this.roomId);
+                    this.tickFrameAccumulator += delta;
+                    while (this.tickFrameAccumulator >= 1.0) {
+                        this.tickFrameAccumulator -= 1.0;
+                        NetworkManager.tickFrame(this.roomId);
+                    }
                 }
 
                 // Log state transitions
