@@ -1,18 +1,18 @@
-import moveUrl from '../resources/move.wav';
-import rotateUrl from '../resources/rotate.wav';
-import dropUrl from '../resources/droppiece.wav';
-import clickUrl from '../resources/buttonclick.wav';
-import tinyGarbageUrl from '../resources/tinygarbage.wav';
-import hugeGarbageUrl from '../resources/hugegarbage.wav';
+import moveUrl from '../resources/soundeffects/move.wav';
+import rotateUrl from '../resources/soundeffects/rotate.wav';
+import dropUrl from '../resources/soundeffects/droppiece.wav';
+import clickUrl from '../resources/soundeffects/buttonclick.wav';
+import tinyGarbageUrl from '../resources/soundeffects/tinygarbage.wav';
+import hugeGarbageUrl from '../resources/soundeffects/hugegarbage.wav';
 
 // Import Combos
-import combo1Url from '../resources/combo1.wav';
-import combo2Url from '../resources/combo2.wav';
-import combo3Url from '../resources/combo3.wav';
-import combo4Url from '../resources/combo4.wav';
-import combo5Url from '../resources/combo5.wav';
-import combo6Url from '../resources/combo6.wav';
-import combo7Url from '../resources/combo7.wav'; // Use for 7+
+import combo1Url from '../resources/soundeffects/combo1.wav';
+import combo2Url from '../resources/soundeffects/combo2.wav';
+import combo3Url from '../resources/soundeffects/combo3.wav';
+import combo4Url from '../resources/soundeffects/combo4.wav';
+import combo5Url from '../resources/soundeffects/combo5.wav';
+import combo6Url from '../resources/soundeffects/combo6.wav';
+import combo7Url from '../resources/soundeffects/combo7.wav'; // Use for 7+
 
 import { SettingsManager } from './SettingsManager';
 

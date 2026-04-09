@@ -163,6 +163,51 @@ export class NetworkManager {
             this.emit('room_update', data);
         });
 
+        // ── Puyo Mines (Quick Play) events ──
+        this.socket.on('mines_joined', (data: any) => {
+            this.emit('mines_joined', data);
+        });
+
+        this.socket.on('mines_state', (data: any) => {
+            this.emit('mines_state', data);
+        });
+
+        this.socket.on('mines_player_list', (data: any) => {
+            this.emit('mines_player_list', data);
+        });
+
+        this.socket.on('mines_player_joined', (data: any) => {
+            this.emit('mines_player_joined', data);
+        });
+
+        this.socket.on('mines_player_left', (data: any) => {
+            this.emit('mines_player_left', data);
+        });
+
+        this.socket.on('mines_receive_garbage', (data: any) => {
+            this.emit('mines_receive_garbage', data);
+        });
+
+        this.socket.on('mines_target_board', (data: any) => {
+            this.emit('mines_target_board', data);
+        });
+
+        this.socket.on('mines_target_updated', (data: any) => {
+            this.emit('mines_target_updated', data);
+        });
+
+        this.socket.on('mines_respawned', (data: any) => {
+            this.emit('mines_respawned', data);
+        });
+
+        this.socket.on('mines_ko', (data: any) => {
+            this.emit('mines_ko', data);
+        });
+
+        this.socket.on('mines_player_died_broadcast', (data: any) => {
+            this.emit('mines_player_died_broadcast', data);
+        });
+
         // Add handler for auth response
         this.socket.on('authenticated', (data: { success: boolean, user?: any, error?: string }) => {
             console.log('Socket Auth:', data);
@@ -339,6 +384,56 @@ export class NetworkManager {
 
     public static getSocket(): Socket | null {
         return this.socket;
+    }
+
+    // ── Puyo Mines (Quick Play) methods ──
+
+    public static joinMines() {
+        if (!this.socket) {
+            this.connect();
+        }
+        if (this.socket?.connected) {
+            this.socket.emit('join_mines');
+        } else {
+            this.socket?.once('connect', () => {
+                this.socket?.emit('join_mines');
+            });
+        }
+    }
+
+    public static leaveMines() {
+        if (!this.socket) return;
+        this.socket.emit('leave_mines');
+    }
+
+    public static minesRespawn() {
+        if (!this.socket) return;
+        this.socket.emit('mines_respawn');
+    }
+
+    public static minesSetTarget(mode: string) {
+        if (!this.socket) return;
+        this.socket.emit('mines_set_target', { mode });
+    }
+
+    public static minesSendGarbage(amount: number, chainLength?: number) {
+        if (!this.socket) return;
+        this.socket.emit('mines_send_garbage', { amount, chainLength });
+    }
+
+    public static minesBoardState(grid: number[][]) {
+        if (!this.socket) return;
+        this.socket.emit('mines_board_state', { grid });
+    }
+
+    public static minesScoreUpdate(score: number) {
+        if (!this.socket) return;
+        this.socket.emit('mines_score_update', { score });
+    }
+
+    public static minesPlayerDied() {
+        if (!this.socket) return;
+        this.socket.emit('mines_player_died');
     }
 }
 

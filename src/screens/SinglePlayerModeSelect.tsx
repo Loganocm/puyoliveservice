@@ -1,41 +1,55 @@
-import { motion } from 'motion/react';
-import { Clock, Target } from 'lucide-react';
-import { BackButton } from '@/components/BackButton';
-import { useMenuInput } from '@/hooks/useMenuInput';
+import { motion } from "motion/react";
+import { useState, useEffect } from "react";
+import { Clock, Target, Zap, Swords, Flame, TrendingUp } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
+import { useMenuInput } from "@/hooks/useMenuInput";
+import { AuthManager } from "@/core/AuthManager";
+import { APIClient } from "@/api/client";
 
 interface SinglePlayerModeSelectProps {
-  onSelectMode: (mode: '3min' | '5min' | '10min' | 'practice') => void;
+  onSelectMode: (mode: "3min" | "5min" | "10min" | "practice") => void;
   onBack: () => void;
 }
 
-export function SinglePlayerModeSelect({ onSelectMode, onBack }: SinglePlayerModeSelectProps) {
+export function SinglePlayerModeSelect({
+  onSelectMode,
+  onBack,
+}: SinglePlayerModeSelectProps) {
   useMenuInput({ onBack }, [onBack]);
+  const user = AuthManager.currentUser;
+  const [percentiles, setPercentiles] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    if (user && !AuthManager.isGuest && user.games_played > 0) {
+      APIClient.getUserPercentiles(user.id).then(setPercentiles).catch(() => {});
+    }
+  }, [user]);
 
   const modes = [
-    { id: '3min' as const, label: '3 MINUTES', icon: Clock },
-    { id: '5min' as const, label: '5 MINUTES', icon: Clock },
-    { id: '10min' as const, label: '10 MINUTES', icon: Clock },
-    { id: 'practice' as const, label: 'PRACTICE', icon: Target },
+    { id: "3min" as const, label: "3 MINUTES", icon: Clock },
+    { id: "5min" as const, label: "5 MINUTES", icon: Clock },
+    { id: "10min" as const, label: "10 MINUTES", icon: Clock },
+    { id: "practice" as const, label: "PRACTICE", icon: Target },
   ];
 
   return (
     <div className="size-full relative overflow-hidden bg-transparent flex items-center justify-center">
       {/* Background effects */}
-      <div 
+      <div
         className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage: `
             linear-gradient(rgba(99,102,241,0.3) 1px, transparent 1px),
             linear-gradient(90deg, rgba(99,102,241,0.3) 1px, transparent 1px)
           `,
-          backgroundSize: '40px 40px',
+          backgroundSize: "40px 40px",
         }}
       />
-      
+
       <BackButton onClick={onBack} />
 
       <div className="w-full max-w-md px-8">
-        <motion.h1 
+        <motion.h1
           className="text-5xl font-black text-white mb-12 tracking-tighter text-center italic drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -43,6 +57,69 @@ export function SinglePlayerModeSelect({ onSelectMode, onBack }: SinglePlayerMod
         >
           SINGLE PLAYER
         </motion.h1>
+
+        {/* Solo Stats */}
+        {user && !AuthManager.isGuest && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="grid grid-cols-2 gap-3 mb-8"
+          >
+            {[
+              {
+                label: "Games Played",
+                value: user.games_played ?? 0,
+                icon: Swords,
+                color: "text-blue-400",
+                pctKey: "games_percentile",
+              },
+              {
+                label: "Win Rate",
+                value: `${user.games_played ? Math.round(((user.games_won ?? 0) / user.games_played) * 100) : 0}%`,
+                icon: TrendingUp,
+                color: "text-emerald-400",
+                pctKey: "win_rate_percentile",
+              },
+              {
+                label: "Best Chain",
+                value: user.highest_chain ?? 0,
+                icon: Zap,
+                color: "text-yellow-400",
+                pctKey: "chain_percentile",
+              },
+              {
+                label: "Garbage Sent",
+                value: (user.total_garbage_sent ?? 0).toLocaleString(),
+                icon: Flame,
+                color: "text-red-400",
+                pctKey: "garbage_percentile",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="bg-white/[0.04] border border-white/5 rounded-xl px-4 py-3 flex items-center gap-3"
+              >
+                <s.icon className={`w-4 h-4 ${s.color} shrink-0`} />
+                <div>
+                  <div className="text-base font-bold leading-tight">
+                    {s.value}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-white/30 uppercase tracking-wider">
+                      {s.label}
+                    </span>
+                    {percentiles && percentiles[s.pctKey] && (
+                      <span className="text-[10px] font-bold text-indigo-400">
+                        Top {percentiles[s.pctKey]}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        )}
 
         <div className="flex flex-col gap-4">
           {modes.map((mode, index) => (
@@ -56,16 +133,16 @@ export function SinglePlayerModeSelect({ onSelectMode, onBack }: SinglePlayerMod
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white/5 rounded-lg group-hover:bg-[#FF5733]/20 group-hover:text-[#FF5733] transition-colors">
-                    <mode.icon className="w-6 h-6" />
-                  </div>
-                  <span className="group-hover:text-[#FF5733] transition-colors">{mode.label}</span>
+                <div className="p-3 bg-white/5 rounded-lg group-hover:bg-[#FF5733]/20 group-hover:text-[#FF5733] transition-colors">
+                  <mode.icon className="w-6 h-6" />
+                </div>
+                <span className="group-hover:text-[#FF5733] transition-colors">
+                  {mode.label}
+                </span>
               </div>
             </motion.button>
           ))}
         </div>
-
-
       </div>
     </div>
   );

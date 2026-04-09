@@ -212,6 +212,19 @@ export class MatchService {
 
       const isWinner = m.winner_id === userId;
 
+      // Check if replay_data exists and is a valid V2 replay
+      const rd = m.replay_data;
+      const has_valid_replay = !!(
+        rd &&
+        rd.version === 2 &&
+        Array.isArray(rd.inputs) &&
+        rd.inputs.length > 0 &&
+        Number.isFinite(rd.seed) &&
+        Number.isFinite(rd.fps) &&
+        Array.isArray(rd.players) &&
+        rd.players.length >= 2
+      );
+
       return {
         id: m.id,
         opponent_username: opponentUsername,
@@ -228,7 +241,8 @@ export class MatchService {
         my_garbage_sent: isPlayer1 ? m.player1_garbage_sent : m.player2_garbage_sent,
         opponent_garbage_sent: isPlayer1 ? m.player2_garbage_sent : m.player1_garbage_sent,
         duration_seconds: m.duration_seconds,
-        ended_at: m.ended_at
+        ended_at: m.ended_at,
+        has_valid_replay
       };
     });
   }
@@ -250,12 +264,40 @@ export class MatchService {
   /**
    * Get recent matches (for global activity feed)
    */
-  static async getRecentMatches(limit: number = 10): Promise<Match[]> {
+  static async getRecentMatches(limit: number = 10) {
     const matches = await prisma.match.findMany({
       where: { is_ranked: true },
+      include: {
+        player1: { select: { id: true, username: true } },
+        player2: { select: { id: true, username: true } }
+      },
       orderBy: { ended_at: 'desc' },
       take: limit
     });
-    return matches as unknown as Match[];
+    return matches.map((m: any) => {
+      const rd = m.replay_data;
+      const has_valid_replay = !!(
+        rd &&
+        rd.version === 2 &&
+        Array.isArray(rd.inputs) &&
+        rd.inputs.length > 0 &&
+        Number.isFinite(rd.seed) &&
+        Number.isFinite(rd.fps) &&
+        Array.isArray(rd.players) &&
+        rd.players.length >= 2
+      );
+      return {
+        id: m.id,
+        winner_id: m.winner_id,
+        player1: m.player1,
+        player2: m.player2,
+        player1_max_chain: m.player1_max_chain,
+        player2_max_chain: m.player2_max_chain,
+        duration_seconds: m.duration_seconds,
+        ended_at: m.ended_at,
+        elo_change: m.player1_elo_after - m.player1_elo_before,
+        has_valid_replay
+      };
+    });
   }
 }

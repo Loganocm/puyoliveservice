@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { roomManager } from './RoomManager.js';
+import { minesRoom } from './MinesRoom.js';
 import { recordMatch, verifyToken, checkApiHealth } from './ApiClient.js';
 
 const app = express();
@@ -765,10 +766,192 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  // ═══════════════════════════════════════════════════════
+  // PUYO MINES (Quick Play) — Persistent FFA Room
+  // ═══════════════════════════════════════════════════════
+
+  /** Helper: broadcast current mines state to all players in the room */
+  const broadcastMinesState = () => {
+    io.to('MINES_LOBBY').emit('mines_state', minesRoom.getState());
+  };
+
+  /** Helper: broadcast compact player list (for sidebar updates) */
+  const broadcastMinesPlayerList = () => {
+    io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+  };
+
+  socket.on('join_mines', () => {
+    const auth = authenticatedUsers.get(socket.id);
+    const username = auth?.username || `Guest_${socket.id.substring(0, 6)}`;
+
+    const added = minesRoom.addPlayer({
+      socketId: socket.id,
+      username,
+      userId: auth?.userId,
+      avatarUrl: auth?.avatar_url,
+      elo: auth?.elo,
+    });
+
+    if (!added) {
+      // Already in mines, treat as rejoin/respawn
+      minesRoom.respawnPlayer(socket.id);
+    }
+
+    socket.join('MINES_LOBBY');
+    console.log(`[Mines] ${username} joined. Players: ${minesRoom.players.size}`);
+
+    // Send current seed + full state to the joining player
+    socket.emit('mines_joined', {
+      seed: minesRoom.seed,
+      state: minesRoom.getState(),
+      yourSocketId: socket.id,
+    });
+
+    // Notify everyone
+    io.to('MINES_LOBBY').emit('mines_player_joined', {
+      socketId: socket.id,
+      username,
+      userId: auth?.userId,
+      avatarUrl: auth?.avatar_url,
+    });
+
+    broadcastMinesPlayerList();
+  });
+
+  socket.on('leave_mines', () => {
+    const player = minesRoom.players.get(socket.id);
+    if (!player) return;
+
+    console.log(`[Mines] ${player.username} left. Players: ${minesRoom.players.size - 1}`);
+    minesRoom.removePlayer(socket.id);
+    socket.leave('MINES_LOBBY');
+
+    io.to('MINES_LOBBY').emit('mines_player_left', { socketId: socket.id });
+    broadcastMinesPlayerList();
+  });
+
+  socket.on('mines_respawn', () => {
+    const player = minesRoom.players.get(socket.id);
+    if (!player) return;
+
+    minesRoom.respawnPlayer(socket.id);
+    console.log(`[Mines] ${player.username} respawned`);
+
+    // Send new seed for fresh piece sequence
+    socket.emit('mines_respawned', { seed: Date.now() });
+    broadcastMinesPlayerList();
+  });
+
+  socket.on('mines_set_target', (data: { mode: string }) => {
+    const valid = ['random', 'attackers', 'badges', 'vulnerable'];
+    if (!valid.includes(data.mode)) return;
+
+    minesRoom.setTargetingMode(socket.id, data.mode as any);
+    const player = minesRoom.players.get(socket.id);
+    if (player) {
+      socket.emit('mines_target_updated', {
+        mode: player.targetingMode,
+        targetSocketId: player.currentTarget,
+        targetUsername: player.currentTarget
+          ? minesRoom.players.get(player.currentTarget)?.username
+          : null,
+      });
+    }
+  });
+
+  socket.on('mines_send_garbage', (data: { amount: number, chainLength?: number }) => {
+    if (!data || typeof data.amount !== 'number' || data.amount <= 0) return;
+
+    const result = minesRoom.processGarbage(socket.id, data.amount, data.chainLength || 0);
+    if (!result) return;
+
+    // Send garbage only to the target player
+    const targetSocket = io.sockets.sockets.get(result.targetSocketId);
+    if (targetSocket) {
+      targetSocket.emit('mines_receive_garbage', {
+        amount: result.amount,
+        fromSocketId: socket.id,
+        fromUsername: minesRoom.players.get(socket.id)?.username || '???',
+      });
+    }
+
+    // Broadcast updated player list (garbage stats changed)
+    broadcastMinesPlayerList();
+  });
+
+  socket.on('mines_board_state', (data: { grid: number[][] }) => {
+    if (!data?.grid) return;
+    minesRoom.updateBoard(socket.id, data.grid);
+
+    // Relay board to everyone for sidebar mini-boards (optional, can be expensive)
+    // Only send to players targeting this player for efficiency
+    for (const [id, p] of minesRoom.players) {
+      if (p.currentTarget === socket.id && id !== socket.id) {
+        const s = io.sockets.sockets.get(id);
+        if (s) {
+          s.emit('mines_target_board', { grid: data.grid, socketId: socket.id });
+        }
+      }
+    }
+  });
+
+  socket.on('mines_score_update', (data: { score: number }) => {
+    if (!data || typeof data.score !== 'number') return;
+    const depth = minesRoom.updateScore(socket.id, data.score);
+
+    // Periodically broadcast updated player list
+    // (to avoid flooding, client should throttle score updates)
+    broadcastMinesPlayerList();
+  });
+
+  socket.on('mines_player_died', () => {
+    const player = minesRoom.players.get(socket.id);
+    if (!player || !player.alive) return;
+
+    // Find who was targeting this player — they get the KO credit
+    for (const [id, p] of minesRoom.players) {
+      if (p.alive && p.currentTarget === socket.id && id !== socket.id) {
+        minesRoom.recordKO(id);
+        const killerSocket = io.sockets.sockets.get(id);
+        if (killerSocket) {
+          killerSocket.emit('mines_ko', {
+            targetUsername: player.username,
+            totalKOs: p.kos,
+          });
+        }
+        break; // Only one KO credit per death
+      }
+    }
+
+    const deadPlayer = minesRoom.killPlayer(socket.id);
+    if (deadPlayer) {
+      console.log(`[Mines] ${deadPlayer.username} died at depth ${deadPlayer.depth}`);
+      io.to('MINES_LOBBY').emit('mines_player_died_broadcast', {
+        socketId: socket.id,
+        username: deadPlayer.username,
+        depth: deadPlayer.depth,
+      });
+      broadcastMinesPlayerList();
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // END PUYO MINES
+  // ═══════════════════════════════════════════════════════
+
   socket.on('disconnect', async () => {
     console.log(`User disconnected: ${socket.id}`);
     if (removeFromQueues(socket.id)) {
       broadcastQueueUpdate();
+    }
+
+    // Clean up mines lobby
+    if (minesRoom.players.has(socket.id)) {
+      const player = minesRoom.players.get(socket.id);
+      console.log(`[Mines] ${player?.username} disconnected`);
+      minesRoom.removePlayer(socket.id);
+      io.to('MINES_LOBBY').emit('mines_player_left', { socketId: socket.id });
+      broadcastMinesPlayerList();
     }
 
     // Check if user was in a room and HANDLE ABORT/LOSS

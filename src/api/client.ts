@@ -83,4 +83,24 @@ export class APIClient {
     static async getReplay(matchId: number) {
         return this.request(`/matches/${matchId}/replay`);
     }
+
+    static async getUserProfile(identifier: string | number) {
+        return this.request(`/users/${identifier}`);
+    }
+
+    static async searchUsers(query: string, limit: number = 10) {
+        return this.request(`/users/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+    }
+
+    static async getRecentMatches(limit: number = 10) {
+        return this.request(`/matches/recent/all?limit=${limit}`);
+    }
+
+    static async getLeaderboardStats() {
+        return this.request(`/leaderboard/stats`);
+    }
+
+    static async getUserPercentiles(userId: number) {
+        return this.request(`/leaderboard/percentiles/${userId}`);
+    }
 }

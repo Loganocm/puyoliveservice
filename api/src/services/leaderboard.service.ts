@@ -104,4 +104,69 @@ export class LeaderboardService {
       average_elo: Math.round(avgEloResult._avg.elo_rating || 1000)
     };
   }
+
+  /**
+   * Get a user's percentile rankings for various stats.
+   * Returns "Top X%" for each stat (lower = better).
+   */
+  static async getUserPercentiles(userId: number): Promise<{
+    elo_percentile: number;
+    win_rate_percentile: number;
+    chain_percentile: number;
+    garbage_percentile: number;
+    games_percentile: number;
+  } | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        elo_rating: true,
+        games_played: true,
+        games_won: true,
+        highest_chain: true,
+        total_garbage_sent: true,
+      }
+    });
+
+    if (!user || user.games_played === 0) return null;
+
+    const totalRanked = await prisma.user.count({
+      where: { games_played: { gt: 0 } }
+    });
+
+    if (totalRanked === 0) return null;
+
+    // Count how many players are above this user for each stat
+    const [aboveElo, aboveChain, aboveGarbage, aboveGames] = await Promise.all([
+      prisma.user.count({
+        where: { games_played: { gt: 0 }, elo_rating: { gt: user.elo_rating } }
+      }),
+      prisma.user.count({
+        where: { games_played: { gt: 0 }, highest_chain: { gt: user.highest_chain } }
+      }),
+      prisma.user.count({
+        where: { games_played: { gt: 0 }, total_garbage_sent: { gt: user.total_garbage_sent } }
+      }),
+      prisma.user.count({
+        where: { games_played: { gt: 0 }, games_played: { gt: user.games_played } }
+      }),
+    ]);
+
+    // Win rate percentile: count users with better win rate
+    // We need a raw query for computed win rate comparison
+    const userWinRate = user.games_won / user.games_played;
+    const aboveWinRate: [{count: bigint}] = await prisma.$queryRaw(
+      Prisma.sql`SELECT COUNT(*) as count FROM users WHERE games_played > 0 AND (CAST(games_won AS FLOAT) / CAST(games_played AS FLOAT)) > ${userWinRate}`
+    );
+
+    const toPercentile = (above: number) =>
+      Math.max(1, Math.round(((above + 1) / totalRanked) * 100));
+
+    return {
+      elo_percentile: toPercentile(aboveElo),
+      win_rate_percentile: toPercentile(Number(aboveWinRate[0].count)),
+      chain_percentile: toPercentile(aboveChain),
+      garbage_percentile: toPercentile(aboveGarbage),
+      games_percentile: toPercentile(aboveGames),
+    };
+  }
 }

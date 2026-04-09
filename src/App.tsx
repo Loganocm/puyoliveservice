@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Gamepad2, Trophy, Settings, Swords, User } from "lucide-react";
-import puyoHeaderLogo from "@/resources/puyoheader.svg";
+import { Gamepad2, Trophy, Settings, Swords, User, Users } from "lucide-react";
 import { backgroundManager } from "@/core/BackgroundManager";
 import { PuyoFooter } from "@/components/PuyoFooter";
 import { WaterFillButton } from "@/components/WaterFillButton";
@@ -10,6 +9,7 @@ import { AuthManager, type User as UserData } from "./core/AuthManager";
 import { XpCalculator } from "./core/XpCalculator";
 import { GameEvents } from "@/core/GameEvents";
 import { LevelUpOverlay } from "@/components/LevelUpOverlay";
+import { VolumeHUD } from "@/components/VolumeHUD";
 
 import { SinglePlayerModeSelect } from "@/screens/SinglePlayerModeSelect";
 import { MultiplayerLobby } from "@/screens/MultiplayerLobby";
@@ -25,6 +25,7 @@ import { ResourceManager } from "@/core/ResourceManager";
 import { GameScene } from "@/scenes/GameScene";
 import { MenuScene } from "@/scenes/MenuScene";
 import { ProfileScreen } from "@/screens/ProfileScreen";
+import { CommunityScreen } from "@/screens/CommunityScreen";
 
 type Screen =
   | "menu"
@@ -47,6 +48,7 @@ export default function App() {
   const [user, setUser] = useState<UserData | null>(
     AuthManager.currentUser as UserData | null,
   );
+  const [showCommunity, setShowCommunity] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
   const [bgImage, setBgImage] = useState<string>("");
@@ -143,6 +145,8 @@ export default function App() {
         setScreen("menu");
       } else if (screen === "controls") {
         setScreen("settings");
+      } else if (showCommunity) {
+        setShowCommunity(false);
       } else if (showProfile) {
         setShowProfile(false);
       }
@@ -151,7 +155,7 @@ export default function App() {
     return () => {
       GameEvents.off("menu_back", handleBack);
     };
-  }, [screen, showProfile]);
+  }, [screen, showProfile, showCommunity]);
 
   // Restore Auth Check
   useState(() => {
@@ -333,6 +337,26 @@ export default function App() {
               </div>
             </motion.header>
 
+            {/* Community Tab - Left Side */}
+            <motion.button
+              initial={{ opacity: 0, x: -40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{
+                duration: hasVisitedMenu.current ? 0 : 0.5,
+                delay: hasVisitedMenu.current ? 0 : 0.3,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              whileHover={{ scale: 1.03, x: 4 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowCommunity(true)}
+              className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 px-3 py-6 bg-indigo-600/80 hover:bg-indigo-500/90 border border-white/10 rounded-r-2xl shadow-lg shadow-indigo-500/20 backdrop-blur-sm transition-colors cursor-pointer"
+            >
+              <Users className="w-5 h-5 text-white" />
+              <span className="text-[11px] font-bold tracking-widest text-white/90 [writing-mode:vertical-lr] rotate-180">
+                COMMUNITY
+              </span>
+            </motion.button>
+
             {/* Centered Logo */}
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -343,11 +367,10 @@ export default function App() {
               }}
               className="flex justify-center px-8 pt-4 pb-4 z-10"
             >
-              <img
-                src={puyoHeaderLogo}
-                alt="Puyo Live"
-                className="w-full max-w-lg"
-              />
+              <h1 className="text-6xl md:text-7xl font-black tracking-tight select-none">
+                <span className="text-white">PUYO </span>
+                <span className="text-indigo-400">LIVE</span>
+              </h1>
             </motion.div>
 
             {/* Main Menu */}
@@ -572,6 +595,18 @@ export default function App() {
           }}
         />
       )}
+
+      {showCommunity && (
+        <CommunityScreen
+          onClose={() => setShowCommunity(false)}
+          onWatchReplay={() => {
+            setShowCommunity(false);
+            setScreen("replay");
+          }}
+        />
+      )}
+
+      <VolumeHUD />
     </div>
   );
 }

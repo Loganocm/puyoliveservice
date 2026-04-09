@@ -451,13 +451,15 @@ export class UIManager {
                     <div class="col-act"></div>
                 `;
 
-                // Watch Button
-                const btn = document.createElement('button');
-                btn.className = 'btn-watch';
-                btn.innerText = 'WATCH';
-                btn.onclick = () => this.loadReplay(m.id);
+                // Watch Button (only if replay is valid)
+                if (m.has_valid_replay) {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn-watch';
+                    btn.innerText = 'WATCH';
+                    btn.onclick = () => this.loadReplay(m.id);
 
-                item.querySelector('.col-act')?.appendChild(btn);
+                    item.querySelector('.col-act')?.appendChild(btn);
+                }
                 list.appendChild(item);
             });
 

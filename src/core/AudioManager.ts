@@ -1,10 +1,10 @@
 import { SettingsManager } from './SettingsManager';
 
 // Import audio files
-import buttonClickUrl from '../resources/buttonclick.wav';
-import moveUrl from '../resources/move.wav';
-import rotateUrl from '../resources/rotate.wav';
-import dropPieceUrl from '../resources/droppiece.wav';
+import buttonClickUrl from '../resources/soundeffects/buttonclick.wav';
+import moveUrl from '../resources/soundeffects/move.wav';
+import rotateUrl from '../resources/soundeffects/rotate.wav';
+import dropPieceUrl from '../resources/soundeffects/droppiece.wav';
 
 export class AudioManager {
     private static sounds: Map<string, HTMLAudioElement> = new Map();

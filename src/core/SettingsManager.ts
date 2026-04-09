@@ -25,8 +25,12 @@ export class SettingsManager {
   public static lineClearDelay = 20;
 
   // Master Volume (0 to 100)
+  // Master Volume (0 to 100) - controls overall volume
   // Scaled so 100 = 0.1 gain (10%)
   public static masterVolume = 100;
+
+  // BGM Volume (0 to 100) - controls background music independently
+  public static bgmVolume = 50;
 
   // Soft Drop Protection (Require fresh press on spawn)
   // Defaulting to true is safer for preventing accidental drops on spawn
@@ -44,6 +48,7 @@ export class SettingsManager {
       are: this.are,
       lineClearDelay: this.lineClearDelay,
       masterVolume: this.masterVolume,
+      bgmVolume: this.bgmVolume,
       softDropProtection: this.softDropProtection,
       screenShake: this.screenShake
     }));
@@ -73,6 +78,7 @@ export class SettingsManager {
       }
       if (parsed.softDropProtection !== undefined) this.softDropProtection = parsed.softDropProtection;
       if (parsed.screenShake !== undefined) this.screenShake = parsed.screenShake;
+      if (parsed.bgmVolume !== undefined) this.bgmVolume = parsed.bgmVolume;
     } else {
       this.save();
     }

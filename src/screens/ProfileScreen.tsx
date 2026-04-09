@@ -10,6 +10,7 @@ interface MatchHistoryEntry {
   elo_change: number;
   ended_at: string;
   duration_seconds: number;
+  has_valid_replay?: boolean;
 }
 
 export const ProfileScreen: React.FC<{
@@ -20,6 +21,13 @@ export const ProfileScreen: React.FC<{
   const [matches, setMatches] = useState<MatchHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"stats" | "history">("history");
+  const [percentiles, setPercentiles] = useState<{
+    elo_percentile: number;
+    win_rate_percentile: number;
+    chain_percentile: number;
+    garbage_percentile: number;
+    games_percentile: number;
+  } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -31,11 +39,14 @@ export const ProfileScreen: React.FC<{
       setLoading(true);
       // Reload user stats
       const me = await APIClient.getMe();
-      // AuthManager.currentUser = me; // Update global if needed, but safe to use local
       setUser(me);
 
-      const history = await APIClient.getMatchHistory(me.id);
+      const [history, pctData] = await Promise.all([
+        APIClient.getMatchHistory(me.id),
+        APIClient.getUserPercentiles(me.id).catch(() => null),
+      ]);
       setMatches(history.matches);
+      setPercentiles(pctData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -165,47 +176,13 @@ export const ProfileScreen: React.FC<{
                       </div>
                     </div>
                   </div>
+                  {match.has_valid_replay && (
                   <button
                     onClick={async () => {
                       if (loading) return;
                       try {
                         setLoading(true);
                         const replayData = await APIClient.getReplay(match.id);
-                        console.log("[Replay] Data received:", {
-                          version: replayData?.version,
-                          duration: replayData?.duration,
-                          inputCount: replayData?.inputs?.length,
-                          fps: replayData?.fps,
-                        });
-
-                        // Validate replay data
-                        if (
-                          !replayData ||
-                          replayData.version !== 2 ||
-                          !Array.isArray(replayData.inputs) ||
-                          replayData.inputs.length === 0 ||
-                          !replayData.duration ||
-                          !Number.isFinite(replayData.seed) ||
-                          !Number.isFinite(replayData.fps) ||
-                          !Array.isArray(replayData.players) ||
-                          replayData.players.length < 2
-                        ) {
-                          console.warn(
-                            "[Replay] Validation failed:",
-                            JSON.stringify({
-                              hasData: !!replayData,
-                              version: replayData?.version,
-                              isInputsArray: Array.isArray(replayData?.inputs),
-                              inputCount: replayData?.inputs?.length,
-                              duration: replayData?.duration,
-                            }),
-                          );
-                          alert(
-                            "This replay was recorded with an older version and cannot be played.\n\nNew matches will have working replays!",
-                          );
-                          setLoading(false);
-                          return;
-                        }
 
                         onClose(); // Close profile modal
 
@@ -226,6 +203,7 @@ export const ProfileScreen: React.FC<{
                   >
                     Watch Replay
                   </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -238,6 +216,11 @@ export const ProfileScreen: React.FC<{
                 <div className="text-4xl font-bold text-white">
                   {user?.games_played}
                 </div>
+                {percentiles && (
+                  <div className="text-xs font-bold text-indigo-400 mt-1">
+                    Top {percentiles.games_percentile}%
+                  </div>
+                )}
               </div>
               <div className="bg-white/5 border border-white/5 p-6 rounded-2xl">
                 <div className="text-white/40 text-xs font-bold uppercase tracking-wider mb-2">
@@ -249,6 +232,11 @@ export const ProfileScreen: React.FC<{
                     : 0}
                   %
                 </div>
+                {percentiles && (
+                  <div className="text-xs font-bold text-indigo-400 mt-1">
+                    Top {percentiles.win_rate_percentile}%
+                  </div>
+                )}
               </div>
               <div className="bg-white/5 border border-white/5 p-6 rounded-2xl">
                 <div className="text-white/40 text-xs font-bold uppercase tracking-wider mb-2">
@@ -257,6 +245,11 @@ export const ProfileScreen: React.FC<{
                 <div className="text-4xl font-bold text-amber-400">
                   {user?.highest_chain}
                 </div>
+                {percentiles && (
+                  <div className="text-xs font-bold text-indigo-400 mt-1">
+                    Top {percentiles.chain_percentile}%
+                  </div>
+                )}
               </div>
               <div className="bg-white/5 border border-white/5 p-6 rounded-2xl">
                 <div className="text-white/40 text-xs font-bold uppercase tracking-wider mb-2">
@@ -265,6 +258,11 @@ export const ProfileScreen: React.FC<{
                 <div className="text-4xl font-bold text-purple-400">
                   {user?.total_garbage_sent}
                 </div>
+                {percentiles && (
+                  <div className="text-xs font-bold text-indigo-400 mt-1">
+                    Top {percentiles.garbage_percentile}%
+                  </div>
+                )}
               </div>
             </div>
           )}

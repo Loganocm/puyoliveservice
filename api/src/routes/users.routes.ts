@@ -1,8 +1,35 @@
 import { Router, Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { asyncHandler, optionalAuth } from '../middleware/index.js';
+import prisma from '../db/index.js';
 
 const router = Router();
+
+/**
+ * GET /users/search?q=term&limit=10
+ * Search users by username prefix
+ */
+router.get('/search', asyncHandler(async (req: Request, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 25);
+
+  if (q.length < 2) {
+    res.json({ users: [] });
+    return;
+  }
+
+  const users = await prisma.user.findMany({
+    where: { username: { startsWith: q, mode: 'insensitive' } },
+    select: {
+      id: true, username: true, elo_rating: true, level: true,
+      avatar_url: true, games_played: true, games_won: true,
+    },
+    orderBy: { elo_rating: 'desc' },
+    take: limit,
+  });
+
+  res.json({ users });
+}));
 
 /**
  * GET /users/:identifier

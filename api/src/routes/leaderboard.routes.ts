@@ -104,4 +104,26 @@ router.get('/me', optionalAuth, asyncHandler(async (req: Request, res: Response)
   });
 }));
 
+/**
+ * GET /leaderboard/percentiles/:userId
+ * Get a user's percentile rankings for various stats
+ */
+router.get('/percentiles/:userId', asyncHandler(async (req: Request, res: Response) => {
+  const userId = parseInt(req.params.userId as string, 10);
+
+  if (isNaN(userId)) {
+    res.status(400).json({ error: 'Invalid user ID' });
+    return;
+  }
+
+  const percentiles = await LeaderboardService.getUserPercentiles(userId);
+
+  if (!percentiles) {
+    res.status(404).json({ error: 'User not found or has no games played' });
+    return;
+  }
+
+  res.json(percentiles);
+}));
+
 export default router;
