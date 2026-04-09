@@ -171,6 +171,12 @@ export const ProfileScreen: React.FC<{
                       try {
                         setLoading(true);
                         const replayData = await APIClient.getReplay(match.id);
+                        console.log("[Replay] Data received:", {
+                          version: replayData?.version,
+                          duration: replayData?.duration,
+                          inputCount: replayData?.inputs?.length,
+                          fps: replayData?.fps,
+                        });
 
                         // Validate replay data
                         if (
