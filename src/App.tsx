@@ -1,59 +1,65 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Gamepad2, 
-  Trophy, 
-  Settings,
-  Swords, 
-  User
-} from 'lucide-react';
-import puyoHeaderLogo from '@/resources/puyoheader.svg';
-import { backgroundManager } from '@/core/BackgroundManager';
-import { PuyoFooter } from '@/components/PuyoFooter';
-import { WaterFillButton } from '@/components/WaterFillButton';
-import { PlayerStatsPanel } from '@/components/PlayerStatsPanel';
-import { AuthManager, type User as UserData } from './core/AuthManager';
-import { XpCalculator } from './core/XpCalculator';
-import { GameEvents } from '@/core/GameEvents';
-import { LevelUpOverlay } from '@/components/LevelUpOverlay';
+import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Gamepad2, Trophy, Settings, Swords, User } from "lucide-react";
+import puyoHeaderLogo from "@/resources/puyoheader.svg";
+import { backgroundManager } from "@/core/BackgroundManager";
+import { PuyoFooter } from "@/components/PuyoFooter";
+import { WaterFillButton } from "@/components/WaterFillButton";
+import { PlayerStatsPanel } from "@/components/PlayerStatsPanel";
+import { AuthManager, type User as UserData } from "./core/AuthManager";
+import { XpCalculator } from "./core/XpCalculator";
+import { GameEvents } from "@/core/GameEvents";
+import { LevelUpOverlay } from "@/components/LevelUpOverlay";
 
-import { SinglePlayerModeSelect } from '@/screens/SinglePlayerModeSelect';
-import { MultiplayerLobby } from '@/screens/MultiplayerLobby';
-import { LeaderboardScreen } from '@/screens/LeaderboardScreen';
-import { SettingsScreen } from '@/screens/SettingsScreen';
-import { ControlsScreen } from '@/screens/ControlsScreen';
-import { OnboardingScreen } from '@/screens/OnboardingScreen';
-import { GameOverlay } from '@/screens/GameOverlay';
-import { ReplayOverlay } from '@/screens/ReplayOverlay';
-import { TransitionParticles } from '@/components/TransitionParticles';
-import { SceneManager } from '@/core/SceneManager';
-import { ResourceManager } from '@/core/ResourceManager';
-import { GameScene } from '@/scenes/GameScene';
-import { MenuScene } from '@/scenes/MenuScene';
-import { ProfileScreen } from '@/screens/ProfileScreen';
+import { SinglePlayerModeSelect } from "@/screens/SinglePlayerModeSelect";
+import { MultiplayerLobby } from "@/screens/MultiplayerLobby";
+import { LeaderboardScreen } from "@/screens/LeaderboardScreen";
+import { SettingsScreen } from "@/screens/SettingsScreen";
+import { ControlsScreen } from "@/screens/ControlsScreen";
+import { OnboardingScreen } from "@/screens/OnboardingScreen";
+import { GameOverlay } from "@/screens/GameOverlay";
+import { ReplayOverlay } from "@/screens/ReplayOverlay";
+import { TransitionParticles } from "@/components/TransitionParticles";
+import { SceneManager } from "@/core/SceneManager";
+import { ResourceManager } from "@/core/ResourceManager";
+import { GameScene } from "@/scenes/GameScene";
+import { MenuScene } from "@/scenes/MenuScene";
+import { ProfileScreen } from "@/screens/ProfileScreen";
 
-type Screen = 'menu' | 'single' | 'multi' | 'leaderboard' | 'settings' | 'controls' | 'onboarding' | 'game' | 'replay' | 'transition';
+type Screen =
+  | "menu"
+  | "single"
+  | "multi"
+  | "leaderboard"
+  | "settings"
+  | "controls"
+  | "onboarding"
+  | "game"
+  | "replay"
+  | "transition";
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('onboarding'); // Default to onboarding until auth check
+  const [screen, setScreen] = useState<Screen>("onboarding"); // Default to onboarding until auth check
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   // Restore reactive user state
-  const [user, setUser] = useState<UserData | null>(AuthManager.currentUser as UserData | null);
+  const [user, setUser] = useState<UserData | null>(
+    AuthManager.currentUser as UserData | null,
+  );
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
-  const [bgImage, setBgImage] = useState<string>('');
+  const [bgImage, setBgImage] = useState<string>("");
 
   // Set random background on component mount
   useEffect(() => {
     // Select a random background for the menu
     const bg = backgroundManager.getRandomBackground();
-    console.log('[App] Setting menu background:', bg);
+    console.log("[App] Setting menu background:", bg);
     backgroundManager.setMenuBackground(bg);
     setBgImage(bg);
   }, []);
-  
+
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
 
@@ -63,92 +69,87 @@ export default function App() {
     setUser(AuthManager.currentUser as UserData | null);
 
     const handleUserUpdate = (userData: any) => {
-        // Check for level up
-        if (userData && user && userData.level > (user.level ?? 0)) {
-             setShowLevelUp(true);
-             setLevelUpLevel(userData.level);
-        }
-        setUser(userData as UserData | null);
+      // Check for level up
+      if (userData && user && userData.level > (user.level ?? 0)) {
+        setShowLevelUp(true);
+        setLevelUpLevel(userData.level);
+      }
+      setUser(userData as UserData | null);
     };
 
-    GameEvents.on('user_update', handleUserUpdate);
+    GameEvents.on("user_update", handleUserUpdate);
     return () => {
-        GameEvents.off('user_update', handleUserUpdate);
+      GameEvents.off("user_update", handleUserUpdate);
     };
   }, [user]);
 
   // Update ref when we enter menu
   useEffect(() => {
-    if (screen === 'menu') {
-       hasVisitedMenu.current = true;
+    if (screen === "menu") {
+      hasVisitedMenu.current = true;
     }
 
-    if (screen === 'transition') {
-        const prepareGame = async () => {
-            const startTime = Date.now();
-            console.log("[App] Starting Transition. Waiting for assets...");
+    if (screen === "transition") {
+      const prepareGame = async () => {
+        const startTime = Date.now();
+        console.log("[App] Starting Transition. Waiting for assets...");
 
-            // 1. Wait for Game Core (ResourceManager) to be loaded
-            // Simple polling since it runs in parallel
-            while (!ResourceManager.loaded) {
-                await new Promise(r => setTimeout(r, 100));
-            }
-            console.log("[App] Core Assets Loaded.");
+        // 1. Wait for Game Core (ResourceManager) to be loaded
+        // Simple polling since it runs in parallel
+        while (!ResourceManager.loaded) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        console.log("[App] Core Assets Loaded.");
 
-            // 2. Preload Menu Background
-            // We use the one we selected on mount
-            const bg = backgroundManager.getMenuBackground();
-            if (bg) {
-                console.log("[App] Preloading Menu Background:", bg);
-                await backgroundManager.preload(bg);
-            }
+        // 2. Preload Menu Background
+        // We use the one we selected on mount
+        const bg = backgroundManager.getMenuBackground();
+        if (bg) {
+          console.log("[App] Preloading Menu Background:", bg);
+          await backgroundManager.preload(bg);
+        }
 
-            // 3. Preload Game Background (for instant start)
-            const gameBg = backgroundManager.prepareGameBackground();
-            if (gameBg) {
-                console.log("[App] Preloading Game Background:", gameBg);
-                await backgroundManager.preload(gameBg);
-            }
+        // 3. Preload Game Background (for instant start)
+        const gameBg = backgroundManager.prepareGameBackground();
+        if (gameBg) {
+          console.log("[App] Preloading Game Background:", gameBg);
+          await backgroundManager.preload(gameBg);
+        }
 
-            // 4. Ensure Minimum Duration (2s) for smooth effect
-            const elapsed = Date.now() - startTime;
-            const remaining = Math.max(0, 2000 - elapsed);
-            console.log(`[App] Transition wait: ${remaining}ms`);
-            
-            if (remaining > 0) {
-                await new Promise(r => setTimeout(r, remaining));
-            }
+        // 4. Ensure Minimum Duration (2s) for smooth effect
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 2000 - elapsed);
+        console.log(`[App] Transition wait: ${remaining}ms`);
 
-            setScreen('menu');
-        };
-        prepareGame();
+        if (remaining > 0) {
+          await new Promise((r) => setTimeout(r, remaining));
+        }
+
+        setScreen("menu");
+      };
+      prepareGame();
     }
   }, [screen]);
 
   // Handle Menu Navigation (Back)
   useEffect(() => {
     const handleBack = () => {
-        console.log('[App] Menu Back requested. Current screen:', screen);
-        if (screen === 'settings' || screen === 'leaderboard' || screen === 'single') {
-            setScreen('menu');
-        } else if (screen === 'controls') {
-            setScreen('settings');
-        } else if (showProfile) {
-            setShowProfile(false);
-        } else if (screen === 'multi') {
-            // MultiplayerLobby handles its own back logic via internal state usually,
-            // but if we are at root of lobby, we should go back to menu.
-            // We can check if a "private-room" section is open via DOM? No, that's brittle.
-            // Ideally MultiplayerLobby emits 'exit_multi' or we have a way to check.
-            // For now, let's allow App to handle 'multi' -> 'menu' ONLY if checked?
-            // Actually, we pass onBack to MultiplayerLobby. It renders a Back button.
-            // But if we press Escape, MultiplayerLobby should handle it.
-            // WE DO NOT HANDLE 'multi' HERE to avoid conflict.
-        }
+      console.log("[App] Menu Back requested. Current screen:", screen);
+      if (
+        screen === "settings" ||
+        screen === "leaderboard" ||
+        screen === "single"
+      ) {
+        setScreen("menu");
+      } else if (screen === "controls") {
+        setScreen("settings");
+      } else if (showProfile) {
+        setShowProfile(false);
+      }
     };
-    GameEvents.on('menu_back', handleBack);
+    GameEvents.on("menu_back", handleBack);
     return () => {
-        GameEvents.off('menu_back', handleBack);
+      GameEvents.off("menu_back", handleBack);
     };
   }, [screen, showProfile]);
 
@@ -157,9 +158,9 @@ export default function App() {
     const initAuth = async () => {
       const isValid = await AuthManager.init();
       if (isValid) {
-        setScreen('menu');
+        setScreen("menu");
       } else {
-        setScreen('onboarding');
+        setScreen("onboarding");
       }
       // setAuthInitialized(true);
     };
@@ -168,45 +169,48 @@ export default function App() {
 
   const menuItems = [
     {
-      label: 'Single Player',
-      subtitle: 'Practice or Time Attack',
+      label: "Single Player",
+      subtitle: "Practice or Time Attack",
       icon: Gamepad2,
-      color: '#3B82F6', // blue-500
-      accentColor: '#22D3EE', // cyan-400
-      action: () => setScreen('single')
+      color: "#3B82F6", // blue-500
+      accentColor: "#22D3EE", // cyan-400
+      action: () => setScreen("single"),
     },
     {
-      label: 'Multiplayer',
-      subtitle: 'Ranked & Casual Matches',
+      label: "Multiplayer",
+      subtitle: "Ranked & Casual Matches",
       icon: Swords,
-      color: '#8B5CF6', // violet-500
-      accentColor: '#E879F9', // fuchsia-400
-      action: () => setScreen('multi')
+      color: "#8B5CF6", // violet-500
+      accentColor: "#E879F9", // fuchsia-400
+      action: () => setScreen("multi"),
     },
     {
-      label: 'Leaderboard',
-      subtitle: 'Global Rankings',
+      label: "Leaderboard",
+      subtitle: "Global Rankings",
       icon: Trophy,
-      color: '#F59E0B', // amber-500
-      accentColor: '#F97316', // orange-500
-      action: () => setScreen('leaderboard')
+      color: "#F59E0B", // amber-500
+      accentColor: "#F97316", // orange-500
+      action: () => setScreen("leaderboard"),
     },
     {
-      label: 'Settings',
-      subtitle: 'Controls & Audio',
+      label: "Settings",
+      subtitle: "Controls & Audio",
       icon: Settings,
-      color: '#64748B', // slate-500
-      accentColor: '#94A3B8', // slate-400
-      action: () => setScreen('settings')
-    }
+      color: "#64748B", // slate-500
+      accentColor: "#94A3B8", // slate-400
+      action: () => setScreen("settings"),
+    },
   ];
 
   // Click outside to close user menu
   const userMenuRef = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
         setShowUserMenu(false);
       }
     }
@@ -218,37 +222,41 @@ export default function App() {
 
   const handleSignIn = () => {
     AuthManager.logout(false); // Don't reload, just clear state
-    setScreen('onboarding');
+    setScreen("onboarding");
   };
 
   return (
     <div className="relative h-screen w-screen bg-transparent overflow-hidden font-sans text-white z-50 pointer-events-none">
-      {bgImage && screen !== 'game' && screen !== 'onboarding' && screen !== 'transition' && (
-         <motion.div 
-           initial={{ opacity: 0 }}
-           animate={{ opacity: 0.6 }}
-           transition={{ duration: 1.5, ease: "easeOut" }}
-           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-           style={{ backgroundImage: `url(${bgImage})` }}
-         />
-      )}
-      <AnimatePresence mode="popLayout">
-        {screen === 'menu' && (
-          <motion.div 
+      {bgImage &&
+        screen !== "game" &&
+        screen !== "onboarding" &&
+        screen !== "transition" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.6 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: `url(${bgImage})` }}
+          />
+        )}
+      <AnimatePresence mode="wait">
+        {screen === "menu" && (
+          <motion.div
             key="menu"
             initial={hasVisitedMenu.current ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
             className="size-full flex flex-col pointer-events-auto"
           >
             {/* Header */}
-            <motion.header 
+            <motion.header
               initial={hasVisitedMenu.current ? { y: 0 } : { y: -100 }}
               animate={{ y: 0 }}
               className="flex justify-end items-center px-8 py-6 z-20"
             >
               <div className="flex items-center gap-3">
-                <PlayerStatsPanel 
+                <PlayerStatsPanel
                   elo={user?.elo_rating || 1000}
                   level={user?.level || 1}
                   currentXp={user?.current_xp || 0}
@@ -257,17 +265,23 @@ export default function App() {
                   isGuest={AuthManager.isGuest}
                   onSignInClick={handleSignIn}
                 />
-                
+
                 {/* User Avatar with Dropdown */}
                 <div className="relative" ref={userMenuRef}>
-                  <motion.div 
-                      className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center border border-white/20 shadow-lg shadow-indigo-500/20 bg-cover bg-center cursor-pointer"
-                      style={{ backgroundImage: user?.avatar_url ? `url(${user.avatar_url})` : undefined }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setShowUserMenu(!showUserMenu)}
+                  <motion.div
+                    className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center border border-white/20 shadow-lg shadow-indigo-500/20 bg-cover bg-center cursor-pointer"
+                    style={{
+                      backgroundImage: user?.avatar_url
+                        ? `url(${user.avatar_url})`
+                        : undefined,
+                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowUserMenu(!showUserMenu)}
                   >
-                     {!user?.avatar_url && <User className="text-white w-6 h-6" />}
+                    {!user?.avatar_url && (
+                      <User className="text-white w-6 h-6" />
+                    )}
                   </motion.div>
 
                   {/* Dropdown Menu */}
@@ -279,35 +293,39 @@ export default function App() {
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         className="absolute right-0 top-14 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 ring-1 ring-white/5"
                       >
-                         <div 
-                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setShowProfile(true);
-                            }}
-                         >
-                            <p className="text-sm font-bold text-white truncate">{user?.username || 'Guest'}</p>
-                            <p className="text-xs text-white/40 truncate">{user?.email || 'No email linked'}</p>
-                         </div>
-                         <button
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setShowProfile(true);
-                            }}
-                            className="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
-                         >
-                           <User size={16} /> My Profile
-                         </button>
-                         <button
-                            onClick={() => {
-                              AuthManager.logout();
-                              setShowUserMenu(false);
-                              setScreen('onboarding');
-                            }}
-                            className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
-                         >
-                           Log Out
-                         </button>
+                        <div
+                          className="px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setShowProfile(true);
+                          }}
+                        >
+                          <p className="text-sm font-bold text-white truncate">
+                            {user?.username || "Guest"}
+                          </p>
+                          <p className="text-xs text-white/40 truncate">
+                            {user?.email || "No email linked"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setShowProfile(true);
+                          }}
+                          className="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
+                        >
+                          <User size={16} /> My Profile
+                        </button>
+                        <button
+                          onClick={() => {
+                            AuthManager.logout();
+                            setShowUserMenu(false);
+                            setScreen("onboarding");
+                          }}
+                          className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
+                        >
+                          Log Out
+                        </button>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -319,10 +337,17 @@ export default function App() {
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: hasVisitedMenu.current ? 0 : 0.6, ease: [0.16, 1, 0.3, 1] }}
+              transition={{
+                duration: hasVisitedMenu.current ? 0 : 0.6,
+                ease: [0.16, 1, 0.3, 1],
+              }}
               className="flex justify-center px-8 pt-4 pb-4 z-10"
             >
-              <img src={puyoHeaderLogo} alt="Puyo Live" className="w-full max-w-lg" />
+              <img
+                src={puyoHeaderLogo}
+                alt="Puyo Live"
+                className="w-full max-w-lg"
+              />
             </motion.div>
 
             {/* Main Menu */}
@@ -360,131 +385,191 @@ export default function App() {
           </motion.div>
         )}
 
-
-        {screen === 'single' && (
-          <motion.div key="single" className="size-full pointer-events-auto" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}>
-            <SinglePlayerModeSelect 
-              onBack={() => setScreen('menu')} 
+        {screen === "single" && (
+          <motion.div
+            key="single"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <SinglePlayerModeSelect
+              onBack={() => setScreen("menu")}
               onSelectMode={(mode) => {
-                console.log('Selected Mode:', mode);
+                console.log("Selected Mode:", mode);
                 // Map mode strings to seconds
                 let timeLimit = 0;
-                if (mode === '3min') timeLimit = 180;
-                else if (mode === '5min') timeLimit = 300;
-                else if (mode === '10min') timeLimit = 600;
+                if (mode === "3min") timeLimit = 180;
+                else if (mode === "5min") timeLimit = 300;
+                else if (mode === "10min") timeLimit = 600;
 
                 SceneManager.changeScene(new GameScene(undefined, timeLimit)); // No Room ID = Single Player
-                setScreen('game');
+                setScreen("game");
               }}
             />
           </motion.div>
         )}
 
-        {screen === 'multi' && (
-          <motion.div key="multi" className="size-full pointer-events-auto" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}>
-            <MultiplayerLobby 
+        {screen === "multi" && (
+          <motion.div
+            key="multi"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <MultiplayerLobby
               onBack={() => {
                 SceneManager.changeScene(new MenuScene());
-                setScreen('menu');
+                setScreen("menu");
               }}
               onStartGame={() => {
-                 // SceneManager.changeScene logic is handled inside MultiplayerLobby? 
-                 // Actually MultiplayerLobby usually listens for match_ready then starts.
-                 // But if we want to switch screen, we need to know.
-                 // MultiplayerLobby currently probably doesn't start GameScene. 
-                 // Let's assume MultiplayerLobby handles the *networking* part and when match starts, 
-                 // we need to switch screen.
-                 // Ideally MultiplayerLobby should call a prop like onMatchStart().
-                 // We passed `onStartGame` which logs 'Start Multiplayer Game'.
-                 // We should pass a handler that switches screen.
-                 // But MultiplayerLobby sets up the room. GameScene needs the roomId.
-                 // Does MultiplayerLobby pass roomId back? 
-                 // I need to check MultiplayerLobby.tsx.
-                 setScreen('game');
+                // SceneManager.changeScene logic is handled inside MultiplayerLobby?
+                // Actually MultiplayerLobby usually listens for match_ready then starts.
+                // But if we want to switch screen, we need to know.
+                // MultiplayerLobby currently probably doesn't start GameScene.
+                // Let's assume MultiplayerLobby handles the *networking* part and when match starts,
+                // we need to switch screen.
+                // Ideally MultiplayerLobby should call a prop like onMatchStart().
+                // We passed `onStartGame` which logs 'Start Multiplayer Game'.
+                // We should pass a handler that switches screen.
+                // But MultiplayerLobby sets up the room. GameScene needs the roomId.
+                // Does MultiplayerLobby pass roomId back?
+                // I need to check MultiplayerLobby.tsx.
+                setScreen("game");
               }}
             />
           </motion.div>
         )}
 
-        {screen === 'leaderboard' && (
-          <motion.div key="leaderboard" className="size-full pointer-events-auto" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}>
-            <LeaderboardScreen onBack={() => setScreen('menu')} />
+        {screen === "leaderboard" && (
+          <motion.div
+            key="leaderboard"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <LeaderboardScreen onBack={() => setScreen("menu")} />
           </motion.div>
         )}
 
-        {screen === 'settings' && (
-          <motion.div key="settings" className="size-full pointer-events-auto" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}>
-            <SettingsScreen 
-              onBack={() => setScreen('menu')} 
-              onOpenControls={() => setScreen('controls')}
+        {screen === "settings" && (
+          <motion.div
+            key="settings"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <SettingsScreen
+              onBack={() => setScreen("menu")}
+              onOpenControls={() => setScreen("controls")}
             />
           </motion.div>
         )}
 
-        {screen === 'controls' && (
-          <motion.div key="controls" className="size-full pointer-events-auto" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}>
-            <ControlsScreen onBack={() => setScreen('settings')} />
+        {screen === "controls" && (
+          <motion.div
+            key="controls"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <ControlsScreen onBack={() => setScreen("settings")} />
           </motion.div>
         )}
 
-        {screen === 'onboarding' && (
-          <motion.div key="onboarding" className="size-full pointer-events-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <OnboardingScreen onComplete={(username) => {
-              console.log('Onboarding Complete:', username);
-              setScreen('transition');
-              // Loading logic is now handled in the useEffect for 'transition' state
-            }} />
+        {screen === "onboarding" && (
+          <motion.div
+            key="onboarding"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <OnboardingScreen
+              onComplete={(username) => {
+                console.log("Onboarding Complete:", username);
+                setScreen("transition");
+                // Loading logic is now handled in the useEffect for 'transition' state
+              }}
+            />
           </motion.div>
         )}
 
-        {screen === 'transition' && (
-            <motion.div key="transition" className="size-full z-[100]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <TransitionParticles />
-            </motion.div>
-        )}
-
-        {screen === 'game' && (
-          <motion.div key="game" className="size-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-             <GameOverlay 
-                onBack={() => {
-                  SceneManager.changeScene(new MenuScene());
-                  setScreen('menu');
-                }}
-                onQueueAgain={() => {
-                  SceneManager.changeScene(new MenuScene());
-                  setScreen('multi');
-                }}
-             />
+        {screen === "transition" && (
+          <motion.div
+            key="transition"
+            className="size-full z-[100]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <TransitionParticles />
           </motion.div>
         )}
 
-        {screen === 'replay' && (
-            <motion.div key="replay" className="size-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <ReplayOverlay 
-                    onExit={() => {
-                        SceneManager.changeScene(new MenuScene());
-                        setScreen('menu');
-                    }}
-                />
-            </motion.div>
+        {screen === "game" && (
+          <motion.div
+            key="game"
+            className="size-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <GameOverlay
+              onBack={() => {
+                SceneManager.changeScene(new MenuScene());
+                setScreen("menu");
+              }}
+              onQueueAgain={() => {
+                SceneManager.changeScene(new MenuScene());
+                setScreen("multi");
+              }}
+            />
+          </motion.div>
+        )}
+
+        {screen === "replay" && (
+          <motion.div
+            key="replay"
+            className="size-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <ReplayOverlay
+              onExit={() => {
+                SceneManager.changeScene(new MenuScene());
+                setScreen("menu");
+              }}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 
       {/* Level Up Overlay */}
       {showLevelUp && (
-        <LevelUpOverlay 
-          level={levelUpLevel} 
-          onComplete={() => setShowLevelUp(false)} 
+        <LevelUpOverlay
+          level={levelUpLevel}
+          onComplete={() => setShowLevelUp(false)}
         />
       )}
 
       {showProfile && (
-        <ProfileScreen 
-            onClose={() => setShowProfile(false)} 
-            onWatchReplay={() => {
-                setShowProfile(false);
-                setScreen('replay');
-            }}
+        <ProfileScreen
+          onClose={() => setShowProfile(false)}
+          onWatchReplay={() => {
+            setShowProfile(false);
+            setScreen("replay");
+          }}
         />
       )}
     </div>
