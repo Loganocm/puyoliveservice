@@ -162,7 +162,8 @@ export class BGMManager {
         clearInterval(interval);
         audio.volume = 0;
         audio.pause();
-        audio.src = ''; // Release resource
+        audio.removeAttribute('src');
+        audio.load(); // Release resource without spurious network request
         return;
       }
       audio.volume = startVol * (1 - step / steps);

@@ -76,6 +76,8 @@ export default function App() {
 
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
+  const userRef = useRef<UserData | null>(user);
+  userRef.current = user;
 
   // Subscribe to auth changes
   useEffect(() => {
@@ -84,7 +86,11 @@ export default function App() {
 
     const handleUserUpdate = (userData: any) => {
       // Check for level up
-      if (userData && user && userData.level > (user.level ?? 0)) {
+      if (
+        userData &&
+        userRef.current &&
+        userData.level > (userRef.current.level ?? 0)
+      ) {
         setShowLevelUp(true);
         setLevelUpLevel(userData.level);
       }
@@ -95,7 +101,7 @@ export default function App() {
     return () => {
       GameEvents.off("user_update", handleUserUpdate);
     };
-  }, [user]);
+  }, []);
 
   // Update ref when we enter menu
   useEffect(() => {

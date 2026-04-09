@@ -274,15 +274,9 @@ export const CommunityScreen: React.FC<{
     setProfileMatches([]);
     setProfilePercentiles(null);
     try {
-      const [profile, historyData] = await Promise.all([
-        APIClient.getUserProfile(identifier),
-        APIClient.getMatchHistory(
-          typeof identifier === "number" ? identifier : 0,
-          10,
-          0,
-        ),
-      ]);
+      const profile = await APIClient.getUserProfile(identifier);
       setViewingProfile(profile);
+      const historyData = await APIClient.getMatchHistory(profile.id, 10, 0);
       setProfileMatches(historyData.matches || []);
       // Fetch percentiles in background (non-blocking)
       if (profile?.id) {

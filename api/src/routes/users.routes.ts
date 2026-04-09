@@ -75,9 +75,14 @@ router.post('/:id/avatar', optionalAuth, asyncHandler(async (req: Request, res: 
     return;
   }
 
-  // Basic validation for Base64 image
-  if (!avatar.startsWith('data:image/')) {
-    res.status(400).json({ error: 'Invalid image specificiation' });
+  // Validate image type and size
+  const ALLOWED_TYPES = ['data:image/png;', 'data:image/jpeg;', 'data:image/webp;'];
+  if (!ALLOWED_TYPES.some(t => avatar.startsWith(t))) {
+    res.status(400).json({ error: 'Only PNG, JPEG, and WebP images are allowed' });
+    return;
+  }
+  if (avatar.length > 150_000) { // ~100KB decoded
+    res.status(400).json({ error: 'Avatar too large (max ~100KB)' });
     return;
   }
 
@@ -98,11 +103,15 @@ router.patch('/:id', optionalAuth, asyncHandler(async (req: Request, res: Respon
     return;
   }
 
-  const { username, email, password } = req.body;
+  const { username, email } = req.body;
 
-  // Basic empty check? AuthService handles validatin, but we should pass only defaults
+  if (req.body.password) {
+    res.status(400).json({ error: 'Use /auth/change-password to update password' });
+    return;
+  }
+
   try {
-    const result = await AuthService.updateUser(req.user.id, { username, email, password });
+    const result = await AuthService.updateUser(req.user.id, { username, email });
     res.json(result); // { user, token }
   } catch (e: any) {
     res.status(400).json({ error: e.message });

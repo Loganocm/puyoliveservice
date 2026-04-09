@@ -116,8 +116,7 @@ router.post('/check', asyncHandler(async (req: Request, res: Response) => {
     res.json({ exists });
   } catch (error) {
     console.error('Check username failed:', error);
-    // @ts-ignore
-    res.status(500).json({ error: 'Internal Server Error', details: error.message, stack: error.stack });
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 }));
 

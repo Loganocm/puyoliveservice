@@ -263,6 +263,10 @@ export class GameRoom {
 
     // Update room settings (host only)
     updateSettings(newSettings: Partial<RoomSettings>) {
+        if (newSettings.bestOf !== undefined && ![1, 3, 5].includes(newSettings.bestOf)) return;
+        if (newSettings.maxPlayers !== undefined && ![2, 3, 4].includes(newSettings.maxPlayers)) return;
+        if (newSettings.garbageMultiplier !== undefined && (newSettings.garbageMultiplier < 0.5 || newSettings.garbageMultiplier > 3)) return;
+        if (newSettings.marginTime !== undefined && (newSettings.marginTime < 30 || newSettings.marginTime > 300)) return;
         this.settings = { ...this.settings, ...newSettings };
         this.maxPlayers = this.settings.maxPlayers;
     }

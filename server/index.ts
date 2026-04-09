@@ -60,10 +60,13 @@ app.get('/health', (_req, res) => {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST"],
-    credentials: false,
-    allowedHeaders: ["*"]
+    credentials: true,
   },
   pingTimeout: 60000,
   pingInterval: 25000
@@ -499,9 +502,11 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('send_garbage', (data: { roomId: string, amount: number, chainLength?: number }) => {
+    if (!data || typeof data.amount !== 'number' || data.amount <= 0 || data.amount > 100) return;
+    if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || data.chainLength < 0 || data.chainLength > 30)) return;
     // Track garbage stats
     const room = roomManager.getRoom(data.roomId);
-    if (room) {
+    if (room && room.players.has(socket.id)) {
       room.recordGarbage(socket.id, data.amount);
       if (data.chainLength) {
         room.recordChain(socket.id, data.chainLength);
@@ -676,6 +681,8 @@ io.on('connection', (socket: Socket) => {
   };
 
   socket.on('player_lost', async (data: { roomId: string }) => {
+    const room = roomManager.getRoom(data.roomId);
+    if (!room || !room.players.has(socket.id)) return;
     console.log(`[Server] player_lost received from ${socket.id} for room ${data.roomId}`);
     await handleMatchEnd(data.roomId, socket.id, 'lost');
   });
@@ -740,16 +747,13 @@ io.on('connection', (socket: Socket) => {
       const socket2 = io.sockets.sockets.get(p2);
 
       if (socket1 && socket2) {
-        newRoom.addPlayer({ id: p1, name: `Player ${p1.substring(0, 4)}`, ready: true });
-        newRoom.addPlayer({ id: p2, name: `Player ${p2.substring(0, 4)}`, ready: true });
+        newRoom.addPlayer({ id: p1, name: auth1?.username || `Player ${p1.substring(0, 4)}`, ready: true, userId: auth1?.userId, authToken: auth1?.token });
+        newRoom.addPlayer({ id: p2, name: auth2?.username || `Player ${p2.substring(0, 4)}`, ready: true, userId: auth2?.userId, authToken: auth2?.token });
 
         socket1.join(newRoom.id);
         socket2.join(newRoom.id);
 
         console.log(`Unranked match found (requeue): ${p1} vs ${p2} in room ${newRoom.id}`);
-
-        const auth1 = authenticatedUsers.get(p1);
-        const auth2 = authenticatedUsers.get(p2);
 
         io.to(newRoom.id).emit('match_found', {
           roomId: newRoom.id,
@@ -764,6 +768,7 @@ io.on('connection', (socket: Socket) => {
         io.to(newRoom.id).emit('player_joined', { id: p2, count: 2 });
 
         setTimeout(() => {
+          newRoom.startMatch();
           const replayerIds = Array.from(newRoom.players.keys());
           io.to(newRoom.id).emit('game_start', { seed: Date.now(), roomId: newRoom.id, players: replayerIds });
         }, 3000);

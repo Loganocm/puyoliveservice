@@ -147,7 +147,7 @@ export class LeaderboardService {
         where: { games_played: { gt: 0 }, total_garbage_sent: { gt: user.total_garbage_sent } }
       }),
       prisma.user.count({
-        where: { games_played: { gt: 0 }, games_played: { gt: user.games_played } }
+        where: { games_played: { gt: user.games_played } }
       }),
     ]);
 

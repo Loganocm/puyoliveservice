@@ -57,28 +57,32 @@ export class SettingsManager {
   public static load() {
     const data = localStorage.getItem('puyolive_settings');
     if (data) {
-      const parsed = JSON.parse(data);
-      if (parsed.das !== undefined) this.das = parsed.das;
-      if (parsed.arr !== undefined) this.arr = parsed.arr;
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.das !== undefined) this.das = parsed.das;
+        if (parsed.arr !== undefined) this.arr = parsed.arr;
 
-      if (parsed.sdf !== undefined) this.sdf = parsed.sdf;
-      else if (parsed.softDropSpeed !== undefined) this.sdf = parsed.softDropSpeed;
+        if (parsed.sdf !== undefined) this.sdf = parsed.sdf;
+        else if (parsed.softDropSpeed !== undefined) this.sdf = parsed.softDropSpeed;
 
-      if (parsed.are !== undefined) this.are = parsed.are;
-      if (parsed.lineClearDelay !== undefined) this.lineClearDelay = parsed.lineClearDelay;
-      if (parsed.masterVolume !== undefined) {
-        this.masterVolume = parsed.masterVolume;
-        // Migration: If loading old float volume (<= 1.0) on new scale (0-100)
-        // Convert to new default (100) or scale it? 
-        // Scaling old 0.5 -> 50 results in 0.05 gain (half of new max). 
-        // This preserves relative intent.
-        if (this.masterVolume <= 1.0) {
-          this.masterVolume = Math.round(this.masterVolume * 100);
+        if (parsed.are !== undefined) this.are = parsed.are;
+        if (parsed.lineClearDelay !== undefined) this.lineClearDelay = parsed.lineClearDelay;
+        if (parsed.masterVolume !== undefined) {
+          this.masterVolume = parsed.masterVolume;
+          // Migration: If loading old float volume (between 0 and 1 exclusive)
+          // Convert to new scale (0-100). Preserves relative intent.
+          if (this.masterVolume > 0 && this.masterVolume < 1) {
+            this.masterVolume = Math.round(this.masterVolume * 100);
+          }
         }
+        if (parsed.softDropProtection !== undefined) this.softDropProtection = parsed.softDropProtection;
+        if (parsed.screenShake !== undefined) this.screenShake = parsed.screenShake;
+        if (parsed.bgmVolume !== undefined) this.bgmVolume = parsed.bgmVolume;
+      } catch (e) {
+        console.warn('[SettingsManager] Corrupt settings data, resetting:', e);
+        localStorage.removeItem('puyolive_settings');
+        this.save();
       }
-      if (parsed.softDropProtection !== undefined) this.softDropProtection = parsed.softDropProtection;
-      if (parsed.screenShake !== undefined) this.screenShake = parsed.screenShake;
-      if (parsed.bgmVolume !== undefined) this.bgmVolume = parsed.bgmVolume;
     } else {
       this.save();
     }

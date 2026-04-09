@@ -355,7 +355,7 @@ export class GameScene implements IScene {
                 this.spawnFloatingText(500, 350, "RECONNECTING...", 0xFFFF00);
 
                 // Re-authenticate first (server needs to know our userId to recognize us)
-                const token = localStorage.getItem('auth_token');
+                const token = localStorage.getItem('puyolive_token');
                 if (token) {
                     NetworkManager.authenticate(token);
                     // Small delay to let auth complete, then rejoin
@@ -1488,8 +1488,8 @@ export class GameScene implements IScene {
                     }
                 }
 
-                addPuyo(x, gY, main, 0.3);
-                addPuyo(sx, gY + offsets[rot].y, sub, 0.3);
+                addPuyo(x, gY, main, 0, 0.3);
+                addPuyo(sx, gY + offsets[rot].y, sub, 0, 0.3);
             }
         } catch (e) { console.error("Error drawing opponent:", e); }
 

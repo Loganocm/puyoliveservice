@@ -4,7 +4,10 @@ export class RoomManager {
     private rooms: Map<string, GameRoom> = new Map();
 
     createRoom(): GameRoom {
-        const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        let roomId: string;
+        do {
+            roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        } while (this.rooms.has(roomId));
         const room = new GameRoom(roomId);
         this.rooms.set(roomId, room);
         return room;

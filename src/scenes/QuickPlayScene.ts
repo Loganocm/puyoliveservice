@@ -932,9 +932,12 @@ export class QuickPlayScene implements IScene {
     }
 
     private renderTargetBoard() {
-        // Clear previous
-        while (this.targetBoardContainer.children.length > 0) {
-            this.targetBoardContainer.children[0].destroy();
+        // Clear previous, but preserve persistent border
+        const children = this.targetBoardContainer.removeChildren();
+        for (const child of children) {
+            if (child !== this.targetBoardBorder) {
+                child.destroy();
+            }
         }
 
         // Background
@@ -1079,7 +1082,7 @@ export class QuickPlayScene implements IScene {
         this.staticBg.position.set(screenW / 2, screenH / 2);
     }
 
-    resize(): void {
+    onResize(_width: number, _height: number): void {
         this.resizeBackground();
         this.updateLayout();
     }
