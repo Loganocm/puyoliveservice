@@ -747,7 +747,7 @@ export class GameScene implements IScene {
 
     // V2 Replay: Record input for server-side replay in multiplayer
     private recordInputForReplay(inputType: string): void {
-        if (this.roomId && this.opponentId && !this.replayData) {
+        if (this.roomId && !this.replayData) {
             // Only record in multiplayer matches, not replays
             NetworkManager.recordInput(this.roomId, inputType);
         }
@@ -810,7 +810,7 @@ export class GameScene implements IScene {
 
 
                 // V2 Replay: Tick frame counter on server for multiplayer
-                if (this.roomId && this.opponentId && !this.replayData) {
+                if (this.roomId && !this.replayData) {
                     NetworkManager.tickFrame(this.roomId);
                 }
 
