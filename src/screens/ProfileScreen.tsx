@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { APIClient } from "../api/client";
 import { AuthManager } from "../core/AuthManager";
-import { Clock, Calendar } from "lucide-react";
+import { Clock, Calendar, Pencil, Check, X, Loader2 } from "lucide-react";
 
 interface MatchHistoryEntry {
   id: number;
@@ -29,6 +29,13 @@ export const ProfileScreen: React.FC<{
     games_percentile: number;
   } | null>(null);
 
+  // Username editing
+  const [editingName, setEditingName] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -54,6 +61,62 @@ export const ProfileScreen: React.FC<{
     }
   };
 
+  const startEditingName = () => {
+    setNewUsername(user?.username || "");
+    setNameError("");
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.focus(), 50);
+  };
+
+  const cancelEditingName = () => {
+    setEditingName(false);
+    setNameError("");
+  };
+
+  const saveUsername = async () => {
+    const trimmed = newUsername.trim();
+
+    // Client-side validation (matches server rules)
+    if (trimmed.length < 3) {
+      setNameError("Username must be at least 3 characters");
+      return;
+    }
+    if (trimmed.length > 32) {
+      setNameError("Username must be at most 32 characters");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      setNameError("Letters, numbers, and underscores only");
+      return;
+    }
+    if (trimmed === user?.username) {
+      setEditingName(false);
+      return;
+    }
+
+    try {
+      setNameSaving(true);
+      setNameError("");
+      const result = await APIClient.updateProfile(user!.id, {
+        username: trimmed,
+      });
+
+      // Update token (server returns new JWT with updated username)
+      if (result.token) {
+        localStorage.setItem("puyolive_token", result.token);
+      }
+
+      // Refresh auth state so the rest of the app picks it up
+      await AuthManager.refreshProfile();
+      setUser(AuthManager.currentUser);
+      setEditingName(false);
+    } catch (e: any) {
+      setNameError(e?.message || "Failed to update username");
+    } finally {
+      setNameSaving(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto">
       <div className="w-full max-w-4xl bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -73,9 +136,66 @@ export const ProfileScreen: React.FC<{
                 )}
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white mb-2">
-                  {user?.username}
-                </h1>
+                {editingName ? (
+                  <div className="mb-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={nameInputRef}
+                        type="text"
+                        value={newUsername}
+                        onChange={(e) => {
+                          setNewUsername(e.target.value);
+                          setNameError("");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveUsername();
+                          if (e.key === "Escape") cancelEditingName();
+                        }}
+                        maxLength={32}
+                        className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-2xl font-bold text-white outline-none focus:border-indigo-500 transition-colors w-64"
+                        disabled={nameSaving}
+                      />
+                      <button
+                        onClick={saveUsername}
+                        disabled={nameSaving}
+                        className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
+                      >
+                        {nameSaving ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <Check size={18} />
+                        )}
+                      </button>
+                      <button
+                        onClick={cancelEditingName}
+                        disabled={nameSaving}
+                        className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 transition-colors disabled:opacity-50"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                    {nameError && (
+                      <p className="text-red-400 text-xs mt-1.5 font-medium">
+                        {nameError}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mb-2">
+                    <h1 className="text-3xl font-bold text-white">
+                      {user?.username}
+                    </h1>
+                    {!AuthManager.isGuest && (
+                      <button
+                        onClick={startEditingName}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/30 hover:text-white/60 transition-colors"
+                        title="Change username"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
                   <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-blue-300">
                     Level {user?.level}
@@ -177,32 +297,34 @@ export const ProfileScreen: React.FC<{
                     </div>
                   </div>
                   {match.has_valid_replay && (
-                  <button
-                    onClick={async () => {
-                      if (loading) return;
-                      try {
-                        setLoading(true);
-                        const replayData = await APIClient.getReplay(match.id);
+                    <button
+                      onClick={async () => {
+                        if (loading) return;
+                        try {
+                          setLoading(true);
+                          const replayData = await APIClient.getReplay(
+                            match.id,
+                          );
 
-                        onClose(); // Close profile modal
+                          onClose(); // Close profile modal
 
-                        // Initialize Replay Scene
-                        const { SceneManager } =
-                          await import("../core/SceneManager");
-                        const { ReplayScene } =
-                          await import("../scenes/ReplayScene");
-                        SceneManager.changeScene(new ReplayScene(replayData));
+                          // Initialize Replay Scene
+                          const { SceneManager } =
+                            await import("../core/SceneManager");
+                          const { ReplayScene } =
+                            await import("../scenes/ReplayScene");
+                          SceneManager.changeScene(new ReplayScene(replayData));
 
-                        onWatchReplay();
-                      } catch (e) {
-                        console.error("Failed to load replay", e);
-                        setLoading(false);
-                      }
-                    }}
-                    className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors border border-white/5"
-                  >
-                    Watch Replay
-                  </button>
+                          onWatchReplay();
+                        } catch (e) {
+                          console.error("Failed to load replay", e);
+                          setLoading(false);
+                        }
+                      }}
+                      className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-colors border border-white/5"
+                    >
+                      Watch Replay
+                    </button>
                   )}
                 </div>
               ))}

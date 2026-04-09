@@ -88,6 +88,22 @@ const authenticatedUsers = new Map<string, {
 let rankedQueue: string[] = [];
 let unrankedQueue: string[] = [];
 
+// Wire up mines bot callbacks (needs io reference)
+minesRoom.onBotGarbage = (targetSocketId: string, amount: number) => {
+  const targetSocket = io.sockets.sockets.get(targetSocketId);
+  if (targetSocket) {
+    targetSocket.emit('mines_receive_garbage', {
+      amount,
+      fromSocketId: '__MINES_BOT__',
+      fromUsername: '⛏ MineBot',
+    });
+  }
+  io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+};
+minesRoom.onBroadcastPlayerList = () => {
+  io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+};
+
 io.on('connection', (socket: Socket) => {
   console.log(`User connected: ${socket.id}`);
 
@@ -815,6 +831,7 @@ io.on('connection', (socket: Socket) => {
       avatarUrl: auth?.avatar_url,
     });
 
+    minesRoom.updateBotPresence();
     broadcastMinesPlayerList();
   });
 
@@ -827,6 +844,7 @@ io.on('connection', (socket: Socket) => {
     socket.leave('MINES_LOBBY');
 
     io.to('MINES_LOBBY').emit('mines_player_left', { socketId: socket.id });
+    minesRoom.updateBotPresence();
     broadcastMinesPlayerList();
   });
 
@@ -951,6 +969,7 @@ io.on('connection', (socket: Socket) => {
       console.log(`[Mines] ${player?.username} disconnected`);
       minesRoom.removePlayer(socket.id);
       io.to('MINES_LOBBY').emit('mines_player_left', { socketId: socket.id });
+      minesRoom.updateBotPresence();
       broadcastMinesPlayerList();
     }
 

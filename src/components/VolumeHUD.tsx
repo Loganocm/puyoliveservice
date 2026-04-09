@@ -45,14 +45,20 @@ export function VolumeHUD() {
       const isBGM = e.shiftKey;
 
       if (isBGM) {
-        const newVal = Math.max(0, Math.min(100, SettingsManager.bgmVolume + delta));
+        const newVal = Math.max(
+          0,
+          Math.min(100, SettingsManager.bgmVolume + delta),
+        );
         SettingsManager.bgmVolume = newVal;
         SettingsManager.save();
         setBgmVol(newVal);
         BGMManager.updateVolume();
         showHUD("bgm");
       } else {
-        const newVal = Math.max(0, Math.min(100, SettingsManager.masterVolume + delta));
+        const newVal = Math.max(
+          0,
+          Math.min(100, SettingsManager.masterVolume + delta),
+        );
         SettingsManager.masterVolume = newVal;
         SettingsManager.save();
         setMasterVol(newVal);
@@ -72,16 +78,17 @@ export function VolumeHUD() {
   // Sync if settings change externally (e.g., from SettingsScreen)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (SettingsManager.masterVolume !== masterVol) setMasterVol(SettingsManager.masterVolume);
-      if (SettingsManager.bgmVolume !== bgmVol) setBgmVol(SettingsManager.bgmVolume);
+      if (SettingsManager.masterVolume !== masterVol)
+        setMasterVol(SettingsManager.masterVolume);
+      if (SettingsManager.bgmVolume !== bgmVol)
+        setBgmVol(SettingsManager.bgmVolume);
     }, 500);
     return () => clearInterval(interval);
   }, [masterVol, bgmVol]);
 
   const vol = activeChannel === "master" ? masterVol : bgmVol;
   const isMuted = vol === 0;
-  const Icon =
-    activeChannel === "bgm" ? Music : isMuted ? VolumeX : Volume2;
+  const Icon = activeChannel === "bgm" ? Music : isMuted ? VolumeX : Volume2;
   const label = activeChannel === "master" ? "VOLUME" : "MUSIC";
   const barColor =
     activeChannel === "master" ? "bg-indigo-500" : "bg-violet-500";

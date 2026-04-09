@@ -8,9 +8,33 @@
  * - Player list sidebar showing all participants and their depth
  * - Players who top out are eliminated, can rejoin immediately
  * - Garbage mechanics follow TETR.IO patterns (targeted distribution)
+ * - Bot fills in when < 10 players, scales difficulty by depth level
  */
 
 export type TargetingMode = 'random' | 'attackers' | 'badges' | 'vulnerable';
+
+/**
+ * Depth level thresholds — reaching these depths advances the mine level.
+ * The bot's garbage output scales with the highest level in the room.
+ */
+export const DEPTH_LEVELS = [
+    { depth: 0,    level: 1, name: 'Surface',        color: '#4ade80' },
+    { depth: 500,  level: 2, name: 'Shallow Mines',  color: '#22d3ee' },
+    { depth: 1000, level: 3, name: 'Deep Caverns',   color: '#818cf8' },
+    { depth: 2000, level: 4, name: 'Crystal Veins',  color: '#a78bfa' },
+    { depth: 3500, level: 5, name: 'Magma Layer',    color: '#f97316' },
+    { depth: 5000, level: 6, name: 'The Abyss',      color: '#ef4444' },
+    { depth: 7500, level: 7, name: 'Void Core',      color: '#dc2626' },
+    { depth: 10000,level: 8, name: 'Bedrock',        color: '#991b1b' },
+];
+
+/** Get the depth level for a given depth value */
+export function getDepthLevel(depth: number): typeof DEPTH_LEVELS[number] {
+    for (let i = DEPTH_LEVELS.length - 1; i >= 0; i--) {
+        if (depth >= DEPTH_LEVELS[i].depth) return DEPTH_LEVELS[i];
+    }
+    return DEPTH_LEVELS[0];
+}
 
 export interface MinesPlayer {
     socketId: string;
@@ -47,10 +71,13 @@ export interface MinesState {
         kos: number;
         targetingMode: TargetingMode;
         currentTarget: string | null;
+        isBot?: boolean;
+        depthLevel: number;
     }[];
     activePlayers: number;
     totalPlayers: number;
     seed: number;
+    highestLevel: number;
 }
 
 /** Points of score per 1 unit of depth */
@@ -80,6 +107,16 @@ export class MinesRoom {
     // Round tracking
     private roundNumber: number = 0;
 
+    // ── Bot system ──
+    /** Minimum real (non-bot) players before the bot activates. Below this, bot fills the gap. */
+    private static readonly BOT_THRESHOLD = 10;
+    /** Bot garbage sending interval handle */
+    private botInterval: ReturnType<typeof setInterval> | null = null;
+    /** Callback for server to emit garbage to a specific player */
+    public onBotGarbage: ((targetSocketId: string, amount: number) => void) | null = null;
+    /** Callback for server to broadcast updated player list */
+    public onBroadcastPlayerList: (() => void) | null = null;
+
     constructor() {
         // Rotate seed periodically for variety
         setInterval(() => {
@@ -88,6 +125,152 @@ export class MinesRoom {
                 this.roundNumber++;
             }
         }, 60000); // Check every minute
+    }
+
+    // ── Bot Management ──
+
+    /** The bot's socketId is a fixed sentinel value */
+    private static readonly BOT_ID = '__MINES_BOT__';
+    private static readonly BOT_NAMES = [
+        'MineBot', 'CaveDigger', 'DrillMaster', 'RockCrusher',
+        'TunnelRat', 'DepthSeeker', 'GemHunter', 'MoleMachine'
+    ];
+
+    /** Whether the bot is currently active in the room */
+    get botActive(): boolean {
+        return this.players.has(MinesRoom.BOT_ID);
+    }
+
+    /** Get only real (non-bot) players */
+    getRealPlayerCount(): number {
+        let count = 0;
+        for (const p of this.players.values()) {
+            if (p.socketId !== MinesRoom.BOT_ID) count++;
+        }
+        return count;
+    }
+
+    /** Get the highest depth level among all alive real players */
+    getHighestAliveLevel(): number {
+        let max = 1;
+        for (const p of this.players.values()) {
+            if (p.alive && p.socketId !== MinesRoom.BOT_ID) {
+                const lvl = getDepthLevel(p.depth).level;
+                if (lvl > max) max = lvl;
+            }
+        }
+        return max;
+    }
+
+    /**
+     * Check if bot should be added or removed.
+     * Called after player join/leave events.
+     */
+    updateBotPresence(): void {
+        const realCount = this.getRealPlayerCount();
+        const aliveReal = this.getAlivePlayers().filter(p => p.socketId !== MinesRoom.BOT_ID).length;
+
+        if (realCount > 0 && realCount < MinesRoom.BOT_THRESHOLD && !this.botActive) {
+            // Add bot
+            const name = MinesRoom.BOT_NAMES[Math.floor(Math.random() * MinesRoom.BOT_NAMES.length)];
+            this.players.set(MinesRoom.BOT_ID, {
+                socketId: MinesRoom.BOT_ID,
+                username: `⛏ ${name}`,
+                alive: true,
+                depth: 0,
+                score: 0,
+                kos: 0,
+                garbageSent: 0,
+                board: null,
+                targetingMode: 'random',
+                currentTarget: null,
+                joinedAt: Date.now(),
+            });
+            this.startBotLoop();
+            console.log(`[Mines Bot] Activated (${realCount} real players)`);
+        } else if ((realCount >= MinesRoom.BOT_THRESHOLD || realCount === 0) && this.botActive) {
+            // Remove bot
+            this.stopBotLoop();
+            this.players.delete(MinesRoom.BOT_ID);
+            // Reassign anyone targeting the bot
+            for (const [id, p] of this.players) {
+                if (p.currentTarget === MinesRoom.BOT_ID) {
+                    this.reassignTarget(id);
+                }
+            }
+            console.log(`[Mines Bot] Deactivated (${realCount} real players)`);
+        }
+    }
+
+    /**
+     * Bot garbage loop — sends garbage to a random alive player at intervals
+     * scaled by the room's highest depth level.
+     *
+     * Level scaling:
+     *   Level 1: 1 garbage every 12s
+     *   Level 2: 1 garbage every 10s
+     *   Level 3: 2 garbage every 8s
+     *   Level 4: 2 garbage every 6s
+     *   Level 5: 3 garbage every 5s
+     *   Level 6: 3 garbage every 4s
+     *   Level 7: 4 garbage every 3s
+     *   Level 8: 5 garbage every 2.5s
+     */
+    private static readonly BOT_SCHEDULE: { amount: number; intervalMs: number }[] = [
+        { amount: 1, intervalMs: 12000 }, // Level 1
+        { amount: 1, intervalMs: 10000 }, // Level 2
+        { amount: 2, intervalMs: 8000 },  // Level 3
+        { amount: 2, intervalMs: 6000 },  // Level 4
+        { amount: 3, intervalMs: 5000 },  // Level 5
+        { amount: 3, intervalMs: 4000 },  // Level 6
+        { amount: 4, intervalMs: 3000 },  // Level 7
+        { amount: 5, intervalMs: 2500 },  // Level 8
+    ];
+
+    private botLastLevel: number = 0;
+
+    private startBotLoop(): void {
+        this.stopBotLoop();
+        this.botLastLevel = 0;
+        this.tickBot();
+    }
+
+    private stopBotLoop(): void {
+        if (this.botInterval) {
+            clearTimeout(this.botInterval);
+            this.botInterval = null;
+        }
+    }
+
+    private tickBot(): void {
+        const level = this.getHighestAliveLevel();
+        const schedule = MinesRoom.BOT_SCHEDULE[Math.min(level - 1, MinesRoom.BOT_SCHEDULE.length - 1)];
+
+        // If level changed, update bot's simulated depth to match theme
+        if (level !== this.botLastLevel) {
+            this.botLastLevel = level;
+            const bot = this.players.get(MinesRoom.BOT_ID);
+            if (bot) {
+                // Bot depth tracks the level threshold so it shows in the correct zone
+                const lvlDef = DEPTH_LEVELS[Math.min(level - 1, DEPTH_LEVELS.length - 1)];
+                bot.depth = lvlDef.depth;
+                bot.score = lvlDef.depth * DEPTH_DIVISOR;
+            }
+        }
+
+        // Pick a random alive real player to send garbage to
+        const targets = this.getAlivePlayers().filter(p => p.socketId !== MinesRoom.BOT_ID);
+        if (targets.length > 0 && this.onBotGarbage) {
+            const target = targets[Math.floor(Math.random() * targets.length)];
+            this.onBotGarbage(target.socketId, schedule.amount);
+            const bot = this.players.get(MinesRoom.BOT_ID);
+            if (bot) bot.garbageSent += schedule.amount;
+        }
+
+        // Schedule next tick
+        if (this.botActive) {
+            this.botInterval = setTimeout(() => this.tickBot(), schedule.intervalMs);
+        }
     }
 
     /**
@@ -349,6 +532,8 @@ export class MinesRoom {
             kos: p.kos,
             targetingMode: p.targetingMode,
             currentTarget: p.currentTarget,
+            isBot: p.socketId === MinesRoom.BOT_ID,
+            depthLevel: getDepthLevel(p.depth).level,
         }));
 
         // Sort: alive first (by depth desc), then dead (by depth desc)
@@ -362,6 +547,7 @@ export class MinesRoom {
             activePlayers: this.getAlivePlayers().length,
             totalPlayers: this.players.size,
             seed: this.seed,
+            highestLevel: this.getHighestAliveLevel(),
         };
     }
 
@@ -375,6 +561,8 @@ export class MinesRoom {
         alive: boolean;
         kos: number;
         attackers: number;
+        isBot?: boolean;
+        depthLevel: number;
     }[] {
         return Array.from(this.players.values())
             .map(p => ({
@@ -384,6 +572,8 @@ export class MinesRoom {
                 alive: p.alive,
                 kos: p.kos,
                 attackers: this.getAttackerCount(p.socketId),
+                isBot: p.socketId === MinesRoom.BOT_ID ? true : undefined,
+                depthLevel: getDepthLevel(p.depth).level,
             }))
             .sort((a, b) => {
                 if (a.alive !== b.alive) return a.alive ? -1 : 1;

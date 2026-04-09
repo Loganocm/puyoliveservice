@@ -42,6 +42,10 @@ type GameEventMap = {
         action: 'play' | 'pause' | 'seek' | 'speed' | 'exit';
         value?: number; // frame for seek, multiplier for speed
     };
+    // Puyo Mines (Quick Play) events
+    'mines_died': { depth: number; kos: number; score: number };
+    'mines_left': void;
+    'mines_level_up': { level: number; name: string; color: number };
 };
 
 class GameEventEmitter extends EventEmitter<GameEventMap> { }

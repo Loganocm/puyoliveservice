@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Gamepad2, Trophy, Settings, Swords, User, Users } from "lucide-react";
+import {
+  Gamepad2,
+  Trophy,
+  Settings,
+  Swords,
+  User,
+  Users,
+  Pickaxe,
+} from "lucide-react";
 import { backgroundManager } from "@/core/BackgroundManager";
 import { PuyoFooter } from "@/components/PuyoFooter";
 import { WaterFillButton } from "@/components/WaterFillButton";
@@ -19,11 +27,14 @@ import { ControlsScreen } from "@/screens/ControlsScreen";
 import { OnboardingScreen } from "@/screens/OnboardingScreen";
 import { GameOverlay } from "@/screens/GameOverlay";
 import { ReplayOverlay } from "@/screens/ReplayOverlay";
+import { QuickPlayScreen } from "@/screens/QuickPlayScreen";
 import { TransitionParticles } from "@/components/TransitionParticles";
 import { SceneManager } from "@/core/SceneManager";
 import { ResourceManager } from "@/core/ResourceManager";
 import { GameScene } from "@/scenes/GameScene";
+import { QuickPlayScene } from "@/scenes/QuickPlayScene";
 import { MenuScene } from "@/scenes/MenuScene";
+import { NetworkManager } from "@/core/NetworkManager";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import { CommunityScreen } from "@/screens/CommunityScreen";
 
@@ -31,6 +42,7 @@ type Screen =
   | "menu"
   | "single"
   | "multi"
+  | "quickplay"
   | "leaderboard"
   | "settings"
   | "controls"
@@ -157,6 +169,32 @@ export default function App() {
     };
   }, [screen, showProfile, showCommunity]);
 
+  // Handle Quick Play (Puyo Mines) lifecycle
+  useEffect(() => {
+    const handleMinesJoined = (data: {
+      seed: number;
+      state: any;
+      socketId: string;
+    }) => {
+      console.log("[App] Mines joined, seed:", data.seed);
+      const scene = new QuickPlayScene(data.seed);
+      SceneManager.changeScene(scene);
+    };
+
+    const handleMinesLeft = () => {
+      console.log("[App] Left mines");
+      SceneManager.changeScene(new MenuScene());
+      setScreen("menu");
+    };
+
+    NetworkManager.on("mines_joined", handleMinesJoined);
+    GameEvents.on("mines_left", handleMinesLeft);
+    return () => {
+      NetworkManager.off("mines_joined", handleMinesJoined);
+      GameEvents.off("mines_left", handleMinesLeft);
+    };
+  }, []);
+
   // Restore Auth Check
   useState(() => {
     const initAuth = async () => {
@@ -181,8 +219,29 @@ export default function App() {
       action: () => setScreen("single"),
     },
     {
-      label: "Multiplayer",
-      subtitle: "Ranked & Casual Matches",
+      label: "Quick Play",
+      subtitle: "Puyo Mines · FFA Survival",
+      icon: Pickaxe,
+      color: "#06B6D4", // cyan-500
+      accentColor: "#22D3EE", // cyan-400
+      action: () => {
+        // Connect and join mines, then launch scene
+        if (!NetworkManager.isConnected) {
+          NetworkManager.connect();
+        }
+        // Auth if needed
+        const token =
+          AuthManager.getToken?.() || localStorage.getItem("puyolive_token");
+        if (token) {
+          NetworkManager.authenticate(token);
+        }
+        NetworkManager.joinMines();
+        setScreen("quickplay");
+      },
+    },
+    {
+      label: "Unranked",
+      subtitle: "Casual 1v1 Matches",
       icon: Swords,
       color: "#8B5CF6", // violet-500
       accentColor: "#E879F9", // fuchsia-400
@@ -462,6 +521,25 @@ export default function App() {
                 // Does MultiplayerLobby pass roomId back?
                 // I need to check MultiplayerLobby.tsx.
                 setScreen("game");
+              }}
+            />
+          </motion.div>
+        )}
+
+        {screen === "quickplay" && (
+          <motion.div
+            key="quickplay"
+            className="size-full pointer-events-auto"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <QuickPlayScreen
+              onLeave={() => {
+                NetworkManager.leaveMines();
+                SceneManager.changeScene(new MenuScene());
+                setScreen("menu");
               }}
             />
           </motion.div>

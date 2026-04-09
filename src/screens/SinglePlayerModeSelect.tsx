@@ -17,11 +17,15 @@ export function SinglePlayerModeSelect({
 }: SinglePlayerModeSelectProps) {
   useMenuInput({ onBack }, [onBack]);
   const user = AuthManager.currentUser;
-  const [percentiles, setPercentiles] = useState<Record<string, number> | null>(null);
+  const [percentiles, setPercentiles] = useState<Record<string, number> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (user && !AuthManager.isGuest && user.games_played > 0) {
-      APIClient.getUserPercentiles(user.id).then(setPercentiles).catch(() => {});
+      APIClient.getUserPercentiles(user.id)
+        .then(setPercentiles)
+        .catch(() => {});
     }
   }, [user]);
 

@@ -115,7 +115,10 @@ export const CommunityScreen: React.FC<{
     null,
   );
   const [profileMatches, setProfileMatches] = useState<MatchHistoryEntry[]>([]);
-  const [profilePercentiles, setProfilePercentiles] = useState<Record<string, number> | null>(null);
+  const [profilePercentiles, setProfilePercentiles] = useState<Record<
+    string,
+    number
+  > | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -233,7 +236,10 @@ export const CommunityScreen: React.FC<{
   const loadRankedPage = useCallback(async (page: number) => {
     setRankedLoading(true);
     try {
-      const data = await APIClient.getLeaderboard(PLAYERS_PER_PAGE, page * PLAYERS_PER_PAGE);
+      const data = await APIClient.getLeaderboard(
+        PLAYERS_PER_PAGE,
+        page * PLAYERS_PER_PAGE,
+      );
       setRankedPlayers(
         data.leaderboard.map((p: any) => ({
           rank: p.rank,
@@ -391,6 +397,7 @@ export const CommunityScreen: React.FC<{
                 key="profile-view"
                 profile={viewingProfile}
                 matches={profileMatches}
+                percentiles={profilePercentiles}
                 loading={profileLoading}
                 onBack={() => setViewingProfile(null)}
                 onWatchReplay={onWatchReplay}
@@ -568,8 +575,10 @@ const ActivityTab: React.FC<{
                       try {
                         const { APIClient } = await import("../api/client");
                         const replayData = await APIClient.getReplay(m.id);
-                        const { SceneManager } = await import("../core/SceneManager");
-                        const { ReplayScene } = await import("../scenes/ReplayScene");
+                        const { SceneManager } =
+                          await import("../core/SceneManager");
+                        const { ReplayScene } =
+                          await import("../scenes/ReplayScene");
                         SceneManager.changeScene(new ReplayScene(replayData));
                         onWatchReplay();
                       } catch (e) {
@@ -903,6 +912,7 @@ const PlayersTab: React.FC<{
 const ProfileView: React.FC<{
   profile: UserProfile;
   matches: MatchHistoryEntry[];
+  percentiles: Record<string, number> | null;
   loading: boolean;
   onBack: () => void;
   onWatchReplay: () => void;
@@ -911,6 +921,7 @@ const ProfileView: React.FC<{
 }> = ({
   profile,
   matches,
+  percentiles,
   loading,
   onBack,
   onWatchReplay,
@@ -973,24 +984,28 @@ const ProfileView: React.FC<{
           value: profile.games_played,
           icon: Swords,
           color: "text-blue-400",
+          pKey: "games_played",
         },
         {
           label: "Win Rate",
           value: `${profile.win_rate ?? 0}%`,
           icon: Target,
           color: "text-emerald-400",
+          pKey: "win_rate",
         },
         {
           label: "Best Chain",
           value: profile.highest_chain,
           icon: Zap,
           color: "text-yellow-400",
+          pKey: "highest_chain",
         },
         {
           label: "Garbage Sent",
           value: profile.total_garbage_sent.toLocaleString(),
           icon: Flame,
           color: "text-red-400",
+          pKey: "total_garbage_sent",
         },
       ].map((s) => (
         <div
@@ -1003,6 +1018,11 @@ const ProfileView: React.FC<{
             <div className="text-[10px] text-white/30 uppercase tracking-wider">
               {s.label}
             </div>
+            {percentiles?.[s.pKey] != null && (
+              <div className="text-[9px] text-indigo-400/70 mt-0.5">
+                Top {Math.round(percentiles[s.pKey])}%
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -1072,8 +1092,10 @@ const ProfileView: React.FC<{
                   try {
                     const { APIClient } = await import("../api/client");
                     const replayData = await APIClient.getReplay(m.id);
-                    const { SceneManager } = await import("../core/SceneManager");
-                    const { ReplayScene } = await import("../scenes/ReplayScene");
+                    const { SceneManager } =
+                      await import("../core/SceneManager");
+                    const { ReplayScene } =
+                      await import("../scenes/ReplayScene");
                     SceneManager.changeScene(new ReplayScene(replayData));
                     onWatchReplay();
                   } catch (e) {
