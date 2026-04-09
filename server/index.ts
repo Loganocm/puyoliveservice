@@ -248,7 +248,8 @@ io.on('connection', (socket: Socket) => {
         // Auto-start game after short delay
         setTimeout(() => {
           room.startMatch();
-          io.to(room.id).emit('game_start', { seed: Date.now(), roomId: room.id });
+          const playerIds = Array.from(room.players.keys());
+          io.to(room.id).emit('game_start', { seed: Date.now(), roomId: room.id, players: playerIds });
         }, 3000);
       }
     }
@@ -359,7 +360,8 @@ io.on('connection', (socket: Socket) => {
 
         console.log(`Starting game in room ${roomId}`);
         room.startMatch();
-        io.to(roomId).emit('game_start', { seed: Date.now(), roomId: room.id });
+        const playerIds = Array.from(room.players.keys());
+        io.to(roomId).emit('game_start', { seed: Date.now(), roomId: room.id, players: playerIds });
       } else {
         console.warn(`Unauthorized start_game attempt by ${socket.id} for room ${roomId}`);
       }
@@ -753,7 +755,8 @@ io.on('connection', (socket: Socket) => {
         io.to(newRoom.id).emit('player_joined', { id: p2, count: 2 });
 
         setTimeout(() => {
-          io.to(newRoom.id).emit('game_start', { seed: Date.now(), roomId: newRoom.id });
+          const replayerIds = Array.from(newRoom.players.keys());
+          io.to(newRoom.id).emit('game_start', { seed: Date.now(), roomId: newRoom.id, players: replayerIds });
         }, 3000);
       }
     }

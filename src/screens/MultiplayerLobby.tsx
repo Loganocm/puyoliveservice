@@ -36,7 +36,12 @@ export function MultiplayerLobby({
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
 
   // Queue State
-  const [isSearching, setIsSearching] = useState(false);
+  const [isSearching, setIsSearchingState] = useState(false);
+  const isSearchingRef = useRef(false);
+  const setIsSearching = (val: boolean) => {
+    isSearchingRef.current = val;
+    setIsSearchingState(val);
+  };
   const [queueCounts, setQueueCounts] = useState({ ranked: 0, unranked: 0 });
 
   // Lobby State (for Custom Games)
@@ -48,6 +53,8 @@ export function MultiplayerLobby({
   const [vsPlayers, setVsPlayers] = useState<VSPlayerData[]>([]);
   const [vsRanked, setVsRanked] = useState(false);
   const pendingRoomId = useRef<string | null>(null);
+  const pendingSeed = useRef<number | undefined>(undefined);
+  const pendingOpponentId = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     // Ensure we are connected
@@ -143,6 +150,25 @@ export function MultiplayerLobby({
       NetworkManager.getRooms();
     };
 
+    // game_start from server carries the seed and player IDs
+    const onGameStart = (data: {
+      seed?: number;
+      roomId?: string;
+      players?: string[];
+    }) => {
+      console.log("Lobby: Game Start (seed received)", data);
+      if (data.seed !== undefined) {
+        pendingSeed.current = data.seed;
+      }
+      // Identify opponent from player list
+      if (data.players && Array.isArray(data.players)) {
+        const myId = NetworkManager.getSocket()?.id;
+        pendingOpponentId.current = data.players.find(
+          (id: string) => id !== myId,
+        );
+      }
+    };
+
     // Listeners
     NetworkManager.on("connect", onConnect);
     NetworkManager.on("disconnect", onDisconnect);
@@ -151,12 +177,17 @@ export function MultiplayerLobby({
     NetworkManager.on("match_found", onMatchFound);
     NetworkManager.on("room_created", onRoomCreated);
     NetworkManager.on("game_ended", onGameEnded);
+    NetworkManager.on("game_start", onGameStart);
 
     // Initial Rooms Fetch
     setIsLoadingRooms(true);
     NetworkManager.getRooms();
 
     return () => {
+      // Leave queue if still searching when component unmounts
+      if (isSearchingRef.current) {
+        NetworkManager.leaveQueue();
+      }
       NetworkManager.off("connect", onConnect);
       NetworkManager.off("disconnect", onDisconnect);
       NetworkManager.off("queue_update", onQueueUpdate);
@@ -164,6 +195,7 @@ export function MultiplayerLobby({
       NetworkManager.off("match_found", onMatchFound);
       NetworkManager.off("room_created", onRoomCreated);
       NetworkManager.off("game_ended", onGameEnded);
+      NetworkManager.off("game_start", onGameStart);
     };
   }, []);
 
@@ -437,7 +469,14 @@ export function MultiplayerLobby({
             onCountdownComplete={() => {
               setShowVSScreen(false);
               if (pendingRoomId.current) {
-                SceneManager.changeScene(new GameScene(pendingRoomId.current));
+                SceneManager.changeScene(
+                  new GameScene(
+                    pendingRoomId.current,
+                    0,
+                    pendingSeed.current,
+                    pendingOpponentId.current,
+                  ),
+                );
                 if (onStartGame) onStartGame();
               }
             }}
