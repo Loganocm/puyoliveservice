@@ -196,7 +196,7 @@ export default function App() {
   }, []);
 
   // Restore Auth Check
-  useState(() => {
+  useEffect(() => {
     const initAuth = async () => {
       const isValid = await AuthManager.init();
       if (isValid) {
@@ -207,7 +207,7 @@ export default function App() {
       // setAuthInitialized(true);
     };
     initAuth();
-  });
+  }, []);
 
   const menuItems = [
     {

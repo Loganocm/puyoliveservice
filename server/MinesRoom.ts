@@ -116,10 +116,12 @@ export class MinesRoom {
     public onBotGarbage: ((targetSocketId: string, amount: number) => void) | null = null;
     /** Callback for server to broadcast updated player list */
     public onBroadcastPlayerList: (() => void) | null = null;
+    /** Seed rotation interval handle */
+    private seedInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor() {
         // Rotate seed periodically for variety
-        setInterval(() => {
+        this.seedInterval = setInterval(() => {
             if (this.getAlivePlayers().length === 0) {
                 this.seed = Date.now();
                 this.roundNumber++;
@@ -262,7 +264,11 @@ export class MinesRoom {
         const targets = this.getAlivePlayers().filter(p => p.socketId !== MinesRoom.BOT_ID);
         if (targets.length > 0 && this.onBotGarbage) {
             const target = targets[Math.floor(Math.random() * targets.length)];
-            this.onBotGarbage(target.socketId, schedule.amount);
+            try {
+                this.onBotGarbage(target.socketId, schedule.amount);
+            } catch (err) {
+                console.error('[Mines Bot] Error sending garbage:', err);
+            }
             const bot = this.players.get(MinesRoom.BOT_ID);
             if (bot) bot.garbageSent += schedule.amount;
         }

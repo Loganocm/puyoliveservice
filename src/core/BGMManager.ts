@@ -19,8 +19,6 @@ export class BGMManager {
   private static tracks: Map<string, string[]> = new Map(); // context -> urls[]
   private static currentAudio: HTMLAudioElement | null = null;
   private static currentContext: BGMContext = 'none';
-  private static fadingOut: HTMLAudioElement | null = null;
-  private static fadeInterval: ReturnType<typeof setInterval> | null = null;
   private static _initialized = false;
 
   static get initialized() { return this._initialized; }

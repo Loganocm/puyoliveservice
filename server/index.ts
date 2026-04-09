@@ -173,6 +173,13 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('join_queue', (data: { ranked?: boolean } = {}) => {
     const isRanked = data.ranked || false;
+
+    // Ranked queue requires authentication
+    if (isRanked && !authenticatedUsers.has(socket.id)) {
+      socket.emit('error', { message: 'You must be logged in to play ranked' });
+      return;
+    }
+
     const queueName = isRanked ? 'ranked' : 'unranked';
     const queue = isRanked ? rankedQueue : unrankedQueue;
 
@@ -300,25 +307,6 @@ io.on('connection', (socket: Socket) => {
       maxPlayers: room.maxPlayers
     });
   };
-
-  socket.on('get_room_details', (data: { roomId: string }) => {
-    const room = roomManager.getRoom(data.roomId);
-    if (room) {
-      broadcastRoomUpdate(data.roomId); // Just broadcast to everyone to be safe/lazy, or emit back to socket
-    }
-  });
-
-  socket.on('toggle_ready', (data: { roomId: string, ready: boolean }) => {
-    const room = roomManager.getRoom(data.roomId);
-    if (room) {
-      const player = room.players.get(socket.id);
-      if (player) {
-        player.ready = data.ready;
-        console.log(`Player ${player.name} in room ${data.roomId} is now ${data.ready ? 'READY' : 'NOT READY'}`);
-        broadcastRoomUpdate(data.roomId);
-      }
-    }
-  });
 
   const broadcastRoomList = () => {
     // Only send PUBLIC rooms to the lobby list
@@ -527,9 +515,10 @@ io.on('connection', (socket: Socket) => {
         room.recordInput(targetIndex as 0 | 1, 'G', data.amount);
       }
       room.recordReplayEvent('garbage', socket.id, { amount: data.amount });
+
+      // Send to everyone else in the room
+      socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
     }
-    // Send to everyone else in the room
-    socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
   });
 
   socket.on('send_board_state', (data: { roomId: string, grid: number[][] }) => {
@@ -850,7 +839,7 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('mines_respawn', () => {
     const player = minesRoom.players.get(socket.id);
-    if (!player) return;
+    if (!player || player.alive) return; // Must be dead to respawn
 
     minesRoom.respawnPlayer(socket.id);
     console.log(`[Mines] ${player.username} respawned`);
@@ -878,7 +867,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_send_garbage', (data: { amount: number, chainLength?: number }) => {
-    if (!data || typeof data.amount !== 'number' || data.amount <= 0) return;
+    if (!data || typeof data.amount !== 'number' || data.amount <= 0 || data.amount > 100) return;
 
     const result = minesRoom.processGarbage(socket.id, data.amount, data.chainLength || 0);
     if (!result) return;

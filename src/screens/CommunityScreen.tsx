@@ -124,6 +124,13 @@ export const CommunityScreen: React.FC<{
   const [loading, setLoading] = useState(true);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Clean up search timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
   // Load initial data for the active tab
   useEffect(() => {
     loadTabData(tab);

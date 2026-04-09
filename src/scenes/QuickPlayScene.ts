@@ -363,6 +363,7 @@ export class QuickPlayScene implements IScene {
 
     private setupNetworkListeners() {
         const onMinesGarbage = (data: { amount: number, fromUsername: string }) => {
+            if (this.container.destroyed) return;
             if (data && typeof data.amount === 'number' && this.alive) {
                 this.engine.addGarbage(data.amount);
                 this.spawnFloatingText(400, 100, `${data.fromUsername} +${data.amount}`, 0xff0000);
@@ -393,6 +394,7 @@ export class QuickPlayScene implements IScene {
         this.networkListeners.push({ event: 'mines_target_updated', cb: onTargetUpdated });
 
         const onRespawned = (data: { seed: number }) => {
+            if (this.container.destroyed) return;
             this.seed = data.seed;
             this.setupEngine();
             this.alive = true;
@@ -403,6 +405,7 @@ export class QuickPlayScene implements IScene {
         this.networkListeners.push({ event: 'mines_respawned', cb: onRespawned });
 
         const onKO = (data: { targetUsername: string, totalKOs: number }) => {
+            if (this.container.destroyed) return;
             this.kos = data.totalKOs;
             this.spawnFloatingText(300, 150, `KO! ${data.targetUsername}`, 0xFFD700, 1.2);
         };

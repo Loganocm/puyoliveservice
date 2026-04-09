@@ -489,7 +489,6 @@ export class GameScene implements IScene {
         }
 
         this.gameMessage = "";
-        this.gameMessage = "";
         this.elapsedTime = 0;
         this.accumulator = 0;
         this.particles = [];
@@ -876,7 +875,7 @@ export class GameScene implements IScene {
                 }
 
                 // Update timer
-                if (this.timeLimit > 0 && (this.engine.state as number) !== 6) {
+                if (this.timeLimit > 0 && this.engine.state !== GameState.GAMEOVER) {
                     this.accumulator += delta / 60;
                     while (this.accumulator >= 1.0) {
                         this.accumulator -= 1.0;
@@ -1386,47 +1385,6 @@ export class GameScene implements IScene {
     // (PauseScreen.tsx, GameOverScreen.tsx via GameOverlay.tsx)
     // Old PixiJS-based menu code has been removed.
 
-
-    drawGarbageTray() {
-        // Show total incoming garbage (Queue + Nuisance)
-        const totalGarbage = this.engine.garbageQueue + this.engine.nuisanceTray;
-        if (totalGarbage <= 0) return;
-
-        // Icons values: 1, 6, 30, 180, 360, 720
-        const icons: { val: number, type: 'small' | 'big' | 'rock' | 'star' | 'moon' | 'crown' }[] = [
-            { val: 720, type: 'crown' },
-            { val: 360, type: 'moon' },
-            { val: 180, type: 'star' },
-            { val: 30, type: 'rock' },
-            { val: 6, type: 'big' },
-            { val: 1, type: 'small' }
-        ];
-
-        let remaining = totalGarbage;
-        const trayX = 20;
-        const trayY = 80;
-        let drawX = trayX;
-
-        for (const icon of icons) {
-            while (remaining >= icon.val) {
-                if (drawX > 300) break; // Overflow
-
-                const texture = ResourceManager.getGarbageIconTexture(icon.type);
-                const sprite = new Sprite(texture);
-                sprite.x = drawX;
-                sprite.y = trayY;
-
-                // Force icons to consistent 32px display size regardless of sheet resolution
-                sprite.width = 32;
-                sprite.height = 32;
-
-                this.uiContainer.addChild(sprite);
-
-                remaining -= icon.val;
-                drawX += 32 + 2; // Spacing at display size
-            }
-        }
-    }
 
     drawOpponent() {
         // Destroy all children from previous frame (prevent memory leak)

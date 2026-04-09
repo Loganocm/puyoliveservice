@@ -150,6 +150,7 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
       GameEvents.off("mines_died", onDied);
       GameEvents.off("mines_left", onLeft);
       GameEvents.off("mines_level_up", onLevelUp);
+      if (levelUpTimer.current) clearTimeout(levelUpTimer.current);
     };
   }, [onLeave]);
 
