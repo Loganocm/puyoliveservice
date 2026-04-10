@@ -1188,7 +1188,7 @@ io.on('connection', (socket: Socket) => {
     const player = minesRoom.players.get(socket.id);
     if (!player || !player.alive) return;
     
-    player.simulator.recordInput(data.input);
+    player.simulator.executeInput({ i: data.input });
   });
 
   socket.on('mines_tick_frame', () => {

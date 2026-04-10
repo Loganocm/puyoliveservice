@@ -11,7 +11,7 @@
  * - Bot fills in when < 10 players, scales difficulty by depth level
  */
 
-import { PuyoSimulator } from './PuyoSimulator';
+import { PuyoSimulator } from './PuyoSimulator.js';
 
 export type TargetingMode = 'random' | 'attackers' | 'badges' | 'vulnerable';
 
@@ -207,6 +207,7 @@ export class MinesRoom {
                 kos: 0,
                 garbageSent: 0,
                 board: null,
+                simulator: new PuyoSimulator(this.seed),
                 targetingMode: 'random',
                 currentTarget: null,
                 joinedAt: Date.now(),
@@ -270,7 +271,7 @@ export class MinesRoom {
             
             // Periodically sync the visible board
             if (player.simulator.frameCount % 6 === 0) {
-                player.board = player.simulator.getSerializedData();
+                player.board = player.simulator.board.grid;
             }
 
             if (player.simulator.isGameOver && player.alive) {
@@ -375,7 +376,7 @@ export class MinesRoom {
                      target.simulator.addGarbage(ffaAmount);
                      // The actual network emit must happen from index.ts, so we'll fire onPlayerGarbage
                      if (this.onPlayerGarbage) {
-                         this.onPlayerGarbage(targetId, ffaAmount, player.username, socketId);
+                         this.onPlayerGarbage(targetId, ffaAmount, player.username, data.socketId);
                      }
                 }
             }
