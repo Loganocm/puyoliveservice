@@ -69,7 +69,8 @@ const io = new Server(httpServer, {
     credentials: true,
   },
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  maxHttpBufferSize: 256 * 1024, // 256 KB max payload — prevents oversized grid/state DoS
 });
 
 const port = process.env.PORT || 3001;
@@ -90,6 +91,47 @@ const authenticatedUsers = new Map<string, {
 // Separate queues for ranked and unranked matchmaking
 let rankedQueue: string[] = [];
 let unrankedQueue: string[] = [];
+
+// ── Per-socket rate limiting ──
+const socketEventTimestamps = new Map<string, Map<string, number[]>>();
+
+/** Returns true if the event is allowed, false if rate-limited */
+function checkSocketRate(socketId: string, eventName: string, maxPerSec: number): boolean {
+  if (!socketEventTimestamps.has(socketId)) {
+    socketEventTimestamps.set(socketId, new Map());
+  }
+  const events = socketEventTimestamps.get(socketId)!;
+  if (!events.has(eventName)) {
+    events.set(eventName, []);
+  }
+  const timestamps = events.get(eventName)!;
+  const now = Date.now();
+  const cutoff = now - 1000;
+
+  // Remove old timestamps
+  while (timestamps.length > 0 && timestamps[0] < cutoff) {
+    timestamps.shift();
+  }
+
+  if (timestamps.length >= maxPerSec) {
+    return false;
+  }
+  timestamps.push(now);
+  return true;
+}
+
+/** Validate a Puyo board grid: must be 13 rows × 6 cols with valid cell values */
+function isValidGrid(grid: unknown): grid is number[][] {
+  if (!Array.isArray(grid)) return false;
+  if (grid.length === 0 || grid.length > 14) return false;
+  for (const row of grid) {
+    if (!Array.isArray(row) || row.length > 8) return false;
+    for (const cell of row) {
+      if (typeof cell !== 'number' || !Number.isInteger(cell) || cell < 0 || cell > 15) return false;
+    }
+  }
+  return true;
+}
 
 // Wire up mines bot callbacks (needs io reference)
 minesRoom.onBotGarbage = (targetSocketId: string, amount: number) => {
@@ -175,6 +217,7 @@ io.on('connection', (socket: Socket) => {
   };
 
   socket.on('join_queue', (data: { ranked?: boolean } = {}) => {
+    if (!checkSocketRate(socket.id, 'join_queue', 2)) return;
     const isRanked = data.ranked || false;
 
     // Ranked queue requires authentication
@@ -331,6 +374,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('create_room', (data: { isPrivate?: boolean } = {}) => {
+    if (!checkSocketRate(socket.id, 'create_room', 1)) return;
     const room = roomManager.createRoom();
     room.isPrivate = !!data.isPrivate;
 
@@ -388,6 +432,12 @@ io.on('connection', (socket: Socket) => {
     if (auth?.userId) {
       const oldSocketId = room.reconnectPlayer(auth.userId, socket.id, auth.token);
       if (oldSocketId) {
+        // Force-disconnect old socket to prevent dual-socket monitoring
+        const oldSocket = io.sockets.sockets.get(oldSocketId);
+        if (oldSocket) {
+          oldSocket.leave(roomId);
+          oldSocket.disconnect(true);
+        }
         // Successfully reconnected - join the socket.io room
         socket.join(roomId);
         socket.emit('reconnected', { roomId, message: 'Reconnected to match' });
@@ -396,7 +446,13 @@ io.on('connection', (socket: Socket) => {
       }
     }
 
-    // Not a reconnect - try to add as new player
+    // Not a reconnect - prevent joining mid-game
+    if (room.matchStats) {
+      socket.emit('error', { message: 'Cannot join room during active match' });
+      return;
+    }
+
+    // Try to add as new player
     const playerName = auth?.username || `Player ${socket.id.substring(0, 4)}`;
     if (room.addPlayer({
       id: socket.id,
@@ -483,69 +539,84 @@ io.on('connection', (socket: Socket) => {
 
   // V2 Replay: Record player inputs
   socket.on('record_input', (data: { roomId: string, input: string }) => {
+    if (!data || typeof data.roomId !== 'string' || typeof data.input !== 'string') return;
+    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD', 'G'];
+    if (!validInputs.includes(data.input)) return;
+    if (!checkSocketRate(socket.id, 'record_input', 120)) return;
     const room = roomManager.getRoom(data.roomId);
-    if (room && room.matchStats) {
-      const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
-      room.recordInput(playerIndex, data.input as any);
-    }
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
+    const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
+    room.recordInput(playerIndex, data.input as any);
   });
 
   // V2 Replay: Tick frame counter (only player 0 is authoritative to prevent double-counting)
   socket.on('tick_frame', (data: { roomId: string }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!checkSocketRate(socket.id, 'tick_frame', 65)) return;
     const room = roomManager.getRoom(data.roomId);
-    if (room && room.matchStats) {
-      const playerIndex = room.getPlayerIndex(socket.id);
-      if (playerIndex === 0) {
-        room.tick();
-      }
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
+    const playerIndex = room.getPlayerIndex(socket.id);
+    if (playerIndex === 0) {
+      room.tick();
     }
   });
 
   socket.on('send_garbage', (data: { roomId: string, amount: number, chainLength?: number }) => {
-    if (!data || typeof data.amount !== 'number' || data.amount <= 0 || data.amount > 100) return;
-    if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || data.chainLength < 0 || data.chainLength > 30)) return;
-    // Track garbage stats
+    if (!data || typeof data.roomId !== 'string') return;
+    if (typeof data.amount !== 'number' || !Number.isInteger(data.amount) || data.amount <= 0 || data.amount > 100) return;
+    if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || !Number.isInteger(data.chainLength) || data.chainLength < 1 || data.chainLength > 25)) return;
+    if (!checkSocketRate(socket.id, 'send_garbage', 30)) return;
     const room = roomManager.getRoom(data.roomId);
-    if (room && room.players.has(socket.id)) {
-      room.recordGarbage(socket.id, data.amount);
-      if (data.chainLength) {
-        room.recordChain(socket.id, data.chainLength);
-        room.recordReplayEvent('chain', socket.id, { length: data.chainLength });
-      }
-      // V2 Replay: Record garbage event
-      // Find opponent (who receives the garbage)
-      const senderIndex = room.getPlayerIndex(socket.id);
-      if (senderIndex !== -1) {
-        const targetIndex = senderIndex === 0 ? 1 : 0;
-        room.recordInput(targetIndex as 0 | 1, 'G', data.amount);
-      }
-      room.recordReplayEvent('garbage', socket.id, { amount: data.amount });
-
-      // Send to everyone else in the room
-      socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
+    if (!room || !room.players.has(socket.id)) return;
+    // MUST have an active, non-concluded match
+    if (!room.matchStats || room.matchConcluded) return;
+    room.recordGarbage(socket.id, data.amount);
+    if (data.chainLength) {
+      room.recordChain(socket.id, data.chainLength);
+      room.recordReplayEvent('chain', socket.id, { length: data.chainLength });
     }
+    // V2 Replay: Record garbage event
+    const senderIndex = room.getPlayerIndex(socket.id);
+    if (senderIndex !== -1) {
+      const targetIndex = senderIndex === 0 ? 1 : 0;
+      room.recordInput(targetIndex as 0 | 1, 'G', data.amount);
+    }
+    room.recordReplayEvent('garbage', socket.id, { amount: data.amount });
+
+    // Send to everyone else in the room
+    socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
   });
 
   socket.on('send_board_state', (data: { roomId: string, grid: number[][] }) => {
-    // Relay board state to opponent
-    socket.broadcast.to(data.roomId).emit('receive_board_state', { grid: data.grid, playerId: socket.id });
-
-    // Record for replay (sampling or full?)
-    // For a perfect replay we need every state change.
-    // If bandwidth is concern, we can rely on moves, but board state is safer for sync.
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!isValidGrid(data.grid)) return;
+    if (!checkSocketRate(socket.id, 'send_board_state', 10)) return;
     const room = roomManager.getRoom(data.roomId);
-    if (room) {
-      room.recordReplayEvent('move', socket.id, { grid: data.grid });
-    }
-
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
+    socket.broadcast.to(data.roomId).emit('receive_board_state', { grid: data.grid, playerId: socket.id });
+    room.recordReplayEvent('move', socket.id, { grid: data.grid });
   });
 
   socket.on('send_player_state', (data: { roomId: string, state: any }) => {
-    // Relay active piece state
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!data.state || typeof data.state !== 'object') return;
+    if (!checkSocketRate(socket.id, 'send_player_state', 60)) return;
+    const room = roomManager.getRoom(data.roomId);
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
     socket.broadcast.to(data.roomId).emit('receive_player_state', { state: data.state, playerId: socket.id });
   });
 
   socket.on('send_score', (data: { roomId: string, score: number }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (typeof data.score !== 'number' || !Number.isFinite(data.score) || data.score < 0 || data.score > 999999) return;
+    if (!checkSocketRate(socket.id, 'send_score', 10)) return;
+    const room = roomManager.getRoom(data.roomId);
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
     socket.broadcast.to(data.roomId).emit('receive_score', { score: data.score, playerId: socket.id });
   });
 
@@ -681,8 +752,11 @@ io.on('connection', (socket: Socket) => {
   };
 
   socket.on('player_lost', async (data: { roomId: string }) => {
+    if (!data || typeof data.roomId !== 'string') return;
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
+    // Match must be active and not already concluded
+    if (!room.matchStats || room.matchConcluded) return;
     console.log(`[Server] player_lost received from ${socket.id} for room ${data.roomId}`);
     await handleMatchEnd(data.roomId, socket.id, 'lost');
   });
@@ -794,7 +868,12 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('join_mines', () => {
     const auth = authenticatedUsers.get(socket.id);
-    const username = auth?.username || `Guest_${socket.id.substring(0, 6)}`;
+    let username = auth?.username || `Guest_${socket.id.substring(0, 6)}`;
+    // Sanitize and cap username length
+    if (typeof username !== 'string' || username.trim().length === 0) {
+      username = `Player_${socket.id.substring(0, 6)}`;
+    }
+    username = username.substring(0, 32).replace(/[\x00-\x1F\x7F]/g, '');
 
     const added = minesRoom.addPlayer({
       socketId: socket.id,
@@ -874,7 +953,9 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_send_garbage', (data: { amount: number, chainLength?: number }) => {
-    if (!data || typeof data.amount !== 'number' || data.amount <= 0 || data.amount > 100) return;
+    if (!data || typeof data.amount !== 'number' || !Number.isInteger(data.amount) || data.amount <= 0 || data.amount > 100) return;
+    if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || !Number.isInteger(data.chainLength) || data.chainLength < 1 || data.chainLength > 25)) return;
+    if (!checkSocketRate(socket.id, 'mines_send_garbage', 30)) return;
 
     const result = minesRoom.processGarbage(socket.id, data.amount, data.chainLength || 0);
     if (!result) return;
@@ -894,7 +975,8 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_board_state', (data: { grid: number[][] }) => {
-    if (!data?.grid) return;
+    if (!isValidGrid(data?.grid)) return;
+    if (!checkSocketRate(socket.id, 'mines_board_state', 10)) return;
     minesRoom.updateBoard(socket.id, data.grid);
 
     // Relay board to everyone for sidebar mini-boards (optional, can be expensive)
@@ -910,7 +992,13 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_score_update', (data: { score: number }) => {
-    if (!data || typeof data.score !== 'number') return;
+    if (!data || typeof data.score !== 'number' || !Number.isFinite(data.score)) return;
+    if (data.score < 0 || data.score > 100_000_000) return;
+    if (!checkSocketRate(socket.id, 'mines_score_update', 10)) return;
+    const player = minesRoom.players.get(socket.id);
+    if (!player || !player.alive) return;
+    // Score must not decrease (prevent manipulation)
+    if (data.score < player.score) return;
     const depth = minesRoom.updateScore(socket.id, data.score);
 
     // Periodically broadcast updated player list
@@ -976,6 +1064,7 @@ io.on('connection', (socket: Socket) => {
     }
 
     authenticatedUsers.delete(socket.id);
+    socketEventTimestamps.delete(socket.id);
   });
 });
 

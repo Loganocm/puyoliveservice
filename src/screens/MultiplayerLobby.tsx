@@ -1,6 +1,14 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, useRef } from "react";
-import { Users, Loader2, Play, Hash, Plus, Trophy } from "lucide-react";
+import {
+  Users,
+  Loader2,
+  Play,
+  Hash,
+  Plus,
+  Trophy,
+  Pickaxe,
+} from "lucide-react";
 import { MenuBanner } from "@/components/MenuBanner";
 import { BackButton } from "@/components/BackButton";
 import { GameButton } from "@/components/GameButton";
@@ -15,6 +23,7 @@ import type { VSPlayerData } from "@/screens/VSScreen";
 interface MultiplayerLobbyProps {
   onBack: () => void;
   onStartGame?: () => void;
+  onQuickPlay?: () => void;
 }
 
 import { RoomLobbyScreen } from "@/screens/RoomLobbyScreen";
@@ -23,6 +32,7 @@ import { GameEvents } from "@/core/GameEvents";
 export function MultiplayerLobby({
   onBack,
   onStartGame,
+  onQuickPlay,
 }: MultiplayerLobbyProps) {
   const [queueMode, setQueueMode] = useState<"ranked" | "unranked">(
     AuthManager.isGuest ? "unranked" : "ranked",
@@ -341,10 +351,21 @@ export function MultiplayerLobby({
         </AnimatePresence>
 
         <div className="w-full max-w-4xl grid grid-cols-1 gap-4">
-          {/* Quick Play Banner */}
+          {/* Puyo Mines - FFA Survival */}
           <MenuBanner
-            title="QUICK PLAY"
-            description="CASUAL MATCHMAKING • NO RANKING ON THE LINE"
+            title="PUYO MINES"
+            description="FFA SURVIVAL · DIG DEEPER · OUTLAST EVERYONE"
+            icon={Pickaxe}
+            color="#06B6D4"
+            gradient="linear-gradient(135deg, rgba(6,182,212,0.4) 0%, transparent 100%)"
+            onClick={() => onQuickPlay?.()}
+            delay={0.05}
+          />
+
+          {/* Unranked Banner */}
+          <MenuBanner
+            title="UNRANKED"
+            description="CASUAL 1V1 MATCHMAKING • NO RANKING ON THE LINE"
             icon={Play}
             color="#3B82F6"
             gradient="linear-gradient(135deg, rgba(59,130,246,0.4) 0%, transparent 100%)"

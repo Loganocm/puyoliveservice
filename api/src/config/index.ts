@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,15 +18,19 @@ export const config = {
     connectionString: process.env.DATABASE_URL
   },
 
-  // JWT
+  // JWT — HS512 requires a 64-byte (512-bit) key minimum
   jwt: {
     secret: (() => {
       const secret = process.env.JWT_SECRET;
-      if (!secret && process.env.NODE_ENV === 'production') {
-        throw new Error('JWT_SECRET must be set in production');
+      if (process.env.NODE_ENV === 'production') {
+        if (!secret) throw new Error('JWT_SECRET must be set in production');
+        if (secret.length < 64) throw new Error('JWT_SECRET must be at least 64 characters in production');
+        return secret;
       }
-      return secret || 'dev-secret-change-me';
+      // Dev: use env var or generate a per-process random secret (tokens don't survive restart — intentional)
+      return secret || crypto.randomBytes(64).toString('base64url');
     })(),
+    algorithm: 'HS512' as const,
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   },
 

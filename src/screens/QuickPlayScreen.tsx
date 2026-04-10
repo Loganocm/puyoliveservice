@@ -177,6 +177,7 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
 
   const handleLeave = useCallback(() => {
     NetworkManager.leaveMines();
+    GameEvents.emit("mines_left");
   }, []);
 
   const targetingModes: {

@@ -1,14 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  Gamepad2,
-  Trophy,
-  Settings,
-  Swords,
-  User,
-  Users,
-  Pickaxe,
-} from "lucide-react";
+import { Gamepad2, Trophy, Settings, Swords, User, Users } from "lucide-react";
+import puyoHeaderLogo from "@/resources/puyoheader.svg";
 import { backgroundManager } from "@/core/BackgroundManager";
 import { PuyoFooter } from "@/components/PuyoFooter";
 import { WaterFillButton } from "@/components/WaterFillButton";
@@ -190,7 +183,7 @@ export default function App() {
     const handleMinesLeft = () => {
       console.log("[App] Left mines");
       SceneManager.changeScene(new MenuScene());
-      setScreen("menu");
+      setScreen("multi");
     };
 
     NetworkManager.on("mines_joined", handleMinesJoined);
@@ -225,29 +218,8 @@ export default function App() {
       action: () => setScreen("single"),
     },
     {
-      label: "Quick Play",
-      subtitle: "Puyo Mines · FFA Survival",
-      icon: Pickaxe,
-      color: "#06B6D4", // cyan-500
-      accentColor: "#22D3EE", // cyan-400
-      action: () => {
-        // Connect and join mines, then launch scene
-        if (!NetworkManager.isConnected) {
-          NetworkManager.connect();
-        }
-        // Auth if needed
-        const token =
-          AuthManager.getToken?.() || localStorage.getItem("puyolive_token");
-        if (token) {
-          NetworkManager.authenticate(token);
-        }
-        NetworkManager.joinMines();
-        setScreen("quickplay");
-      },
-    },
-    {
-      label: "Unranked",
-      subtitle: "Casual 1v1 Matches",
+      label: "Multiplayer",
+      subtitle: "Ranked & Casual Matches",
       icon: Swords,
       color: "#8B5CF6", // violet-500
       accentColor: "#E879F9", // fuchsia-400
@@ -432,10 +404,11 @@ export default function App() {
               }}
               className="flex justify-center px-8 pt-4 pb-4 z-10"
             >
-              <h1 className="text-6xl md:text-7xl font-black tracking-tight select-none">
-                <span className="text-white">PUYO </span>
-                <span className="text-indigo-400">LIVE</span>
-              </h1>
+              <img
+                src={puyoHeaderLogo}
+                alt="Puyo Live"
+                className="w-full max-w-lg"
+              />
             </motion.div>
 
             {/* Main Menu */}
@@ -513,6 +486,19 @@ export default function App() {
                 SceneManager.changeScene(new MenuScene());
                 setScreen("menu");
               }}
+              onQuickPlay={() => {
+                if (!NetworkManager.isConnected) {
+                  NetworkManager.connect();
+                }
+                const token =
+                  AuthManager.getToken?.() ||
+                  localStorage.getItem("puyolive_token");
+                if (token) {
+                  NetworkManager.authenticate(token);
+                }
+                NetworkManager.joinMines();
+                setScreen("quickplay");
+              }}
               onStartGame={() => {
                 // SceneManager.changeScene logic is handled inside MultiplayerLobby?
                 // Actually MultiplayerLobby usually listens for match_ready then starts.
@@ -545,7 +531,7 @@ export default function App() {
               onLeave={() => {
                 NetworkManager.leaveMines();
                 SceneManager.changeScene(new MenuScene());
-                setScreen("menu");
+                setScreen("multi");
               }}
             />
           </motion.div>

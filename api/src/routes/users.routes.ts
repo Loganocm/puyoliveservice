@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
-import { asyncHandler, optionalAuth } from '../middleware/index.js';
+import { asyncHandler, authenticate, optionalAuth } from '../middleware/index.js';
 import { prisma } from '../db/prisma.js';
 
 const router = Router();
@@ -60,7 +60,7 @@ router.get('/:identifier', optionalAuth, asyncHandler(async (req: Request, res: 
  * POST /users/:id/avatar
  * Upload/Update user avatar
  */
-router.post('/:id/avatar', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/avatar', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const paramId = parseInt(req.params.id as string, 10);
 
   // Check auth - user can only update their own avatar
@@ -94,7 +94,7 @@ router.post('/:id/avatar', optionalAuth, asyncHandler(async (req: Request, res: 
  * PATCH /users/:id
  * Update user profile (Username, Email, Password)
  */
-router.patch('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+router.patch('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const paramId = parseInt(req.params.id as string, 10);
 
   // Check auth - user can only update their own profile

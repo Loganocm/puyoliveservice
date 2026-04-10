@@ -1,14 +1,32 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { AuthService } from '../services/auth.service.js';
 import { authenticate, asyncHandler } from '../middleware/index.js';
 
 const router = Router();
 
+// Rate limiters for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts, please try again later' },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 registrations per hour per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many accounts created, please try again later' },
+});
+
 /**
  * POST /auth/register
  * Register a new user account
  */
-router.post('/register', asyncHandler(async (req: Request, res: Response) => {
+router.post('/register', registerLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { username, password, email } = req.body;
 
   try {
@@ -24,7 +42,7 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
  * POST /auth/login
  * Login with username and password
  */
-router.post('/login', asyncHandler(async (req: Request, res: Response) => {
+router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
   try {
@@ -61,7 +79,7 @@ router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response)
  * POST /auth/change-password
  * Change the authenticated user's password
  */
-router.post('/change-password', authenticate, asyncHandler(async (req: Request, res: Response) => {
+router.post('/change-password', authenticate, authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {

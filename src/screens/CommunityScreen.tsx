@@ -532,69 +532,71 @@ const ActivityTab: React.FC<{
       <div className="text-center py-12 text-white/30">No matches yet</div>
     ) : (
       <div className="space-y-2">
-        {recentMatches.map((m, i) => {
-          const winner = m.winner_id === m.player1.id ? m.player1 : m.player2;
-          const loser = m.winner_id === m.player1.id ? m.player2 : m.player1;
-          return (
-            <motion.div
-              key={m.id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.02 }}
-              className="flex items-center gap-4 px-4 py-3 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-colors group"
-            >
-              <Swords className="w-4 h-4 text-white/20 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 text-sm">
-                  <button
-                    onClick={() => onPlayerClick(winner.id)}
-                    className="font-bold text-emerald-400 hover:underline truncate"
-                  >
-                    {winner.username}
-                  </button>
-                  <span className="text-white/20">beat</span>
-                  <button
-                    onClick={() => onPlayerClick(loser.id)}
-                    className="font-bold text-red-400/80 hover:underline truncate"
-                  >
-                    {loser.username}
-                  </button>
+        {recentMatches
+          .filter((m) => m.player1 && m.player2)
+          .map((m, i) => {
+            const winner = m.winner_id === m.player1.id ? m.player1 : m.player2;
+            const loser = m.winner_id === m.player1.id ? m.player2 : m.player1;
+            return (
+              <motion.div
+                key={m.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.02 }}
+                className="flex items-center gap-4 px-4 py-3 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-colors group"
+              >
+                <Swords className="w-4 h-4 text-white/20 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm">
+                    <button
+                      onClick={() => onPlayerClick(winner.id)}
+                      className="font-bold text-emerald-400 hover:underline truncate"
+                    >
+                      {winner.username}
+                    </button>
+                    <span className="text-white/20">beat</span>
+                    <button
+                      onClick={() => onPlayerClick(loser.id)}
+                      className="font-bold text-red-400/80 hover:underline truncate"
+                    >
+                      {loser.username}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-white/30 shrink-0">
-                <span className="flex items-center gap-1">
-                  <Clock size={12} />
-                  {m.duration_seconds
-                    ? formatDuration(m.duration_seconds)
-                    : "—"}
-                </span>
-                <span>{timeAgo(m.ended_at)}</span>
-                {m.has_valid_replay && (
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const { APIClient } = await import("../api/client");
-                        const replayData = await APIClient.getReplay(m.id);
-                        const { SceneManager } =
-                          await import("../core/SceneManager");
-                        const { ReplayScene } =
-                          await import("../scenes/ReplayScene");
-                        SceneManager.changeScene(new ReplayScene(replayData));
-                        onWatchReplay();
-                      } catch (e) {
-                        console.error("Failed to load replay", e);
-                      }
-                    }}
-                    className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors border border-white/5"
-                  >
-                    Replay
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          );
-        })}
+                <div className="flex items-center gap-4 text-xs text-white/30 shrink-0">
+                  <span className="flex items-center gap-1">
+                    <Clock size={12} />
+                    {m.duration_seconds
+                      ? formatDuration(m.duration_seconds)
+                      : "—"}
+                  </span>
+                  <span>{timeAgo(m.ended_at)}</span>
+                  {m.has_valid_replay && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const { APIClient } = await import("../api/client");
+                          const replayData = await APIClient.getReplay(m.id);
+                          const { SceneManager } =
+                            await import("../core/SceneManager");
+                          const { ReplayScene } =
+                            await import("../scenes/ReplayScene");
+                          SceneManager.changeScene(new ReplayScene(replayData));
+                          onWatchReplay();
+                        } catch (e) {
+                          console.error("Failed to load replay", e);
+                        }
+                      }}
+                      className="bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-md font-bold text-[10px] uppercase tracking-wider transition-colors border border-white/5"
+                    >
+                      Replay
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
       </div>
     )}
   </motion.div>

@@ -5,14 +5,71 @@ import { config } from '../config/index.js';
 import type { User, UserProfile, CreateUserInput, LoginInput, AuthResponse } from '../types/user.js';
 import { Prisma } from '@prisma/client';
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = 12;
 
 // Validation constants
 const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 32;
 const USERNAME_REGEX = /^[a-zA-Z0-9_]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
+
+// ── Per-account progressive lockout ──
+const LOGIN_MAX_ATTEMPTS = 5;          // Lock after 5 failures
+const LOGIN_LOCKOUT_BASE_MS = 60_000;  // 1 minute initial lockout
+const LOGIN_LOCKOUT_MAX_MS = 30 * 60_000; // 30 min max lockout
+
+interface LoginAttemptInfo {
+  failures: number;
+  lockedUntil: number; // epoch ms
+}
+
+const loginAttempts = new Map<string, LoginAttemptInfo>();
+
+// Cleanup stale entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, info] of loginAttempts) {
+    if (info.lockedUntil < now && info.failures === 0) {
+      loginAttempts.delete(key);
+    }
+  }
+}, 10 * 60_000);
+
+function getAccountLockKey(username: string): string {
+  return username.toLowerCase().trim();
+}
+
+function checkAccountLock(username: string): { locked: boolean; retryAfterMs?: number } {
+  const key = getAccountLockKey(username);
+  const info = loginAttempts.get(key);
+  if (!info) return { locked: false };
+  const now = Date.now();
+  if (info.lockedUntil > now) {
+    return { locked: true, retryAfterMs: info.lockedUntil - now };
+  }
+  return { locked: false };
+}
+
+function recordLoginFailure(username: string): void {
+  const key = getAccountLockKey(username);
+  const info = loginAttempts.get(key) || { failures: 0, lockedUntil: 0 };
+  info.failures++;
+  if (info.failures >= LOGIN_MAX_ATTEMPTS) {
+    // Exponential backoff: 1m, 2m, 4m, 8m, 16m, capped at 30m
+    const lockMs = Math.min(
+      LOGIN_LOCKOUT_BASE_MS * Math.pow(2, info.failures - LOGIN_MAX_ATTEMPTS),
+      LOGIN_LOCKOUT_MAX_MS
+    );
+    info.lockedUntil = Date.now() + lockMs;
+  }
+  loginAttempts.set(key, info);
+}
+
+function clearLoginFailures(username: string): void {
+  loginAttempts.delete(getAccountLockKey(username));
+}
 
 export class AuthService {
   /**
@@ -101,16 +158,19 @@ export class AuthService {
     }
 
     // Hash password
+    // Validate email if provided
+    if (input.email && !EMAIL_REGEX.test(input.email)) {
+      throw new Error('Invalid email format');
+    }
+
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
     // Create user
-    // Note: 'any' cast used as a compatibility bridge between Prisma User and local User interface if needed
-    // but they should be compatible.
     const user = await prisma.user.create({
       data: {
         username,
         password_hash: passwordHash,
-        email: (input.email || undefined) as any, // Cast to any to bypass local type mismatch
+        email: (input.email || undefined) as any,
         elo_rating: config.elo.defaultRating,
       }
     });
@@ -144,6 +204,13 @@ export class AuthService {
       throw new Error('Username and password are required');
     }
 
+    // Check account lockout BEFORE doing any database work
+    const lockStatus = checkAccountLock(input.username);
+    if (lockStatus.locked) {
+      const retrySeconds = Math.ceil((lockStatus.retryAfterMs || 0) / 1000);
+      throw new Error(`Account temporarily locked. Try again in ${retrySeconds} seconds`);
+    }
+
     // Find user by username (case-insensitive)
     const user = await prisma.user.findFirst({
       where: {
@@ -155,19 +222,20 @@ export class AuthService {
     });
 
     if (!user) {
+      // Record failure even for non-existent users (prevents username enumeration via timing)
+      recordLoginFailure(input.username);
       throw new Error('Invalid username or password');
     }
 
     // Verify password
     const isValid = await bcrypt.compare(input.password, user.password_hash);
     if (!isValid) {
+      recordLoginFailure(input.username);
       throw new Error('Invalid username or password');
     }
 
-    // Update last login (Wait, User model in Prisma schema didn't have last_login_at. 
-    // I should check schema or types. If schema doesn't have it, I can't update it yet.
-    // For now, I will omit updating last_login_at if it's not in schema schema: User model has: id, username, email, password_hash, elo_rating, games_played/won, highest_chain, garbage, created_at, updated_at, but NOT last_login_at.
-    // I will skip this update step or add it to schema later.
+    // Success — clear lockout state
+    clearLoginFailures(input.username);
 
     const profile = this.toProfile(user as unknown as User);
     const token = this.generateToken(user as unknown as User);
@@ -238,7 +306,9 @@ export class AuthService {
    */
   static async verifyToken(token: string): Promise<User | null> {
     try {
-      const payload = jwt.verify(token, config.jwt.secret) as { userId: number };
+      const payload = jwt.verify(token, config.jwt.secret, {
+        algorithms: [config.jwt.algorithm],
+      }) as { userId: number };
       return this.getUserById(payload.userId);
     } catch {
       return null;
@@ -252,7 +322,10 @@ export class AuthService {
     return jwt.sign(
       { userId: user.id, username: user.username },
       config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'] }
+      {
+        algorithm: config.jwt.algorithm,
+        expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
+      }
     );
   }
 
@@ -329,7 +402,7 @@ export class AuthService {
   /**
    * Update user profile info (Username, Email, Password)
    */
-  static async updateUser(userId: number, input: { username?: string, email?: string, password?: string }): Promise<AuthResponse> {
+  static async updateUser(userId: number, input: { username?: string, email?: string }): Promise<AuthResponse> {
     const dataToUpdate: any = {};
 
     // 1. Username
@@ -353,8 +426,10 @@ export class AuthService {
     // 2. Email
     if (input.email !== undefined) {
       if (input.email.length > 0) {
+        if (!EMAIL_REGEX.test(input.email)) {
+          throw new Error('Invalid email format');
+        }
         // Check uniqueness (exclude self)
-        // Note: Not all users have email, so only check if not null
         const existing = await prisma.user.findFirst({
           where: {
             email: { mode: 'insensitive', equals: input.email },
@@ -364,16 +439,8 @@ export class AuthService {
         if (existing) throw new Error('Email already taken');
         dataToUpdate.email = input.email;
       } else {
-        dataToUpdate.email = null; // Clear email (if nullable) or ignore? Assuming nullable.
+        dataToUpdate.email = null;
       }
-    }
-
-    // 3. Password
-    if (input.password) {
-      const validation = this.validatePassword(input.password);
-      if (!validation.valid) throw new Error(validation.error);
-      const hash = await bcrypt.hash(input.password, SALT_ROUNDS);
-      dataToUpdate.password_hash = hash;
     }
 
     if (Object.keys(dataToUpdate).length === 0) {
