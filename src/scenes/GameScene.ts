@@ -875,7 +875,7 @@ export class GameScene implements IScene {
                 }
 
                 // Update timer
-                if (this.timeLimit > 0 && this.engine.state !== GameState.GAMEOVER) {
+                if (this.timeLimit > 0 && (this.engine.state as number) !== GameState.GAMEOVER) {
                     this.accumulator += delta / 60;
                     while (this.accumulator >= 1.0) {
                         this.accumulator -= 1.0;
