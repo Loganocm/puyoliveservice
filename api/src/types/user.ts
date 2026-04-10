@@ -51,7 +51,7 @@ export interface LoginInput {
 
 // Auth response
 export interface AuthResponse {
-  user: UserProfile;
+  user: UserProfile & { is_admin?: boolean };
   token: string;
 }
 

@@ -178,7 +178,7 @@ export class AuthService {
     const profile = this.toProfile(user as unknown as User);
     const token = this.generateToken(user as unknown as User);
 
-    return { user: profile, token };
+    return { user: { ...profile, is_admin: (user as any).is_admin || false }, token };
   }
 
   /**
@@ -240,7 +240,7 @@ export class AuthService {
     const profile = this.toProfile(user as unknown as User);
     const token = this.generateToken(user as unknown as User);
 
-    return { user: profile, token };
+    return { user: { ...profile, is_admin: (user as any).is_admin || false }, token };
   }
 
   /**

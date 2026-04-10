@@ -5,6 +5,7 @@ import { Server, Socket } from 'socket.io';
 import { roomManager } from './RoomManager.js';
 import { minesRoom } from './MinesRoom.js';
 import { recordMatch, verifyToken, checkApiHealth } from './ApiClient.js';
+import { PuyoSimulator } from './PuyoSimulator.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -141,6 +142,38 @@ function isValidGrid(grid: unknown): grid is number[][] {
     }
   }
   return true;
+}
+
+/** Set up server-authoritative game simulators for a match room.
+ *  Creates one PuyoSimulator per player, wired to send garbage to opponents. */
+function setupSimulators(room: ReturnType<typeof roomManager.createRoom>) {
+  const playerIds = Array.from(room.players.keys());
+  room.simulators.clear();
+
+  for (const pid of playerIds) {
+    const sim = new PuyoSimulator(room.seed);
+    room.simulators.set(pid, sim);
+
+    // When this player's sim generates garbage, send to all opponents
+    sim.onGarbageGenerated = (amount: number) => {
+      for (const opponentId of playerIds) {
+        if (opponentId === pid) continue;
+        const opSim = room.simulators.get(opponentId) as PuyoSimulator | undefined;
+        if (opSim) opSim.addGarbage(amount);
+
+        // Notify opponent client for display
+        const opSocket = io.sockets.sockets.get(opponentId);
+        if (opSocket) opSocket.emit('receive_garbage', { amount });
+
+        // Record 'G' input for replay
+        const targetIndex = room.getPlayerIndex(opponentId) as 0 | 1;
+        room.recordInput(targetIndex, 'G', amount);
+      }
+      // Track stats
+      room.recordGarbage(pid, amount);
+    };
+  }
+  console.log(`[Simulator] Created ${room.simulators.size} simulators for room ${room.id} (seed: ${room.seed})`);
 }
 
 // Wire up mines bot callbacks (needs io reference)
@@ -350,8 +383,9 @@ io.on('connection', (socket: Socket) => {
         // Auto-start game after short delay
         setTimeout(() => {
           room.startMatch();
+          setupSimulators(room);
           const playerIds = Array.from(room.players.keys());
-          io.to(room.id).emit('game_start', { seed: Date.now(), roomId: room.id, players: playerIds });
+          io.to(room.id).emit('game_start', { seed: room.seed, roomId: room.id, players: playerIds });
         }, 3000);
       }
     }
@@ -446,8 +480,9 @@ io.on('connection', (socket: Socket) => {
 
         console.log(`Starting game in room ${roomId}`);
         room.startMatch();
+        setupSimulators(room);
         const playerIds = Array.from(room.players.keys());
-        io.to(roomId).emit('game_start', { seed: Date.now(), roomId: room.id, players: playerIds });
+        io.to(roomId).emit('game_start', { seed: room.seed, roomId: room.id, players: playerIds });
       } else {
         console.warn(`Unauthorized start_game attempt by ${socket.id} for room ${roomId}`);
       }
@@ -594,7 +629,8 @@ io.on('connection', (socket: Socket) => {
   // V2 Replay: Record player inputs
   socket.on('record_input', (data: { roomId: string, input: string }) => {
     if (!data || typeof data.roomId !== 'string' || typeof data.input !== 'string') return;
-    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD', 'G'];
+    // 'G' (garbage) is server-only — clients cannot inject garbage via inputs
+    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD'];
     if (!validInputs.includes(data.input)) return;
     if (!checkSocketRate(socket.id, 'record_input', 120)) return;
     const room = roomManager.getRoom(data.roomId);
@@ -602,6 +638,12 @@ io.on('connection', (socket: Socket) => {
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
     room.recordInput(playerIndex, data.input as any);
+
+    // Execute input on server-side simulator (authoritative game state)
+    const sim = room.simulators.get(socket.id) as PuyoSimulator | undefined;
+    if (sim && !sim.isGameOver) {
+      sim.executeInput({ i: data.input });
+    }
   });
 
   // V2 Replay: Tick frame counter (only player 0 is authoritative to prevent double-counting)
@@ -614,41 +656,39 @@ io.on('connection', (socket: Socket) => {
     const playerIndex = room.getPlayerIndex(socket.id);
     if (playerIndex === 0) {
       room.tick();
+
+      // Advance all player simulators and check for death (server-authoritative)
+      for (const [pid, sim] of room.simulators) {
+        if (room.matchConcluded) break;
+        (sim as PuyoSimulator).update();
+        if ((sim as PuyoSimulator).isGameOver && !room.matchConcluded) {
+          console.log(`[Simulator] Player ${room.players.get(pid)?.name} (${pid}) died in room ${room.id} at frame ${room.frameCount}`);
+          handleMatchEnd(room.id, pid, 'lost');
+          break;
+        }
+      }
     }
   });
 
+  // send_garbage: NO-OP for game logic — garbage is now calculated server-side by PuyoSimulator.
+  // Kept for backward compatibility; client still sends this but server ignores it.
+  // Chain length tracking is still recorded for match stats display.
   socket.on('send_garbage', (data: { roomId: string, amount: number, chainLength?: number }) => {
     if (!data || typeof data.roomId !== 'string') return;
     if (typeof data.amount !== 'number' || !Number.isInteger(data.amount) || data.amount <= 0 || data.amount > 100) return;
-    if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || !Number.isInteger(data.chainLength) || data.chainLength < 1 || data.chainLength > 25)) return;
     if (!checkSocketRate(socket.id, 'send_garbage', 30)) return;
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
-    // MUST have an active, non-concluded match
     if (!room.matchStats || room.matchConcluded) return;
-    // Player must have recently cleared puyos to send garbage (server-validated chain window)
-    const garbagePlayer = room.players.get(socket.id)!;
-    if (!garbagePlayer.chainWindow || Date.now() - garbagePlayer.chainWindow > 5000) return;
-    // Cap total garbage per chain window (prevents claiming infinite garbage from one chain)
-    garbagePlayer.chainWindowGarbage = (garbagePlayer.chainWindowGarbage || 0) + data.amount;
-    if (garbagePlayer.chainWindowGarbage > 60) return;
-    room.recordGarbage(socket.id, data.amount);
-    if (data.chainLength) {
+    // Only record chain length for stats — garbage amount is ignored (server calculates)
+    if (data.chainLength && typeof data.chainLength === 'number' && Number.isInteger(data.chainLength) && data.chainLength >= 1 && data.chainLength <= 25) {
       room.recordChain(socket.id, data.chainLength);
-      room.recordReplayEvent('chain', socket.id, { length: data.chainLength });
     }
-    // V2 Replay: Record garbage event
-    const senderIndex = room.getPlayerIndex(socket.id);
-    if (senderIndex !== -1) {
-      const targetIndex = senderIndex === 0 ? 1 : 0;
-      room.recordInput(targetIndex as 0 | 1, 'G', data.amount);
-    }
-    room.recordReplayEvent('garbage', socket.id, { amount: data.amount });
-
-    // Send to everyone else in the room
-    socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
+    // DO NOT relay garbage or record 'G' input — simulator handles this authoritatively
   });
 
+  // send_board_state: Relay only for opponent display.
+  // Death detection and garbage validation are now handled by server-side PuyoSimulator.
   socket.on('send_board_state', (data: { roomId: string, grid: number[][] }) => {
     if (!data || typeof data.roomId !== 'string') return;
     if (!isValidGrid(data.grid)) return;
@@ -660,34 +700,8 @@ io.on('connection', (socket: Socket) => {
     const boardPlayer = room.players.get(socket.id)!;
     boardPlayer.lastBoardUpdate = Date.now();
 
-    // ── Server-side death detection ──
-    // Grid is [col][row]. Death = grid[2][2] (col 2, first visible row in kill column)
-    if (data.grid[2][2] !== 0) {
-      // Spawn point blocked — start death suspect timer
-      if (!boardPlayer.deathSuspectSince) {
-        boardPlayer.deathSuspectSince = Date.now();
-      }
-    } else {
-      // Spawn point clear — cancel suspect
-      boardPlayer.deathSuspectSince = undefined;
-    }
-
-    // ── Puyo count tracking for garbage validation ──
-    let currentPuyoCount = 0;
-    for (const col of data.grid) {
-      for (const cell of col) {
-        if (cell !== 0) currentPuyoCount++;
-      }
-    }
-    if (boardPlayer.lastPuyoCount !== undefined && boardPlayer.lastPuyoCount - currentPuyoCount >= 4) {
-      // Puyos were cleared (minimum Puyo match group = 4) — open chain window
-      boardPlayer.chainWindow = Date.now();
-      boardPlayer.chainWindowGarbage = 0;
-    }
-    boardPlayer.lastPuyoCount = currentPuyoCount;
-
+    // Relay to opponent for display (cosmetic only — server sim is authoritative)
     socket.broadcast.to(data.roomId).emit('receive_board_state', { grid: data.grid, playerId: socket.id });
-    room.recordReplayEvent('move', socket.id, { grid: data.grid });
   });
 
   socket.on('send_player_state', (data: { roomId: string, state: any }) => {
@@ -734,10 +748,18 @@ io.on('connection', (socket: Socket) => {
 
     if (reason === 'disconnect') {
       console.log(`User ${loserSocketId} disconnected from active room ${roomId} (ABORT)`);
-      socket.broadcast.to(roomId).emit('opponent_left');
     } else {
       console.log(`Player ${loserSocketId} lost in room ${roomId}. Broadcasting win.`);
-      socket.broadcast.to(roomId).emit('opponent_lost');
+    }
+
+    // Notify all non-loser players (don't use socket.broadcast — caller may be any socket)
+    const allPlayerIds = Array.from(room.players.keys());
+    for (const pid of allPlayerIds) {
+      if (pid === loserSocketId) continue;
+      const winnerSock = io.sockets.sockets.get(pid);
+      if (winnerSock) {
+        winnerSock.emit(reason === 'disconnect' ? 'opponent_left' : 'opponent_lost');
+      }
     }
 
     if (room.isRankedMatch()) {
@@ -945,8 +967,9 @@ io.on('connection', (socket: Socket) => {
 
         setTimeout(() => {
           newRoom.startMatch();
+          setupSimulators(newRoom);
           const replayerIds = Array.from(newRoom.players.keys());
-          io.to(newRoom.id).emit('game_start', { seed: Date.now(), roomId: newRoom.id, players: replayerIds });
+          io.to(newRoom.id).emit('game_start', { seed: newRoom.seed, roomId: newRoom.id, players: replayerIds });
         }, 3000);
       }
     }
@@ -1233,7 +1256,7 @@ io.on('connection', (socket: Socket) => {
   const HEARTBEAT_INTERVAL = 5_000; // Check every 5 seconds
   const HEARTBEAT_TIMEOUT = 20_000; // 20 seconds without board update = forfeit
   const HEARTBEAT_GRACE = 10_000;   // Don't check until 10s after match start (loading grace)
-  const DEATH_SUSPECT_TIMEOUT = 3_000; // 3 seconds with grid[2][2] filled = forced death
+  // Death detection is now handled by server-side PuyoSimulator (no more DEATH_SUSPECT_TIMEOUT)
 
   setInterval(() => {
     const now = Date.now();
@@ -1245,28 +1268,17 @@ io.on('connection', (socket: Socket) => {
 
       for (const [socketId, player] of room.players) {
         const lastUpdate = player.lastBoardUpdate || 0;
-        let shouldForfeit = false;
-        let reason = '';
 
-        // Check 1: No board state sent for 20 seconds
+        // Check: No board state sent for 20 seconds (AFK / disconnected / hiding board)
         if (now - lastUpdate > HEARTBEAT_TIMEOUT) {
-          shouldForfeit = true;
-          reason = `no board state for ${Math.round((now - lastUpdate) / 1000)}s`;
-        }
-        // Check 2: Board topped out (kill column blocked) for 3+ seconds
-        else if (player.deathSuspectSince && now - player.deathSuspectSince > DEATH_SUSPECT_TIMEOUT) {
-          shouldForfeit = true;
-          reason = `board topped out for ${Math.round((now - player.deathSuspectSince) / 1000)}s`;
-        }
-
-        if (shouldForfeit) {
+          const reason = `no board state for ${Math.round((now - lastUpdate) / 1000)}s`;
           console.log(`[Heartbeat] Player ${player.name} (${socketId}) in room ${room.id}: ${reason}. Auto-forfeiting.`);
           if (!room.concludeMatch(socketId)) continue; // Already concluded
-          const playerSocket = io.sockets.sockets.get(socketId);
-          if (playerSocket) {
-            playerSocket.broadcast.to(room.id).emit('opponent_lost');
-          } else {
-            io.to(room.id).emit('opponent_lost');
+          // Notify winner(s) directly (don't use socket.broadcast — socket may not be the forfeiter)
+          for (const pid of room.players.keys()) {
+            if (pid === socketId) continue;
+            const winnerSocket = io.sockets.sockets.get(pid);
+            if (winnerSocket) winnerSocket.emit('opponent_lost');
           }
           // Emit game_ended
           io.to(room.id).emit('game_ended', { roomId: room.id, reason: 'timeout' });

@@ -84,6 +84,9 @@ export class GameRoom {
     matchConcluded: boolean = false;
     conclusionLoser: string | null = null; // Socket ID of the first loser
 
+    // Server-authoritative game simulators (one per player)
+    simulators: Map<string, any> = new Map();
+
     // V2 Replay Data
     replayInputs: ReplayInput[] = [];
     frameCount: number = 0;
@@ -159,6 +162,7 @@ export class GameRoom {
         this.replayLog = [];
         this.matchConcluded = false;
         this.conclusionLoser = null;
+        this.simulators.clear();
         // Initialize heartbeat + game state tracking for all players
         const now = Date.now();
         for (const player of this.players.values()) {
@@ -302,6 +306,7 @@ export class GameRoom {
         this.replayInputs = [];
         this.frameCount = 0;
         this.replayLog = [];
+        this.simulators.clear();
         this.currentGame++;
         // Reset all player ready states
         for (const player of this.players.values()) {
