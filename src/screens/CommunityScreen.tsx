@@ -569,6 +569,18 @@ const ActivityTab: React.FC<{
                         try {
                           const { APIClient } = await import("../api/client");
                           const replayData = await APIClient.getReplay(m.id);
+
+                          // Validate replay data before creating scene
+                          if (
+                            !replayData ||
+                            replayData.version !== 2 ||
+                            !Array.isArray(replayData.inputs) ||
+                            replayData.inputs.length === 0
+                          ) {
+                            console.error("Invalid replay data:", replayData);
+                            return;
+                          }
+
                           const { SceneManager } =
                             await import("../core/SceneManager");
                           const { ReplayScene } =

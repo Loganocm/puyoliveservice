@@ -155,13 +155,32 @@ export class GameEngine {
     }
 
     public loadReplay(data: { seed: number, inputs: { f: number, i: string, a?: number }[] }) {
-        this.seed = data.seed;
         this.replayInputs = data.inputs;
         this.isReplaying = true;
         this.replayCursor = 0;
         this.frameCount = 0;
         this.board = new Board();
         this.state = GameState.SPAWN;
+        this.activePiece = null;
+        this.matchedPuyos = [];
+        this.chainGroup = [];
+        this.stats = { score: 0, chainCount: 0, maxChain: 0, puyosCleared: 0, garbageSent: 0, garbageReceived: 0 };
+        this.garbageQueue = 0;
+        this.nuisanceTray = 0;
+        this.scoreRemainder = 0;
+        this.garbageFellThisTurn = false;
+        this.dropTimer = 0;
+        this.lockTimer = 0;
+        this.areTimer = 0;
+        this.stateTimer = 0;
+        this._softDrop = false;
+        this.softDropLocked = false;
+        this.horizontalMoveHeld = false;
+        this.bufferAction = null;
+        this.bufferedMove = 0;
+        this.fallingGarbage = [];
+        this.fallingDestinations = [];
+        this.garbageAnimationTimer = 0;
 
         // Reset PRNG
         this.seed = data.seed;
@@ -479,7 +498,9 @@ export class GameEngine {
             this.changeState(GameState.ACTIVE);
 
             // Soft Drop Protection
-            if (SettingsManager.softDropProtection && this.softDrop) {
+            // During replay, use fixed default (true) for determinism
+            const softDropProtection = this.isReplaying ? true : SettingsManager.softDropProtection;
+            if (softDropProtection && this.softDrop) {
                 this.softDropLocked = true;
             } else {
                 this.softDropLocked = false;
@@ -526,12 +547,12 @@ export class GameEngine {
         if (this.softDrop && !this.softDropLocked) {
             // SDF Logic: Drop speed = Base Speed * SDF
             // Delay = Base Delay / SDF
-            // If delay < 1, we drop multiple cells per frame?
-            // For simplicity in this frame-based engine:
-            delay = Math.max(1, Math.floor(this.currentDropDelay / SettingsManager.sdf));
+            // During replay, use fixed SDF=10 (default) for determinism
+            const sdf = this.isReplaying ? 10 : SettingsManager.sdf;
+            delay = Math.max(1, Math.floor(this.currentDropDelay / sdf));
 
             // If SDF is huge (infinity/40), we might want immediate ground.
-            if (SettingsManager.sdf >= 40) {
+            if (sdf >= 40) {
                 delay = 0; // Instant
             }
         }
@@ -587,7 +608,9 @@ export class GameEngine {
                 return;
             }
 
-            const isGliding = this.horizontalMoveHeld; // If holding left/right, pause lock timer
+            // During replay, we can't know held-key state, so disable glide buffer.
+            // Inputs still reset lockTimer on moves, keeping timing close enough.
+            const isGliding = this.isReplaying ? false : this.horizontalMoveHeld;
 
             let shouldIncrement = true;
             if (this.softDropLocked) shouldIncrement = false;
@@ -885,7 +908,10 @@ export class GameEngine {
             this.stats.chainCount++;
 
             this.onChainStep?.(this.stats.chainCount);
-            SoundManager.playCombo(this.stats.chainCount);
+            // Don't play sounds from engine during replay — ReplayScene hooks handle audio
+            if (!this.isReplaying) {
+                SoundManager.playCombo(this.stats.chainCount);
+            }
 
             this.changeState(GameState.POP_ANIM);
         } else {

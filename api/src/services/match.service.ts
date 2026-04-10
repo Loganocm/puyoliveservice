@@ -221,6 +221,8 @@ export class MatchService {
         rd.inputs.length > 0 &&
         Number.isFinite(rd.seed) &&
         Number.isFinite(rd.fps) &&
+        Number.isFinite(rd.duration) &&
+        rd.duration > 0 &&
         Array.isArray(rd.players) &&
         rd.players.length >= 2
       );
@@ -283,6 +285,8 @@ export class MatchService {
         rd.inputs.length > 0 &&
         Number.isFinite(rd.seed) &&
         Number.isFinite(rd.fps) &&
+        Number.isFinite(rd.duration) &&
+        rd.duration > 0 &&
         Array.isArray(rd.players) &&
         rd.players.length >= 2
       );

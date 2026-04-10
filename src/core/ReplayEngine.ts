@@ -57,9 +57,18 @@ export class ReplayEngine {
     constructor(replayData: ReplayFile) {
         this.replayData = replayData;
 
+        // Safety: ensure duration is valid (fallback to last input frame + 60)
+        if (!Number.isFinite(replayData.duration) || replayData.duration <= 0) {
+            const lastInput = replayData.inputs[replayData.inputs.length - 1];
+            this.replayData = { ...replayData, duration: (lastInput?.f ?? 0) + 60 };
+        }
+
+        // Safety: sort inputs by frame to handle potential server-side interleaving
+        this.replayData.inputs.sort((a, b) => a.f - b.f);
+
         // Create two engines with identical seeds for deterministic playback
-        const engine1 = new GameEngine(replayData.seed);
-        const engine2 = new GameEngine(replayData.seed);
+        const engine1 = new GameEngine(this.replayData.seed);
+        const engine2 = new GameEngine(this.replayData.seed);
         engine1.isReplaying = true;
         engine2.isReplaying = true;
         this.engines = [engine1, engine2];
@@ -219,25 +228,65 @@ export class ReplayEngine {
         this.accumulator = 0;
         this._isComplete = false;
 
-        // Suppress callbacks during fast-forward
+        // Suppress ALL callbacks during fast-forward (no sound, no UI updates)
         const savedFrameUpdate = this.onFrameUpdate;
         const savedGameOver = this.onGameOver;
+        const savedEngineReset = this.onEngineReset;
         this.onFrameUpdate = undefined;
         this.onGameOver = undefined;
+        this.onEngineReset = undefined;
+
+        // Suppress engine-level callbacks during seek (prevents chain sounds playing)
+        const savedE1ChainStep = engine1.onChainStep;
+        const savedE2ChainStep = engine2.onChainStep;
+        const savedE1PieceSpawn = engine1.onPieceSpawn;
+        const savedE2PieceSpawn = engine2.onPieceSpawn;
+        const savedE1PieceLock = engine1.onPieceLock;
+        const savedE2PieceLock = engine2.onPieceLock;
+        const savedE1GravityLanded = engine1.onGravityLanded;
+        const savedE2GravityLanded = engine2.onGravityLanded;
+        const savedE1HardDrop = engine1.onHardDrop;
+        const savedE2HardDrop = engine2.onHardDrop;
+        engine1.onChainStep = undefined;
+        engine2.onChainStep = undefined;
+        engine1.onPieceSpawn = undefined;
+        engine2.onPieceSpawn = undefined;
+        engine1.onPieceLock = undefined;
+        engine2.onPieceLock = undefined;
+        engine1.onGravityLanded = undefined;
+        engine2.onGravityLanded = undefined;
+        engine1.onHardDrop = undefined;
+        engine2.onHardDrop = undefined;
+
+        // Force speed to 1.0 during fast-forward to prevent overshoot/undershoot
+        const wasPaused = this._isPaused;
+        const wasSpeed = this._playbackSpeed;
+        this._isPaused = false;
+        this._playbackSpeed = 1.0;
 
         // Fast-forward to target frame
-        const wasPaused = this._isPaused;
-        this._isPaused = false;
-
         while (this.currentFrame < targetFrame && !this._isComplete) {
             this.update(1.0);
         }
 
         this._isPaused = wasPaused;
+        this._playbackSpeed = wasSpeed;
 
-        // Restore callbacks and fire one update
+        // Restore all callbacks
         this.onFrameUpdate = savedFrameUpdate;
         this.onGameOver = savedGameOver;
+        this.onEngineReset = savedEngineReset;
+        engine1.onChainStep = savedE1ChainStep;
+        engine2.onChainStep = savedE2ChainStep;
+        engine1.onPieceSpawn = savedE1PieceSpawn;
+        engine2.onPieceSpawn = savedE2PieceSpawn;
+        engine1.onPieceLock = savedE1PieceLock;
+        engine2.onPieceLock = savedE2PieceLock;
+        engine1.onGravityLanded = savedE1GravityLanded;
+        engine2.onGravityLanded = savedE2GravityLanded;
+        engine1.onHardDrop = savedE1HardDrop;
+        engine2.onHardDrop = savedE2HardDrop;
+
         this.onFrameUpdate?.(this.currentFrame, this.replayData.duration);
     }
 

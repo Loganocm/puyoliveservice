@@ -250,6 +250,16 @@ export class ReplayScene implements IScene {
         };
     }
 
+    /** Remove engine event hooks (used before seek to prevent rapid sounds) */
+    private unhookEngineEvents(idx: 0 | 1): void {
+        const engine = idx === 0 ? this.replayEngine.player1Engine : this.replayEngine.player2Engine;
+        engine.onPieceSpawn = undefined;
+        engine.onPieceLock = undefined;
+        engine.onGravityLanded = undefined;
+        engine.onChainStep = undefined;
+        engine.onHardDrop = undefined;
+    }
+
     // ─── Layout helpers ───
     private resizeBackground(): void {
         if (!this.staticBg.texture || this.staticBg.texture === Texture.WHITE) return;
@@ -275,17 +285,31 @@ export class ReplayScene implements IScene {
                 break;
             case 'seek':
                 if (cmd.value !== undefined) {
-                    // seekToFrame rebuilds engines; onEngineReset re-hooks events
+                    // Unhook events on old engines (about to be destroyed by seek)
+                    this.unhookEngineEvents(0);
+                    this.unhookEngineEvents(1);
+
+                    // seekToFrame rebuilds engines and fast-forwards (events suppressed internally)
                     this.replayEngine.seekToFrame(cmd.value);
-                    // Reset animation state
+
+                    // Reset animation state BEFORE re-hooking (hooks capture animState refs)
                     this.animStates[0] = { landingAnims: new Map(), spawnAnim: -1, popAnimProgress: 0, particles: [], trackedTexts: [], prevState: GameState.SPAWN };
                     this.animStates[1] = { landingAnims: new Map(), spawnAnim: -1, popAnimProgress: 0, particles: [], trackedTexts: [], prevState: GameState.SPAWN };
+
+                    // Re-hook events on the new engines with fresh animState
+                    this.hookEngineEvents(0);
+                    this.hookEngineEvents(1);
+
                     // Remove winner overlay on seek
                     if (this.winnerOverlay) { this.winnerOverlay.destroy(); this.winnerOverlay = null; }
                 }
                 break;
             case 'speed':
                 if (cmd.value !== undefined) this.replayEngine.setSpeed(cmd.value);
+                break;
+            case 'exit':
+                // Cleanup is handled by the App-level onExit callback
+                // which calls SceneManager.changeScene(new MenuScene())
                 break;
         }
         // Always emit current state so overlay stays in sync

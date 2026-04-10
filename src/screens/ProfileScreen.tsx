@@ -326,6 +326,18 @@ export const ProfileScreen: React.FC<{
                             match.id,
                           );
 
+                          // Validate replay data before creating scene
+                          if (
+                            !replayData ||
+                            replayData.version !== 2 ||
+                            !Array.isArray(replayData.inputs) ||
+                            replayData.inputs.length === 0
+                          ) {
+                            console.error("Invalid replay data:", replayData);
+                            setLoading(false);
+                            return;
+                          }
+
                           onClose(); // Close profile modal
 
                           // Initialize Replay Scene
