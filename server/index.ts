@@ -376,14 +376,7 @@ io.on('connection', (socket: Socket) => {
       return;
     }
 
-    // Ranked requires minimum 5 games played (prevents fresh puppet accounts)
-    if (isRanked) {
-      const auth = authenticatedUsers.get(socket.id);
-      if (!auth || (auth.games_played || 0) < 5) {
-        socket.emit('error', { message: 'You need at least 5 games played to enter ranked' });
-        return;
-      }
-    }
+    /* 5-games check removed per User request */
 
     const queueName = isRanked ? 'ranked' : 'unranked';
     const queue = isRanked ? rankedQueue : unrankedQueue;
