@@ -127,7 +127,7 @@ router.post('/verify', verifyLimiter, asyncHandler(async (req: Request, res: Res
 
   if (user) {
     const profile = await AuthService.getProfileById(user.id);
-    res.json({ valid: true, user: profile });
+    res.json({ valid: true, user: profile ? { ...profile, is_admin: (user as any).is_admin || false } : profile });
   } else {
     res.json({ valid: false });
   }

@@ -308,15 +308,6 @@ export class GameScene implements IScene {
             };
             NetworkManager.on('opponent_left', onOpponentLeft);
             this.networkListeners.push({ event: 'opponent_left', cb: onOpponentLeft });
-
-            const onScore = (data: any) => {
-                if (this.opponentId && data.playerId && data.playerId !== this.opponentId) return;
-                if (data && typeof data.score === 'number') {
-                    this.displayOpponentScore(data.score);
-                }
-            };
-            NetworkManager.on('receive_score', onScore);
-            this.networkListeners.push({ event: 'receive_score', cb: onScore });
         }
 
         // Global Disconnect Handler
@@ -1494,10 +1485,6 @@ export class GameScene implements IScene {
         } catch (e) { console.error("Error drawing opponent:", e); }
 
         this.drawOpponentGarbage();
-
-        if (this.opponentScoreText) {
-            this.opponentContainer.addChild(this.opponentScoreText);
-        }
     }
 
     drawOpponentGarbage() {
@@ -1544,29 +1531,6 @@ export class GameScene implements IScene {
                 drawX += 32 + 2;
             }
         }
-    }
-
-    private displayOpponentScore(score: number) {
-        if (!this.opponentScoreText) {
-            this.opponentScoreText = new Text({
-                text: '0',
-                resolution: 2, // High DPI text
-                style: {
-                    fontFamily: 'Arial',
-                    fontSize: 80,
-                    fontWeight: 'bold',
-                    fill: 0xffffff,
-                    stroke: { color: 0x000000, width: 4 },
-                    align: 'center'
-                }
-            });
-            this.opponentScoreText.x = (COLS * CELL_SIZE) / 2;
-            this.opponentScoreText.y = -50; // Above board
-            this.opponentScoreText.anchor.set(0.5);
-        }
-
-        this.opponentScoreText.text = score.toString();
-        this.drawOpponent();
     }
 
     draw() {
@@ -1919,7 +1883,21 @@ export class GameScene implements IScene {
                     const destR = fallingLookup.get(key);
                     if (destR !== undefined) {
                         const visualR = r + (destR - r) * fallingProgress;
-                        this.drawPuyo(c, visualR, color, connections);
+                        // Recompute connections for falling puyos: only connect to neighbors
+                        // that are falling the exact same distance (so they stay visually together).
+                        // Neighbors falling a different amount (or not falling) will visually
+                        // separate, causing cut-off sprite artifacts if we kept the connection.
+                        const fallDist = destR - r;
+                        let fallingConns = 0;
+                        const nTop = fallingLookup.get(c * 100 + (r - 1));
+                        const nRight = fallingLookup.get((c + 1) * 100 + r);
+                        const nBot = fallingLookup.get(c * 100 + (r + 1));
+                        const nLeft = fallingLookup.get((c - 1) * 100 + r);
+                        if (nTop !== undefined && (nTop - (r - 1)) === fallDist && this.checkColor(c, r - 1, color)) fallingConns |= 1;
+                        if (nRight !== undefined && (nRight - r) === fallDist && this.checkColor(c + 1, r, color)) fallingConns |= 2;
+                        if (nBot !== undefined && (nBot - (r + 1)) === fallDist && this.checkColor(c, r + 1, color)) fallingConns |= 4;
+                        if (nLeft !== undefined && (nLeft - r) === fallDist && this.checkColor(c - 1, r, color)) fallingConns |= 8;
+                        this.drawPuyo(c, visualR, color, fallingConns);
                         continue;
                     }
 

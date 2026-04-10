@@ -1,6 +1,6 @@
-import { motion, AnimatePresence } from 'motion/react';
-import { useState, useEffect } from 'react';
-import { Swords, Trophy, Target, Zap, User } from 'lucide-react';
+import { motion, AnimatePresence } from "motion/react";
+import { useState, useEffect } from "react";
+import { Swords, Trophy, Target, Zap, User } from "lucide-react";
 
 export interface VSPlayerData {
   username: string;
@@ -18,15 +18,19 @@ interface VSScreenProps {
   onCountdownComplete: () => void;
 }
 
-export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenProps) {
+export function VSScreen({
+  players,
+  isRanked,
+  onCountdownComplete,
+}: VSScreenProps) {
   const [countdown, setCountdown] = useState(3);
   const [showCountdown, setShowCountdown] = useState(false);
 
   useEffect(() => {
-    // Show player cards for 1.5s, then start countdown
+    // Show player cards briefly, then start countdown after 1s
     const startDelay = setTimeout(() => {
       setShowCountdown(true);
-    }, 4000); // Increased from 1.5s to 4s to allow reading
+    }, 1000);
 
     return () => clearTimeout(startDelay);
   }, []);
@@ -35,46 +39,74 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
     if (!showCountdown) return;
 
     if (countdown === 0) {
-      // Brief pause on "GO!" then trigger game start
+      // Immediately trigger game start on "GO!"
       const goDelay = setTimeout(() => {
         onCountdownComplete();
-      }, 500);
+      }, 300);
       return () => clearTimeout(goDelay);
     }
 
     const timer = setTimeout(() => {
-      setCountdown(prev => prev - 1);
-    }, 800);
+      setCountdown((prev) => prev - 1);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [countdown, showCountdown, onCountdownComplete]);
 
-  const player1 = players[0] || { username: 'Player 1', gamesPlayed: 0, garbageSent: 0, isGuest: true };
-  const player2 = players[1] || { username: 'Player 2', gamesPlayed: 0, garbageSent: 0, isGuest: true };
+  const player1 = players[0] || {
+    username: "Player 1",
+    gamesPlayed: 0,
+    garbageSent: 0,
+    isGuest: true,
+  };
+  const player2 = players[1] || {
+    username: "Player 2",
+    gamesPlayed: 0,
+    garbageSent: 0,
+    isGuest: true,
+  };
 
   const getRankDisplay = (rank: number | null | undefined) => {
     if (!rank) return null;
-    if (rank <= 3) return ['🥇', '🥈', '🥉'][rank - 1];
+    if (rank <= 3) return ["🥇", "🥈", "🥉"][rank - 1];
     return `#${rank}`;
   };
 
-  const PlayerCard = ({ player, side }: { player: VSPlayerData; side: 'left' | 'right' }) => (
+  const PlayerCard = ({
+    player,
+    side,
+  }: {
+    player: VSPlayerData;
+    side: "left" | "right";
+  }) => (
     <motion.div
       className="flex flex-col items-center gap-4 w-64"
-      initial={{ x: side === 'left' ? -100 : 100, opacity: 0 }}
+      initial={{ x: side === "left" ? -100 : 100, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.5, delay: side === 'left' ? 0.1 : 0.2, type: 'spring' }}
+      transition={{
+        duration: 0.3,
+        delay: side === "left" ? 0.05 : 0.1,
+        type: "spring",
+      }}
     >
       {/* Avatar */}
       <motion.div
         className="relative"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
-        transition={{ delay: side === 'left' ? 0.3 : 0.4, type: 'spring', stiffness: 200 }}
+        transition={{
+          delay: side === "left" ? 0.15 : 0.2,
+          type: "spring",
+          stiffness: 200,
+        }}
       >
         <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/20 bg-gradient-to-br from-purple-600/50 to-blue-600/50 backdrop-blur-sm">
           {player.avatarUrl && !player.isGuest ? (
-            <img src={player.avatarUrl} alt={player.username} className="w-full h-full object-cover" />
+            <img
+              src={player.avatarUrl}
+              alt={player.username}
+              className="w-full h-full object-cover"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <User className="w-12 h-12 text-white/60" />
@@ -94,10 +126,10 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
         className="text-center"
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: side === 'left' ? 0.4 : 0.5 }}
+        transition={{ delay: side === "left" ? 0.2 : 0.25 }}
       >
         <h2 className="text-2xl font-black text-white tracking-tight">
-          {player.isGuest ? 'Guest' : player.username}
+          {player.isGuest ? "Guest" : player.username}
         </h2>
         {isRanked && player.elo && (
           <div className="flex items-center justify-center gap-1 mt-1">
@@ -112,21 +144,25 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
         className="grid grid-cols-2 gap-3 w-full"
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: side === 'left' ? 0.5 : 0.6 }}
+        transition={{ delay: side === "left" ? 0.25 : 0.3 }}
       >
         <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-center">
           <div className="flex items-center justify-center gap-1 text-white/60 text-xs mb-1">
             <Target className="w-3 h-3" />
             <span>GAMES</span>
           </div>
-          <div className="text-white font-black text-lg">{player.gamesPlayed}</div>
+          <div className="text-white font-black text-lg">
+            {player.gamesPlayed}
+          </div>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-center">
           <div className="flex items-center justify-center gap-1 text-white/60 text-xs mb-1">
             <Zap className="w-3 h-3" />
             <span>GARBAGE</span>
           </div>
-          <div className="text-white font-black text-lg">{player.garbageSent}</div>
+          <div className="text-white font-black text-lg">
+            {player.garbageSent}
+          </div>
         </div>
       </motion.div>
     </motion.div>
@@ -142,14 +178,14 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
       {/* Background */}
       {/* Background - Toned down */}
       <div className="absolute inset-0 bg-[#0a0a12]" />
-      <div 
+      <div
         className="absolute inset-0 opacity-[0.02]"
         style={{
           backgroundImage: `
             linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
             linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
           `,
-          backgroundSize: '40px 40px',
+          backgroundSize: "40px 40px",
         }}
       />
 
@@ -163,7 +199,7 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
           className="flex flex-col items-center"
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
-          transition={{ delay: 0.6, type: 'spring', stiffness: 200 }}
+          transition={{ delay: 0.15, type: "spring", stiffness: 200 }}
         >
           <div className="relative">
             <Swords className="w-12 h-12 text-white/20" />
@@ -172,7 +208,7 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
             className="text-4xl font-black text-white mt-2 tracking-widest"
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.8 }}
+            transition={{ delay: 0.2 }}
           >
             VS
           </motion.span>
@@ -181,7 +217,7 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
               className="text-xs font-bold text-[#FF5733] tracking-wider mt-1"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.9 }}
+              transition={{ delay: 0.25 }}
             >
               RANKED MATCH
             </motion.span>
@@ -205,17 +241,18 @@ export function VSScreen({ players, isRanked, onCountdownComplete }: VSScreenPro
               key={countdown}
               className="text-[12rem] font-black"
               style={{
-                color: countdown === 0 ? '#22C55E' : '#FF5733',
-                textShadow: countdown === 0 
-                  ? '0 0 60px rgba(34, 197, 94, 0.8)' 
-                  : '0 0 60px rgba(255, 87, 51, 0.8)',
+                color: countdown === 0 ? "#22C55E" : "#FF5733",
+                textShadow:
+                  countdown === 0
+                    ? "0 0 60px rgba(34, 197, 94, 0.8)"
+                    : "0 0 60px rgba(255, 87, 51, 0.8)",
               }}
               initial={{ scale: 2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
-              transition={{ duration: 0.3, type: 'spring', stiffness: 300 }}
+              transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
             >
-              {countdown === 0 ? 'GO!' : countdown}
+              {countdown === 0 ? "GO!" : countdown}
             </motion.div>
           </motion.div>
         )}

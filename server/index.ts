@@ -86,6 +86,7 @@ const authenticatedUsers = new Map<string, {
   total_garbage_sent?: number;
   rank?: number;
   avatar_url?: string;
+  is_admin?: boolean;
 }>();
 
 // Track socket IP addresses for same-IP ranked prevention
@@ -226,7 +227,8 @@ io.on('connection', (socket: Socket) => {
           games_won: user.games_won,
           total_garbage_sent: user.total_garbage_sent,
           rank: user.rank || undefined,
-          avatar_url: user.avatar_url || undefined
+          avatar_url: user.avatar_url || undefined,
+          is_admin: user.is_admin || false
         });
         socket.emit('authenticated', {
           success: true,
@@ -403,15 +405,18 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.getRoom(roomId);
     if (!room) return;
 
-    const players = Array.from(room.players.values()).map(p => ({
-      id: p.id,
-      username: p.name,
-      ready: p.ready,
-      isHost: room.getPlayerIndex(p.id) === 0, // Assume first player is host
-      userId: p.userId,
-      elo: undefined, // Add logic if available
-      avatarUrl: undefined // Add if available in Player struct
-    }));
+    const players = Array.from(room.players.values()).map(p => {
+      const auth = authenticatedUsers.get(p.id);
+      return {
+        id: p.id,
+        username: p.name,
+        ready: p.ready,
+        isHost: room.getPlayerIndex(p.id) === 0,
+        userId: p.userId,
+        elo: auth?.elo,
+        avatarUrl: auth?.avatar_url
+      };
+    });
 
     io.to(roomId).emit('room_update', {
       roomId: room.id,
@@ -444,10 +449,18 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.createRoom();
     room.isPrivate = !!data.isPrivate;
 
-    room.addPlayer({ id: socket.id, name: `Player ${socket.id.substring(0, 4)}`, ready: false });
+    const auth = authenticatedUsers.get(socket.id);
+    const playerName = auth?.username || `Player ${socket.id.substring(0, 4)}`;
+    room.addPlayer({
+      id: socket.id,
+      name: playerName,
+      ready: false,
+      userId: auth?.userId,
+      authToken: auth?.token
+    });
     socket.join(room.id);
     socket.emit('room_created', { roomId: room.id });
-    console.log(`Room created: ${room.id} (Private: ${room.isPrivate})`);
+    console.log(`Room created: ${room.id} by ${playerName} (Private: ${room.isPrivate})`);
     broadcastRoomUpdate(room.id);
     broadcastRoomList();
   });
@@ -655,6 +668,7 @@ io.on('connection', (socket: Socket) => {
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id);
     if (playerIndex === 0) {
+      room.lastTickFrame = Date.now(); // Anti-cheat: tracks active ticking
       room.tick();
 
       // Advance all player simulators and check for death (server-authoritative)
@@ -778,28 +792,25 @@ io.on('connection', (socket: Socket) => {
             // Build Replay Data
             let replayData: any;
 
-            // Only save replay if it was a distinct LOSS (not disconnect/abort)
-            if (reason === 'lost') {
-              const winnerIndex = room.getPlayerIndex(winnerSocketId) as 0 | 1;
-              if (room.replayInputs.length > 0) {
-                replayData = room.buildReplayFile(winnerIndex);
-              } else {
-                // Legacy fallback
-                replayData = {
-                  version: 1,
-                  seed: room.matchStats?.startedAt.getTime() || Date.now(),
-                  duration: room.getMatchDuration() || 0,
-                  winnerId: winner.userId,
-                  players: Array.from(room.players.values()).map(p => ({
-                    id: p.id,
-                    userId: p.userId,
-                    name: p.name
-                  })),
-                  events: room.replayLog
-                };
-              }
+            // Save replay for all match conclusions that have recorded inputs
+            const winnerIndex = room.getPlayerIndex(winnerSocketId) as 0 | 1;
+            if (room.replayInputs.length > 0) {
+              replayData = room.buildReplayFile(winnerIndex);
+            } else if (reason === 'lost') {
+              // Legacy fallback (only for clean losses without V2 inputs)
+              replayData = {
+                version: 1,
+                seed: room.matchStats?.startedAt.getTime() || Date.now(),
+                duration: room.getMatchDuration() || 0,
+                winnerId: winner.userId,
+                players: Array.from(room.players.values()).map(p => ({
+                  id: p.id,
+                  userId: p.userId,
+                  name: p.name
+                })),
+                events: room.replayLog
+              };
             } else {
-              // Aborted games do not save replays
               replayData = undefined;
             }
 
@@ -909,8 +920,9 @@ io.on('connection', (socket: Socket) => {
     if (!checkSocketRate(socket.id, 'requeue', 2)) return;
     console.log(`Player ${socket.id} requesting requeue from room ${data.roomId}`);
 
-    // Step 1: Clean up current room
+    // Step 1: Clean up current room and remember if it was ranked
     const room = roomManager.getRoom(data.roomId);
+    const wasRanked = room?.ranked || false;
     if (room) {
       socket.broadcast.to(data.roomId).emit('opponent_left');
       room.removePlayer(socket.id);
@@ -927,18 +939,32 @@ io.on('connection', (socket: Socket) => {
     // Step 3: Confirm requeue to client (reset their state)
     socket.emit('requeue_confirmed');
 
-    // Step 4: Add back to unranked matchmaking queue (default)
-    unrankedQueue.push(socket.id);
-    console.log(`User ${socket.id} requeued. Unranked queue size: ${unrankedQueue.length}`);
+    // Step 4: Add back to the correct matchmaking queue based on original mode
+    const isRanked = wasRanked && authenticatedUsers.has(socket.id);
+    const queue = isRanked ? rankedQueue : unrankedQueue;
+    queue.push(socket.id);
+    console.log(`User ${socket.id} requeued (${isRanked ? 'ranked' : 'unranked'}). Queue size: ${queue.length}`);
     broadcastQueueUpdate();
 
-    // Step 5: Check for match immediately (unranked)
-    if (unrankedQueue.length >= 2) {
-      const p1 = unrankedQueue.shift()!;
-      const p2 = unrankedQueue.shift()!;
+    // Step 5: Check for match immediately in the appropriate queue
+    if (queue.length >= 2) {
+      const p1 = queue.shift()!;
+      const p2 = queue.shift()!;
       broadcastQueueUpdate();
 
       const newRoom = roomManager.createRoom();
+      if (isRanked) {
+        // Anti-puppet: same-IP check for ranked requeue
+        const ip1 = socketIPs.get(p1);
+        const ip2 = socketIPs.get(p2);
+        if (ip1 && ip2 && ip1 === ip2) {
+          console.log(`[Anti-Puppet] Same IP on requeue — forcing unranked`);
+          newRoom.ranked = false;
+        } else {
+          newRoom.ranked = true;
+        }
+      }
+
       const socket1 = io.sockets.sockets.get(p1);
       const socket2 = io.sockets.sockets.get(p2);
       const auth1 = authenticatedUsers.get(p1);
@@ -951,15 +977,31 @@ io.on('connection', (socket: Socket) => {
         socket1.join(newRoom.id);
         socket2.join(newRoom.id);
 
-        console.log(`Unranked match found (requeue): ${p1} vs ${p2} in room ${newRoom.id}`);
+        console.log(`${isRanked ? 'Ranked' : 'Unranked'} match found (requeue): ${p1} vs ${p2} in room ${newRoom.id}`);
 
         io.to(newRoom.id).emit('match_found', {
           roomId: newRoom.id,
           opponent: 'Opponent',
-          ranked: false,
+          ranked: isRanked,
           players: [
-            { username: auth1?.username || `Player ${p1.substring(0, 4)}`, elo: auth1?.elo || 0 },
-            { username: auth2?.username || `Player ${p2.substring(0, 4)}`, elo: auth2?.elo || 0 }
+            {
+              username: auth1?.username || `Player ${p1.substring(0, 4)}`,
+              elo: auth1?.elo || 0,
+              userId: auth1?.userId,
+              gamesPlayed: auth1?.games_played || 0,
+              garbageSent: auth1?.total_garbage_sent || 0,
+              avatarUrl: auth1?.avatar_url,
+              rank: auth1?.rank
+            },
+            {
+              username: auth2?.username || `Player ${p2.substring(0, 4)}`,
+              elo: auth2?.elo || 0,
+              userId: auth2?.userId,
+              gamesPlayed: auth2?.games_played || 0,
+              garbageSent: auth2?.total_garbage_sent || 0,
+              avatarUrl: auth2?.avatar_url,
+              rank: auth2?.rank
+            }
           ]
         });
 
@@ -1175,6 +1217,76 @@ io.on('connection', (socket: Socket) => {
   // END PUYO MINES
   // ═══════════════════════════════════════════════════════
 
+  // ═══════════════════════════════════════════════════════
+  // ADMIN: Room Management (socket-based, since rooms are in-memory)
+  // ═══════════════════════════════════════════════════════
+
+  socket.on('admin_list_rooms', () => {
+    if (!checkSocketRate(socket.id, 'admin_list_rooms', 3)) return;
+    const auth = authenticatedUsers.get(socket.id);
+    if (!auth?.is_admin) {
+      socket.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+
+    const rooms = roomManager.getAllRooms().map(r => ({
+      id: r.id,
+      players: Array.from(r.players.values()).map(p => ({
+        id: p.id,
+        username: p.name,
+        userId: p.userId,
+        ready: p.ready
+      })),
+      playerCount: r.playerCount,
+      maxPlayers: r.maxPlayers,
+      isPrivate: r.isPrivate,
+      ranked: r.ranked,
+      inMatch: !!r.matchStats,
+      matchConcluded: r.matchConcluded,
+      createdAt: r.createdAt,
+      settings: r.settings
+    }));
+
+    socket.emit('admin_rooms_list', { rooms });
+  });
+
+  socket.on('admin_delete_room', (data: { roomId: string }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!checkSocketRate(socket.id, 'admin_delete_room', 3)) return;
+    const auth = authenticatedUsers.get(socket.id);
+    if (!auth?.is_admin) {
+      socket.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+
+    const room = roomManager.getRoom(data.roomId);
+    if (!room) {
+      socket.emit('error', { message: 'Room not found' });
+      return;
+    }
+
+    console.log(`[Admin] ${auth.username} deleting room ${data.roomId}`);
+
+    // Notify and remove all players from the room
+    const playerIds = Array.from(room.players.keys());
+    for (const pid of playerIds) {
+      const playerSocket = io.sockets.sockets.get(pid);
+      if (playerSocket) {
+        playerSocket.emit('game_ended', { roomId: data.roomId, reason: 'admin_closed' });
+        playerSocket.leave(data.roomId);
+      }
+    }
+
+    roomManager.deleteRoom(data.roomId);
+    broadcastRoomList();
+    socket.emit('admin_room_deleted', { roomId: data.roomId });
+    console.log(`[Admin] Room ${data.roomId} deleted by ${auth.username}`);
+  });
+
+  // ═══════════════════════════════════════════════════════
+  // END ADMIN
+  // ═══════════════════════════════════════════════════════
+
   socket.on('disconnect', async () => {
     console.log(`User disconnected: ${socket.id}`);
     if (removeFromQueues(socket.id)) {
@@ -1265,6 +1377,38 @@ io.on('connection', (socket: Socket) => {
       if (!room.matchStats || room.matchConcluded) continue;
       const matchAge = now - room.matchStats.startedAt.getTime();
       if (matchAge < HEARTBEAT_GRACE) continue; // Still in grace period
+
+      // Check: player 0 stopped sending tick_frame (AFK bypass exploit)
+      // A cheater can satisfy the board-state heartbeat by sending empty boards
+      // while also freezing the server sim by not sending tick_frame.
+      // This covers that gap independently of board state.
+      const lastTick = room.lastTickFrame || 0;
+      if (lastTick > 0 && now - lastTick > HEARTBEAT_TIMEOUT) {
+        // Find player 0 (first in insertion order) and forfeit them
+        const playerIds = Array.from(room.players.keys());
+        const player0Id = playerIds[0];
+        const player0 = room.players.get(player0Id);
+        if (player0Id && player0 && !room.matchConcluded) {
+          const reason = `tick_frame stalled for ${Math.round((now - lastTick) / 1000)}s (AFK bypass)`;
+          console.log(`[Heartbeat] Player 0 ${player0.name} (${player0Id}) in room ${room.id}: ${reason}. Auto-forfeiting.`);
+          if (room.concludeMatch(player0Id)) {
+            for (const pid of room.players.keys()) {
+              if (pid === player0Id) continue;
+              const ws = io.sockets.sockets.get(pid);
+              if (ws) ws.emit('opponent_lost');
+            }
+            io.to(room.id).emit('game_ended', { roomId: room.id, reason: 'timeout' });
+            setTimeout(() => {
+              for (const pid of room.players.keys()) {
+                const ps = io.sockets.sockets.get(pid);
+                if (ps) ps.leave(room.id);
+              }
+              roomManager.deleteRoom(room.id);
+            }, 1000);
+            continue; // Move to next room
+          }
+        }
+      }
 
       for (const [socketId, player] of room.players) {
         const lastUpdate = player.lastBoardUpdate || 0;

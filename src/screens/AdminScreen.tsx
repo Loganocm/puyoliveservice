@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { BackButton } from "@/components/BackButton";
 import { APIClient } from "@/api/client";
+import { NetworkManager } from "@/core/NetworkManager";
 
 interface AdminUser {
   id: number;
@@ -45,6 +46,19 @@ interface EditingState {
   value: string;
 }
 
+interface AdminRoom {
+  id: string;
+  players: { id: string; username: string; userId?: number; ready: boolean }[];
+  playerCount: number;
+  maxPlayers: number;
+  isPrivate: boolean;
+  ranked: boolean;
+  inMatch: boolean;
+  matchConcluded: boolean;
+  createdAt: number;
+  settings: { bestOf: number; maxPlayers: number; garbageMultiplier: number; marginTime: number };
+}
+
 export function AdminScreen({ onBack }: { onBack: () => void }) {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -59,6 +73,10 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [activeTab, setActiveTab] = useState<'users' | 'rooms'>('users');
+  const [rooms, setRooms] = useState<AdminRoom[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [deleteRoomConfirm, setDeleteRoomConfirm] = useState<string | null>(null);
   const LIMIT = 20;
 
   const loadStats = useCallback(async () => {
@@ -91,6 +109,39 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  // Rooms management via socket
+  const loadRooms = useCallback(() => {
+    setRoomsLoading(true);
+    NetworkManager.emitToServer('admin_list_rooms');
+  }, []);
+
+  useEffect(() => {
+    const onRoomsList = (data: { rooms: AdminRoom[] }) => {
+      setRooms(data.rooms);
+      setRoomsLoading(false);
+    };
+    const onRoomDeleted = (data: { roomId: string }) => {
+      setSuccess(`Room ${data.roomId} deleted`);
+      setDeleteRoomConfirm(null);
+      setTimeout(() => setSuccess(""), 3000);
+      loadRooms();
+    };
+    NetworkManager.on('admin_rooms_list', onRoomsList);
+    NetworkManager.on('admin_room_deleted', onRoomDeleted);
+    return () => {
+      NetworkManager.off('admin_rooms_list', onRoomsList);
+      NetworkManager.off('admin_room_deleted', onRoomDeleted);
+    };
+  }, [loadRooms]);
+
+  useEffect(() => {
+    if (activeTab === 'rooms') loadRooms();
+  }, [activeTab, loadRooms]);
+
+  const handleDeleteRoom = (roomId: string) => {
+    NetworkManager.emitToServer('admin_delete_room', { roomId });
+  };
 
   const handleSearch = () => {
     setPage(1);
@@ -289,7 +340,30 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
           </button>
         </motion.div>
 
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'users' ? 'bg-red-500/20 border border-red-500/30 text-red-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}
+          >
+            <Users className="w-3.5 h-3.5 inline mr-1.5" />
+            Users
+          </button>
+          <button
+            onClick={() => setActiveTab('rooms')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'rooms' ? 'bg-red-500/20 border border-red-500/30 text-red-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}
+          >
+            <Swords className="w-3.5 h-3.5 inline mr-1.5" />
+            Rooms
+            {rooms.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-xs">{rooms.length}</span>
+            )}
+          </button>
+        </div>
+
         {/* Users Table */}
+        {activeTab === 'users' && (
+        <>
         <motion.div
           className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl mb-6"
           initial={{ opacity: 0, y: 20 }}
@@ -441,6 +515,122 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+        )}
+        )}
+        </>) /* end users tab */}
+
+        {/* Rooms Tab */}
+        {activeTab === 'rooms' && (
+          <motion.div
+            className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl mb-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <span className="text-white/60 text-xs font-medium uppercase tracking-wider">Active Rooms ({rooms.length})</span>
+              <button
+                onClick={loadRooms}
+                disabled={roomsLoading}
+                className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/60 hover:bg-white/10 transition flex items-center gap-1.5"
+              >
+                {roomsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                Refresh
+              </button>
+            </div>
+
+            {roomsLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 text-white/50 animate-spin" />
+              </div>
+            ) : rooms.length === 0 ? (
+              <div className="text-center py-16 text-white/40 text-sm">No active rooms</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Room ID</th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Players</th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Type</th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Settings</th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Created</th>
+                      <th className="px-4 py-3 text-right text-white/50 font-medium text-xs uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rooms.map((r) => (
+                      <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 transition group">
+                        <td className="px-4 py-3 text-white font-mono font-bold">{r.id}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-0.5">
+                            {r.players.map((p) => (
+                              <div key={p.id} className="flex items-center gap-1.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${p.ready ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                                <span className="text-xs text-white/70">{p.username}</span>
+                                {p.userId && <span className="text-[9px] text-white/20">#{p.userId}</span>}
+                              </div>
+                            ))}
+                            {r.playerCount === 0 && <span className="text-xs text-white/30">Empty</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {r.inMatch ? (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.matchConcluded ? 'bg-white/5 text-white/30' : 'bg-green-500/20 text-green-400'}`}>
+                              {r.matchConcluded ? 'ENDED' : 'IN GAME'}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">LOBBY</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-0.5">
+                            {r.ranked && <span className="text-[10px] text-amber-400 font-bold">RANKED</span>}
+                            {r.isPrivate && <span className="text-[10px] text-white/40">PRIVATE</span>}
+                            {!r.ranked && !r.isPrivate && <span className="text-[10px] text-white/40">PUBLIC</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[10px] text-white/40">
+                          Bo{r.settings.bestOf} · {r.settings.garbageMultiplier}x
+                        </td>
+                        <td className="px-4 py-3 text-white/40 text-xs">
+                          {new Date(r.createdAt).toLocaleTimeString()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {deleteRoomConfirm === r.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => handleDeleteRoom(r.id)}
+                                className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                                title="Confirm delete"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteRoomConfirm(null)}
+                                className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 transition"
+                                title="Cancel"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteRoomConfirm(r.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/50 hover:text-red-400 transition opacity-0 group-hover:opacity-100"
+                              title="Force close room"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </motion.div>
         )}
 
         {/* Edit Modal */}

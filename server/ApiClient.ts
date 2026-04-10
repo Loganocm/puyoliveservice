@@ -35,6 +35,7 @@ interface UserProfile {
   total_garbage_sent?: number;
   avatar_url?: string | null;
   rank?: number | null;
+  is_admin?: boolean;
 }
 
 /**

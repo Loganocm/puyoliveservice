@@ -93,6 +93,10 @@ export class GameRoom {
     replayFPS: number = 60;
     seed: number = 0;
 
+    // Anti-cheat: tracks last time player 0 sent a tick_frame
+    // If this goes stale during an active match, player 0 is forfeited
+    lastTickFrame: number = 0;
+
     // Legacy (kept for backwards compat during transition)
     replayLog: ReplayEventLegacy[] = [];
 
@@ -163,6 +167,7 @@ export class GameRoom {
         this.matchConcluded = false;
         this.conclusionLoser = null;
         this.simulators.clear();
+        this.lastTickFrame = Date.now(); // Initialize tick heartbeat
         // Initialize heartbeat + game state tracking for all players
         const now = Date.now();
         for (const player of this.players.values()) {

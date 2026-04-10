@@ -53,7 +53,10 @@ export class LeaderboardService {
     if (!user) return null;
 
     const higherEloCount = await prisma.user.count({
-      where: { elo_rating: { gt: user.elo_rating } }
+      where: {
+        elo_rating: { gt: user.elo_rating },
+        games_played: { gt: 0 }
+      }
     });
 
     return higherEloCount + 1;

@@ -84,8 +84,17 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
     level: number;
     name: string;
   } | null>(null);
+  const [autoRespawnTimer, setAutoRespawnTimer] = useState(3);
   const killFeedId = useRef(0);
   const levelUpTimer = useRef<ReturnType<typeof setTimeout>>();
+  const autoRespawnRef = useRef<ReturnType<typeof setInterval>>();
+
+  // Session stats (persisted across respawns)
+  const [sessionStats, setSessionStats] = useState({
+    totalDepth: 0,
+    totalKOs: 0,
+    deaths: 0,
+  });
 
   // Setup network listeners
   useEffect(() => {
@@ -100,6 +109,12 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
     const onDied = (data: { depth: number; kos: number; score: number }) => {
       setIsDead(true);
       setDeathStats(data);
+      setAutoRespawnTimer(3);
+      setSessionStats((prev) => ({
+        totalDepth: Math.max(prev.totalDepth, data.depth),
+        totalKOs: prev.totalKOs + data.kos,
+        deaths: prev.deaths + 1,
+      }));
     };
 
     const onDiedBroadcast = (data: {
@@ -154,6 +169,30 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
     };
   }, [onLeave]);
 
+  // Auto-respawn countdown when dead
+  useEffect(() => {
+    if (!isDead) {
+      if (autoRespawnRef.current) clearInterval(autoRespawnRef.current);
+      return;
+    }
+    autoRespawnRef.current = setInterval(() => {
+      setAutoRespawnTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(autoRespawnRef.current);
+          // Auto-respawn
+          setIsDead(false);
+          setDeathStats(null);
+          NetworkManager.minesRespawn();
+          return 3;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (autoRespawnRef.current) clearInterval(autoRespawnRef.current);
+    };
+  }, [isDead]);
+
   // Clean up old kill feed entries
   useEffect(() => {
     const interval = setInterval(() => {
@@ -164,8 +203,10 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
   }, []);
 
   const handleRespawn = useCallback(() => {
+    if (autoRespawnRef.current) clearInterval(autoRespawnRef.current);
     setIsDead(false);
     setDeathStats(null);
+    setAutoRespawnTimer(3);
     NetworkManager.minesRespawn();
   }, []);
 
@@ -523,7 +564,7 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
                   onClick={handleRespawn}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-sm transition-colors"
                 >
-                  Respawn
+                  Respawn ({autoRespawnTimer}s)
                 </button>
                 <button
                   onClick={handleLeave}
@@ -531,6 +572,33 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
                 >
                   Leave
                 </button>
+              </div>
+
+              {/* Session Stats */}
+              <div className="mt-4 pt-3 border-t border-white/5">
+                <div className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-2">
+                  Session
+                </div>
+                <div className="flex justify-center gap-4 text-[10px] text-white/30">
+                  <span>
+                    Best:{" "}
+                    <span className="text-cyan-400/60 font-bold">
+                      {sessionStats.totalDepth}m
+                    </span>
+                  </span>
+                  <span>
+                    KOs:{" "}
+                    <span className="text-red-400/60 font-bold">
+                      {sessionStats.totalKOs}
+                    </span>
+                  </span>
+                  <span>
+                    Deaths:{" "}
+                    <span className="text-white/50 font-bold">
+                      {sessionStats.deaths}
+                    </span>
+                  </span>
+                </div>
               </div>
             </motion.div>
           </motion.div>

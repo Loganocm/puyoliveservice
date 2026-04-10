@@ -263,12 +263,13 @@ export class AuthService {
 
     if (!user) return null;
 
-    // Get rank efficiently
+    // Get rank efficiently (only count ranked players with games played)
     const rank = await prisma.user.count({
       where: {
         elo_rating: {
           gt: user.elo_rating
-        }
+        },
+        games_played: { gt: 0 }
       }
     }) + 1;
 
@@ -294,7 +295,8 @@ export class AuthService {
       where: {
         elo_rating: {
           gt: user.elo_rating
-        }
+        },
+        games_played: { gt: 0 }
       }
     }) + 1;
 
