@@ -1015,7 +1015,7 @@ export class GameScene implements IScene {
             NetworkManager.leaveQueue();
             this.roomId = undefined;
 
-            SceneManager.changeScene(new MenuScene());
+            GameEvents.emit('exit_game');
         }
     }
 

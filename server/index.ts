@@ -1383,12 +1383,12 @@ io.on('connection', (socket: Socket) => {
   }, STALE_ROOM_INTERVAL);
 
   // ── Board state heartbeat — auto-forfeit players who stop sending board updates ──
-  // If a player doesn't send a board state for 20 seconds during an active match,
+  // If a player doesn't send a board state for 7 seconds during an active match,
   // they are auto-forfeited. This prevents: hiding board, refusing to die, AFK stalling.
   // Also detects topped-out boards (death column filled for 3+ seconds).
-  const HEARTBEAT_INTERVAL = 5_000; // Check every 5 seconds
-  const HEARTBEAT_TIMEOUT = 20_000; // 20 seconds without board update = forfeit
-  const HEARTBEAT_GRACE = 10_000;   // Don't check until 10s after match start (loading grace)
+  const HEARTBEAT_INTERVAL = 3_000; // Check every 3 seconds
+  const HEARTBEAT_TIMEOUT = 7_000; // 7 seconds without board update = forfeit
+  const HEARTBEAT_GRACE = 7_000;   // Don't check until 7s after match start (loading grace)
   // Death detection is now handled by server-side PuyoSimulator (no more DEATH_SUSPECT_TIMEOUT)
 
   setInterval(() => {
