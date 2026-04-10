@@ -34,4 +34,5 @@ legacy/
 !.env.example
 api/.env
 postgres_data/
+data/
 setup.txt
