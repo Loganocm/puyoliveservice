@@ -56,7 +56,12 @@ interface AdminRoom {
   inMatch: boolean;
   matchConcluded: boolean;
   createdAt: number;
-  settings: { bestOf: number; maxPlayers: number; garbageMultiplier: number; marginTime: number };
+  settings: {
+    bestOf: number;
+    maxPlayers: number;
+    garbageMultiplier: number;
+    marginTime: number;
+  };
 }
 
 export function AdminScreen({ onBack }: { onBack: () => void }) {
@@ -73,10 +78,12 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [activeTab, setActiveTab] = useState<'users' | 'rooms'>('users');
+  const [activeTab, setActiveTab] = useState<"users" | "rooms">("users");
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
-  const [deleteRoomConfirm, setDeleteRoomConfirm] = useState<string | null>(null);
+  const [deleteRoomConfirm, setDeleteRoomConfirm] = useState<string | null>(
+    null,
+  );
   const LIMIT = 20;
 
   const loadStats = useCallback(async () => {
@@ -113,7 +120,7 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
   // Rooms management via socket
   const loadRooms = useCallback(() => {
     setRoomsLoading(true);
-    NetworkManager.emitToServer('admin_list_rooms');
+    NetworkManager.emitToServer("admin_list_rooms");
   }, []);
 
   useEffect(() => {
@@ -127,20 +134,20 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
       setTimeout(() => setSuccess(""), 3000);
       loadRooms();
     };
-    NetworkManager.on('admin_rooms_list', onRoomsList);
-    NetworkManager.on('admin_room_deleted', onRoomDeleted);
+    NetworkManager.on("admin_rooms_list", onRoomsList);
+    NetworkManager.on("admin_room_deleted", onRoomDeleted);
     return () => {
-      NetworkManager.off('admin_rooms_list', onRoomsList);
-      NetworkManager.off('admin_room_deleted', onRoomDeleted);
+      NetworkManager.off("admin_rooms_list", onRoomsList);
+      NetworkManager.off("admin_room_deleted", onRoomDeleted);
     };
   }, [loadRooms]);
 
   useEffect(() => {
-    if (activeTab === 'rooms') loadRooms();
+    if (activeTab === "rooms") loadRooms();
   }, [activeTab, loadRooms]);
 
   const handleDeleteRoom = (roomId: string) => {
-    NetworkManager.emitToServer('admin_delete_room', { roomId });
+    NetworkManager.emitToServer("admin_delete_room", { roomId });
   };
 
   const handleSearch = () => {
@@ -343,197 +350,215 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
         {/* Tabs */}
         <div className="flex gap-2 mb-4">
           <button
-            onClick={() => setActiveTab('users')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'users' ? 'bg-red-500/20 border border-red-500/30 text-red-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}
+            onClick={() => setActiveTab("users")}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "users" ? "bg-red-500/20 border border-red-500/30 text-red-300" : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10"}`}
           >
             <Users className="w-3.5 h-3.5 inline mr-1.5" />
             Users
           </button>
           <button
-            onClick={() => setActiveTab('rooms')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === 'rooms' ? 'bg-red-500/20 border border-red-500/30 text-red-300' : 'bg-white/5 border border-white/10 text-white/50 hover:bg-white/10'}`}
+            onClick={() => setActiveTab("rooms")}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "rooms" ? "bg-red-500/20 border border-red-500/30 text-red-300" : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10"}`}
           >
             <Swords className="w-3.5 h-3.5 inline mr-1.5" />
             Rooms
             {rooms.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-xs">{rooms.length}</span>
+              <span className="ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-xs">
+                {rooms.length}
+              </span>
             )}
           </button>
         </div>
 
         {/* Users Table */}
-        {activeTab === 'users' && (
-        <>
-        <motion.div
-          className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 text-white/50 animate-spin" />
-            </div>
-          ) : users.length === 0 ? (
-            <div className="text-center py-16 text-white/40 text-sm">
-              No users found
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      User
-                    </th>
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      ELO
-                    </th>
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      Games
-                    </th>
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      W/L
-                    </th>
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      Lvl
-                    </th>
-                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
-                      Joined
-                    </th>
-                    <th className="px-4 py-3 text-right text-white/50 font-medium text-xs uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="border-b border-white/5 hover:bg-white/5 transition group"
-                    >
-                      <td className="px-4 py-3 text-white/60 font-mono text-xs">
-                        #{u.id}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-medium">
-                            {u.username}
-                          </span>
-                          {u.is_admin && (
-                            <Shield className="w-3 h-3 text-red-400" />
-                          )}
-                        </div>
-                        {u.email && (
-                          <div className="text-white/30 text-xs">{u.email}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-white/80 font-mono">
-                        {u.elo_rating}
-                      </td>
-                      <td className="px-4 py-3 text-white/60">
-                        {u.games_played}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-green-400">{u.games_won}</span>
-                        <span className="text-white/20 mx-1">/</span>
-                        <span className="text-red-400">{u.games_lost}</span>
-                      </td>
-                      <td className="px-4 py-3 text-white/60">{u.level}</td>
-                      <td className="px-4 py-3 text-white/40 text-xs">
-                        {new Date(u.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition">
-                          <button
-                            onClick={() =>
-                              startEdit(u.id, "elo_rating", u.elo_rating)
-                            }
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition"
-                            title="Edit user"
+        {
+          activeTab === "users" && (
+            <>
+              <motion.div
+                className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl mb-6"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <Loader2 className="w-6 h-6 text-white/50 animate-spin" />
+                  </div>
+                ) : users.length === 0 ? (
+                  <div className="text-center py-16 text-white/40 text-sm">
+                    No users found
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10">
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            ID
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            User
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            ELO
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            Games
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            W/L
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            Lvl
+                          </th>
+                          <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                            Joined
+                          </th>
+                          <th className="px-4 py-3 text-right text-white/50 font-medium text-xs uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((u) => (
+                          <tr
+                            key={u.id}
+                            className="border-b border-white/5 hover:bg-white/5 transition group"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          {!u.is_admin &&
-                            (deleteConfirm === u.id ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => handleDelete(u.id)}
-                                  className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
-                                  title="Confirm delete"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => setDeleteConfirm(null)}
-                                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 transition"
-                                  title="Cancel"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                            <td className="px-4 py-3 text-white/60 font-mono text-xs">
+                              #{u.id}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-medium">
+                                  {u.username}
+                                </span>
+                                {u.is_admin && (
+                                  <Shield className="w-3 h-3 text-red-400" />
+                                )}
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => setDeleteConfirm(u.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/50 hover:text-red-400 transition"
-                                title="Delete user"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </motion.div>
+                              {u.email && (
+                                <div className="text-white/30 text-xs">
+                                  {u.email}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-white/80 font-mono">
+                              {u.elo_rating}
+                            </td>
+                            <td className="px-4 py-3 text-white/60">
+                              {u.games_played}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-green-400">
+                                {u.games_won}
+                              </span>
+                              <span className="text-white/20 mx-1">/</span>
+                              <span className="text-red-400">
+                                {u.games_lost}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-white/60">
+                              {u.level}
+                            </td>
+                            <td className="px-4 py-3 text-white/40 text-xs">
+                              {new Date(u.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition">
+                                <button
+                                  onClick={() =>
+                                    startEdit(u.id, "elo_rating", u.elo_rating)
+                                  }
+                                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition"
+                                  title="Edit user"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                {!u.is_admin &&
+                                  (deleteConfirm === u.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleDelete(u.id)}
+                                        className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                                        title="Confirm delete"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => setDeleteConfirm(null)}
+                                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 transition"
+                                        title="Cancel"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setDeleteConfirm(u.id)}
+                                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/50 hover:text-red-400 transition"
+                                      title="Delete user"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </motion.div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 mb-8">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="p-2 rounded-lg border border-white/10 text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-white/60 text-sm font-medium">
-              Page {page} of {totalPages} ({total} users)
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="p-2 rounded-lg border border-white/10 text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-        )}
-        </>) /* end users tab */}
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mb-8">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="p-2 rounded-lg border border-white/10 text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-white/60 text-sm font-medium">
+                    Page {page} of {totalPages} ({total} users)
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="p-2 rounded-lg border border-white/10 text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          ) /* end users tab */
+        }
 
         {/* Rooms Tab */}
-        {activeTab === 'rooms' && (
+        {activeTab === "rooms" && (
           <motion.div
             className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl mb-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <span className="text-white/60 text-xs font-medium uppercase tracking-wider">Active Rooms ({rooms.length})</span>
+              <span className="text-white/60 text-xs font-medium uppercase tracking-wider">
+                Active Rooms ({rooms.length})
+              </span>
               <button
                 onClick={loadRooms}
                 disabled={roomsLoading}
                 className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/60 hover:bg-white/10 transition flex items-center gap-1.5"
               >
-                {roomsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                {roomsLoading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Search className="w-3 h-3" />
+                )}
                 Refresh
               </button>
             </div>
@@ -543,55 +568,108 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
                 <Loader2 className="w-6 h-6 text-white/50 animate-spin" />
               </div>
             ) : rooms.length === 0 ? (
-              <div className="text-center py-16 text-white/40 text-sm">No active rooms</div>
+              <div className="text-center py-16 text-white/40 text-sm">
+                No active rooms
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Room ID</th>
-                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Players</th>
-                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Type</th>
-                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Settings</th>
-                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">Created</th>
-                      <th className="px-4 py-3 text-right text-white/50 font-medium text-xs uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Room ID
+                      </th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Players
+                      </th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Settings
+                      </th>
+                      <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Created
+                      </th>
+                      <th className="px-4 py-3 text-right text-white/50 font-medium text-xs uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {rooms.map((r) => (
-                      <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 transition group">
-                        <td className="px-4 py-3 text-white font-mono font-bold">{r.id}</td>
+                      <tr
+                        key={r.id}
+                        className="border-b border-white/5 hover:bg-white/5 transition group"
+                      >
+                        <td className="px-4 py-3 text-white font-mono font-bold">
+                          {r.id}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-0.5">
                             {r.players.map((p) => (
-                              <div key={p.id} className="flex items-center gap-1.5">
-                                <div className={`w-1.5 h-1.5 rounded-full ${p.ready ? 'bg-emerald-400' : 'bg-white/20'}`} />
-                                <span className="text-xs text-white/70">{p.username}</span>
-                                {p.userId && <span className="text-[9px] text-white/20">#{p.userId}</span>}
+                              <div
+                                key={p.id}
+                                className="flex items-center gap-1.5"
+                              >
+                                <div
+                                  className={`w-1.5 h-1.5 rounded-full ${p.ready ? "bg-emerald-400" : "bg-white/20"}`}
+                                />
+                                <span className="text-xs text-white/70">
+                                  {p.username}
+                                </span>
+                                {p.userId && (
+                                  <span className="text-[9px] text-white/20">
+                                    #{p.userId}
+                                  </span>
+                                )}
                               </div>
                             ))}
-                            {r.playerCount === 0 && <span className="text-xs text-white/30">Empty</span>}
+                            {r.playerCount === 0 && (
+                              <span className="text-xs text-white/30">
+                                Empty
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
                           {r.inMatch ? (
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.matchConcluded ? 'bg-white/5 text-white/30' : 'bg-green-500/20 text-green-400'}`}>
-                              {r.matchConcluded ? 'ENDED' : 'IN GAME'}
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.matchConcluded ? "bg-white/5 text-white/30" : "bg-green-500/20 text-green-400"}`}
+                            >
+                              {r.matchConcluded ? "ENDED" : "IN GAME"}
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">LOBBY</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">
+                              LOBBY
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-0.5">
-                            {r.ranked && <span className="text-[10px] text-amber-400 font-bold">RANKED</span>}
-                            {r.isPrivate && <span className="text-[10px] text-white/40">PRIVATE</span>}
-                            {!r.ranked && !r.isPrivate && <span className="text-[10px] text-white/40">PUBLIC</span>}
+                            {r.ranked && (
+                              <span className="text-[10px] text-amber-400 font-bold">
+                                RANKED
+                              </span>
+                            )}
+                            {r.isPrivate && (
+                              <span className="text-[10px] text-white/40">
+                                PRIVATE
+                              </span>
+                            )}
+                            {!r.ranked && !r.isPrivate && (
+                              <span className="text-[10px] text-white/40">
+                                PUBLIC
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-[10px] text-white/40">
-                          Bo{r.settings.bestOf} · {r.settings.garbageMultiplier}x
+                          Bo{r.settings.bestOf} · {r.settings.garbageMultiplier}
+                          x
                         </td>
                         <td className="px-4 py-3 text-white/40 text-xs">
                           {new Date(r.createdAt).toLocaleTimeString()}
