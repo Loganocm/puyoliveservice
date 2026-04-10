@@ -15,8 +15,8 @@ const authLimiter = rateLimit({
 });
 
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // 5 registrations per hour per IP
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 2, // 2 registrations per day per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many accounts created, please try again later' },

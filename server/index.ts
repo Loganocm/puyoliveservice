@@ -87,6 +87,18 @@ const authenticatedUsers = new Map<string, {
   avatar_url?: string;
 }>();
 
+// Track socket IP addresses for same-IP ranked prevention
+const socketIPs = new Map<string, string>();
+
+/** Get the real IP from a socket (handles proxies/Cloudflare) */
+function getSocketIP(socket: Socket): string {
+  const cfIP = socket.handshake.headers['cf-connecting-ip'];
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (typeof cfIP === 'string') return cfIP;
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return socket.handshake.address;
+}
+
 // Separate queues for ranked and unranked matchmaking
 let rankedQueue: string[] = [];
 let unrankedQueue: string[] = [];
@@ -119,13 +131,12 @@ function checkSocketRate(socketId: string, eventName: string, maxPerSec: number)
   return true;
 }
 
-/** Validate a Puyo board grid: must be 13 rows × 6 cols with valid cell values */
+/** Validate a Puyo board grid: must be 6 columns × 14 rows (col-major) with valid cell values */
 function isValidGrid(grid: unknown): grid is number[][] {
-  if (!Array.isArray(grid)) return false;
-  if (grid.length === 0 || grid.length > 14) return false;
-  for (const row of grid) {
-    if (!Array.isArray(row) || row.length > 8) return false;
-    for (const cell of row) {
+  if (!Array.isArray(grid) || grid.length !== 6) return false; // Exactly 6 columns
+  for (const col of grid) {
+    if (!Array.isArray(col) || col.length !== 14) return false; // Exactly 14 rows per column
+    for (const cell of col) {
       if (typeof cell !== 'number' || !Number.isInteger(cell) || cell < 0 || cell > 15) return false;
     }
   }
@@ -150,6 +161,9 @@ minesRoom.onBroadcastPlayerList = () => {
 
 io.on('connection', (socket: Socket) => {
   console.log(`User connected: ${socket.id}`);
+
+  // Track IP for same-IP ranked prevention
+  socketIPs.set(socket.id, getSocketIP(socket));
 
   socket.emit('welcome', {
     message: 'Connected to Puyo Server',
@@ -227,6 +241,15 @@ io.on('connection', (socket: Socket) => {
       return;
     }
 
+    // Ranked requires minimum 5 games played (prevents fresh puppet accounts)
+    if (isRanked) {
+      const auth = authenticatedUsers.get(socket.id);
+      if (!auth || (auth.games_played || 0) < 5) {
+        socket.emit('error', { message: 'You need at least 5 games played to enter ranked' });
+        return;
+      }
+    }
+
     const queueName = isRanked ? 'ranked' : 'unranked';
     const queue = isRanked ? rankedQueue : unrankedQueue;
 
@@ -247,8 +270,16 @@ io.on('connection', (socket: Socket) => {
       const room = roomManager.createRoom();
 
       // Mark room as ranked if it's a ranked match
+      // BUT: if both players share the same IP, force unranked (anti-puppet ELO inflation)
       if (isRanked) {
-        room.ranked = true;
+        const ip1 = socketIPs.get(p1);
+        const ip2 = socketIPs.get(p2);
+        if (ip1 && ip2 && ip1 === ip2) {
+          console.log(`[Anti-Puppet] Same IP detected (${ip1}) for ${p1} and ${p2} — forcing unranked`);
+          room.ranked = false;
+        } else {
+          room.ranked = true;
+        }
       }
 
       const socket1 = io.sockets.sockets.get(p1);
@@ -595,6 +626,12 @@ io.on('connection', (socket: Socket) => {
     if (!room || !room.players.has(socket.id)) return;
     // MUST have an active, non-concluded match
     if (!room.matchStats || room.matchConcluded) return;
+    // Player must have recently cleared puyos to send garbage (server-validated chain window)
+    const garbagePlayer = room.players.get(socket.id)!;
+    if (!garbagePlayer.chainWindow || Date.now() - garbagePlayer.chainWindow > 5000) return;
+    // Cap total garbage per chain window (prevents claiming infinite garbage from one chain)
+    garbagePlayer.chainWindowGarbage = (garbagePlayer.chainWindowGarbage || 0) + data.amount;
+    if (garbagePlayer.chainWindowGarbage > 60) return;
     room.recordGarbage(socket.id, data.amount);
     if (data.chainLength) {
       room.recordChain(socket.id, data.chainLength);
@@ -619,6 +656,36 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
+    // Update heartbeat timestamp — proves player is actively playing
+    const boardPlayer = room.players.get(socket.id)!;
+    boardPlayer.lastBoardUpdate = Date.now();
+
+    // ── Server-side death detection ──
+    // Grid is [col][row]. Death = grid[2][2] (col 2, first visible row in kill column)
+    if (data.grid[2][2] !== 0) {
+      // Spawn point blocked — start death suspect timer
+      if (!boardPlayer.deathSuspectSince) {
+        boardPlayer.deathSuspectSince = Date.now();
+      }
+    } else {
+      // Spawn point clear — cancel suspect
+      boardPlayer.deathSuspectSince = undefined;
+    }
+
+    // ── Puyo count tracking for garbage validation ──
+    let currentPuyoCount = 0;
+    for (const col of data.grid) {
+      for (const cell of col) {
+        if (cell !== 0) currentPuyoCount++;
+      }
+    }
+    if (boardPlayer.lastPuyoCount !== undefined && boardPlayer.lastPuyoCount - currentPuyoCount >= 4) {
+      // Puyos were cleared (minimum Puyo match group = 4) — open chain window
+      boardPlayer.chainWindow = Date.now();
+      boardPlayer.chainWindowGarbage = 0;
+    }
+    boardPlayer.lastPuyoCount = currentPuyoCount;
+
     socket.broadcast.to(data.roomId).emit('receive_board_state', { grid: data.grid, playerId: socket.id });
     room.recordReplayEvent('move', socket.id, { grid: data.grid });
   });
@@ -638,6 +705,8 @@ io.on('connection', (socket: Socket) => {
     socket.broadcast.to(data.roomId).emit('receive_player_state', { state: sanitizedState, playerId: socket.id });
   });
 
+  // Score is COSMETIC RELAY ONLY — does not affect match results, ELO, or any server state.
+  // Server-authoritative data (garbage sent, chains) is tracked via recordGarbage/recordChain.
   socket.on('send_score', (data: { roomId: string, score: number }) => {
     if (!data || typeof data.roomId !== 'string') return;
     if (typeof data.score !== 'number' || !Number.isFinite(data.score) || data.score < 0 || data.score > 999999) return;
@@ -1107,6 +1176,7 @@ io.on('connection', (socket: Socket) => {
 
     authenticatedUsers.delete(socket.id);
     socketEventTimestamps.delete(socket.id);
+    socketIPs.delete(socket.id);
   });
 });
 
@@ -1155,6 +1225,64 @@ io.on('connection', (socket: Socket) => {
       }));
     io.emit('room_list_update', publicRooms);
   }, STALE_ROOM_INTERVAL);
+
+  // ── Board state heartbeat — auto-forfeit players who stop sending board updates ──
+  // If a player doesn't send a board state for 20 seconds during an active match,
+  // they are auto-forfeited. This prevents: hiding board, refusing to die, AFK stalling.
+  // Also detects topped-out boards (death column filled for 3+ seconds).
+  const HEARTBEAT_INTERVAL = 5_000; // Check every 5 seconds
+  const HEARTBEAT_TIMEOUT = 20_000; // 20 seconds without board update = forfeit
+  const HEARTBEAT_GRACE = 10_000;   // Don't check until 10s after match start (loading grace)
+  const DEATH_SUSPECT_TIMEOUT = 3_000; // 3 seconds with grid[2][2] filled = forced death
+
+  setInterval(() => {
+    const now = Date.now();
+    const rooms = roomManager.getAllRooms();
+    for (const room of rooms) {
+      if (!room.matchStats || room.matchConcluded) continue;
+      const matchAge = now - room.matchStats.startedAt.getTime();
+      if (matchAge < HEARTBEAT_GRACE) continue; // Still in grace period
+
+      for (const [socketId, player] of room.players) {
+        const lastUpdate = player.lastBoardUpdate || 0;
+        let shouldForfeit = false;
+        let reason = '';
+
+        // Check 1: No board state sent for 20 seconds
+        if (now - lastUpdate > HEARTBEAT_TIMEOUT) {
+          shouldForfeit = true;
+          reason = `no board state for ${Math.round((now - lastUpdate) / 1000)}s`;
+        }
+        // Check 2: Board topped out (kill column blocked) for 3+ seconds
+        else if (player.deathSuspectSince && now - player.deathSuspectSince > DEATH_SUSPECT_TIMEOUT) {
+          shouldForfeit = true;
+          reason = `board topped out for ${Math.round((now - player.deathSuspectSince) / 1000)}s`;
+        }
+
+        if (shouldForfeit) {
+          console.log(`[Heartbeat] Player ${player.name} (${socketId}) in room ${room.id}: ${reason}. Auto-forfeiting.`);
+          if (!room.concludeMatch(socketId)) continue; // Already concluded
+          const playerSocket = io.sockets.sockets.get(socketId);
+          if (playerSocket) {
+            playerSocket.broadcast.to(room.id).emit('opponent_lost');
+          } else {
+            io.to(room.id).emit('opponent_lost');
+          }
+          // Emit game_ended
+          io.to(room.id).emit('game_ended', { roomId: room.id, reason: 'timeout' });
+          // Clean up after delay
+          setTimeout(() => {
+            for (const pid of room.players.keys()) {
+              const ps = io.sockets.sockets.get(pid);
+              if (ps) ps.leave(room.id);
+            }
+            roomManager.deleteRoom(room.id);
+          }, 1000);
+          break; // Only one player can forfeit per check cycle
+        }
+      }
+    }
+  }, HEARTBEAT_INTERVAL);
 
   // Check API health in background
   try {

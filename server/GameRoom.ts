@@ -4,6 +4,12 @@ export interface Player {
     ready: boolean;
     userId?: number;       // API user ID (if authenticated)
     authToken?: string;    // JWT token for API calls
+    lastBoardUpdate?: number; // Timestamp of last board state sent (heartbeat tracking)
+    // Server-side game state validation
+    lastPuyoCount?: number;        // Puyo count from last board state
+    chainWindow?: number;          // Timestamp when puyos were last cleared (enables garbage sending)
+    chainWindowGarbage?: number;   // Total garbage claimed in current chain window
+    deathSuspectSince?: number;    // When grid[2][2] was first detected filled (topped-out detection)
 }
 
 export interface RoomSettings {
@@ -151,6 +157,17 @@ export class GameRoom {
         this.frameCount = 0;
         this.replayInputs = [];
         this.replayLog = [];
+        this.matchConcluded = false;
+        this.conclusionLoser = null;
+        // Initialize heartbeat + game state tracking for all players
+        const now = Date.now();
+        for (const player of this.players.values()) {
+            player.lastBoardUpdate = now;
+            player.lastPuyoCount = undefined;
+            player.chainWindow = undefined;
+            player.chainWindowGarbage = undefined;
+            player.deathSuspectSince = undefined;
+        }
         this.recordReplayEvent('game_start', undefined, { seed: this.seed });
     }
 
