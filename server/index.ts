@@ -166,6 +166,8 @@ io.on('connection', (socket: Socket) => {
 
   // Handle user authentication
   socket.on('authenticate', async (data: { token: string }) => {
+    if (!data || typeof data.token !== 'string' || data.token.length > 2048) return;
+    if (!checkSocketRate(socket.id, 'authenticate', 3)) return;
     try {
       const user = await verifyToken(data.token);
       if (user) {
@@ -387,6 +389,8 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('start_game', (roomId: string) => {
+    if (!roomId || typeof roomId !== 'string') return;
+    if (!checkSocketRate(socket.id, 'start_game', 2)) return;
     const room = roomManager.getRoom(roomId);
     if (room) {
       if (room.players.has(socket.id)) {
@@ -421,6 +425,8 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('join_room', (roomId: string) => {
+    if (!roomId || typeof roomId !== 'string') return;
+    if (!checkSocketRate(socket.id, 'join_room', 3)) return;
     const room = roomManager.getRoom(roomId);
     if (!room) {
       socket.emit('error', { message: 'Room not found' });
@@ -487,6 +493,8 @@ io.on('connection', (socket: Socket) => {
 
   // Toggle ready state
   socket.on('toggle_ready', (data: { roomId: string, ready: boolean }) => {
+    if (!data || typeof data.roomId !== 'string' || typeof data.ready !== 'boolean') return;
+    if (!checkSocketRate(socket.id, 'toggle_ready', 5)) return;
     const room = roomManager.getRoom(data.roomId);
     if (room && room.players.has(socket.id)) {
       const player = room.players.get(socket.id)!;
@@ -504,6 +512,8 @@ io.on('connection', (socket: Socket) => {
 
   // Get room details
   socket.on('get_room_details', (data: { roomId: string }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!checkSocketRate(socket.id, 'get_room_details', 5)) return;
     const room = roomManager.getRoom(data.roomId);
     if (room) {
       socket.emit('room_update', {
@@ -517,15 +527,29 @@ io.on('connection', (socket: Socket) => {
 
   // Update room settings (host only)
   socket.on('update_room_settings', (data: { roomId: string, settings: any }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) return;
+    if (!checkSocketRate(socket.id, 'update_room_settings', 5)) return;
     const room = roomManager.getRoom(data.roomId);
-    if (!room) return;
+    if (!room || !room.players.has(socket.id)) return;
+    // Cannot change settings during an active match
+    if (room.matchStats) return;
     // Only the host (first player) can update settings
     const isHost = room.getPlayerIndex(socket.id) === 0;
     if (!isHost) {
       socket.emit('error', { message: 'Only the host can change settings' });
       return;
     }
-    room.updateSettings(data.settings);
+    // Whitelist only known setting keys to prevent prototype pollution
+    const ALLOWED_KEYS = ['bestOf', 'maxPlayers', 'garbageMultiplier', 'marginTime'];
+    const sanitized: Record<string, any> = {};
+    for (const key of ALLOWED_KEYS) {
+      if (key in data.settings) {
+        sanitized[key] = data.settings[key];
+      }
+    }
+    if (Object.keys(sanitized).length === 0) return;
+    room.updateSettings(sanitized);
     console.log(`Room ${data.roomId} settings updated:`, room.settings);
     // Broadcast to all players
     io.to(data.roomId).emit('room_settings_update', { settings: room.settings });
@@ -602,12 +626,17 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('send_player_state', (data: { roomId: string, state: any }) => {
     if (!data || typeof data.roomId !== 'string') return;
-    if (!data.state || typeof data.state !== 'object') return;
+    if (!data.state || typeof data.state !== 'object' || Array.isArray(data.state)) return;
+    // Whitelist only known player state keys to prevent data injection
+    const s = data.state;
+    if (typeof s.x !== 'number' || typeof s.y !== 'number' || typeof s.rot !== 'number' ||
+        typeof s.main !== 'number' || typeof s.sub !== 'number') return;
+    const sanitizedState = { x: s.x, y: s.y, rot: s.rot, main: s.main, sub: s.sub };
     if (!checkSocketRate(socket.id, 'send_player_state', 60)) return;
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
-    socket.broadcast.to(data.roomId).emit('receive_player_state', { state: data.state, playerId: socket.id });
+    socket.broadcast.to(data.roomId).emit('receive_player_state', { state: sanitizedState, playerId: socket.id });
   });
 
   socket.on('send_score', (data: { roomId: string, score: number }) => {
@@ -651,7 +680,7 @@ io.on('connection', (socket: Socket) => {
         const winner = room.players.get(winnerSocketId);
         const loser = room.players.get(loserSocketId);
 
-        if (winner?.userId && loser?.userId && winner.authToken) {
+        if (winner?.userId && loser?.userId) {
           const { player1Id, player2Id } = room.getPlayerUserIds();
           const isPlayer1Winner = winner.userId === player1Id;
 
@@ -696,7 +725,7 @@ io.on('connection', (socket: Socket) => {
               player2_garbage_sent: room.matchStats?.player2GarbageSent || 0,
               started_at: room.matchStats?.startedAt,
               replay_data: replayData
-            }, winner.authToken);
+            });
 
             if (matchResult) {
               console.log(`Match recorded: ${winner.userId} beat ${loser.userId}, ELO change: ${matchResult.elo_change}`);
@@ -762,6 +791,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('leave_room', (data: { roomId: string }) => {
+    if (!data || typeof data.roomId !== 'string') return;
     const room = roomManager.getRoom(data.roomId);
     if (room) {
       console.log(`Player ${socket.id} leaving room ${data.roomId}`);
@@ -785,6 +815,8 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('requeue', (data: { roomId: string }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (!checkSocketRate(socket.id, 'requeue', 2)) return;
     console.log(`Player ${socket.id} requesting requeue from room ${data.roomId}`);
 
     // Step 1: Clean up current room
@@ -867,6 +899,7 @@ io.on('connection', (socket: Socket) => {
   };
 
   socket.on('join_mines', () => {
+    if (!checkSocketRate(socket.id, 'join_mines', 2)) return;
     const auth = authenticatedUsers.get(socket.id);
     let username = auth?.username || `Guest_${socket.id.substring(0, 6)}`;
     // Sanitize and cap username length
@@ -911,6 +944,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('leave_mines', () => {
+    if (!checkSocketRate(socket.id, 'leave_mines', 2)) return;
     const player = minesRoom.players.get(socket.id);
     if (!player) return;
 
@@ -924,6 +958,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_respawn', () => {
+    if (!checkSocketRate(socket.id, 'mines_respawn', 2)) return; // Max 2 respawns/sec
     const player = minesRoom.players.get(socket.id);
     if (!player || player.alive) return; // Must be dead to respawn
 
@@ -936,26 +971,30 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_set_target', (data: { mode: string }) => {
+    if (!data || typeof data.mode !== 'string') return;
+    if (!checkSocketRate(socket.id, 'mines_set_target', 5)) return;
     const valid = ['random', 'attackers', 'badges', 'vulnerable'];
     if (!valid.includes(data.mode)) return;
+    const targetPlayer = minesRoom.players.get(socket.id);
+    if (!targetPlayer) return;
 
     minesRoom.setTargetingMode(socket.id, data.mode as any);
-    const player = minesRoom.players.get(socket.id);
-    if (player) {
-      socket.emit('mines_target_updated', {
-        mode: player.targetingMode,
-        targetSocketId: player.currentTarget,
-        targetUsername: player.currentTarget
-          ? minesRoom.players.get(player.currentTarget)?.username
-          : null,
-      });
-    }
+    socket.emit('mines_target_updated', {
+      mode: targetPlayer.targetingMode,
+      targetSocketId: targetPlayer.currentTarget,
+      targetUsername: targetPlayer.currentTarget
+        ? minesRoom.players.get(targetPlayer.currentTarget)?.username
+        : null,
+    });
   });
 
   socket.on('mines_send_garbage', (data: { amount: number, chainLength?: number }) => {
     if (!data || typeof data.amount !== 'number' || !Number.isInteger(data.amount) || data.amount <= 0 || data.amount > 100) return;
     if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || !Number.isInteger(data.chainLength) || data.chainLength < 1 || data.chainLength > 25)) return;
     if (!checkSocketRate(socket.id, 'mines_send_garbage', 30)) return;
+    // Must be an alive player in the mines lobby
+    const sender = minesRoom.players.get(socket.id);
+    if (!sender || !sender.alive) return;
 
     const result = minesRoom.processGarbage(socket.id, data.amount, data.chainLength || 0);
     if (!result) return;
@@ -977,6 +1016,9 @@ io.on('connection', (socket: Socket) => {
   socket.on('mines_board_state', (data: { grid: number[][] }) => {
     if (!isValidGrid(data?.grid)) return;
     if (!checkSocketRate(socket.id, 'mines_board_state', 10)) return;
+    // Must be an alive player in the mines lobby
+    const boardPlayer = minesRoom.players.get(socket.id);
+    if (!boardPlayer || !boardPlayer.alive) return;
     minesRoom.updateBoard(socket.id, data.grid);
 
     // Relay board to everyone for sidebar mini-boards (optional, can be expensive)
@@ -1007,6 +1049,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   socket.on('mines_player_died', () => {
+    if (!checkSocketRate(socket.id, 'mines_player_died', 3)) return;
     const player = minesRoom.players.get(socket.id);
     if (!player || !player.alive) return;
 

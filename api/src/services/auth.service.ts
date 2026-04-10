@@ -303,11 +303,13 @@ export class AuthService {
 
   /**
    * Verify JWT token and return user
+   * Accepts both HS512 (new) and HS256 (legacy) tokens for backward compatibility.
+   * New tokens are always signed with HS512. Old HS256 tokens will expire naturally.
    */
   static async verifyToken(token: string): Promise<User | null> {
     try {
       const payload = jwt.verify(token, config.jwt.secret, {
-        algorithms: [config.jwt.algorithm],
+        algorithms: ['HS512', 'HS256'],
       }) as { userId: number };
       return this.getUserById(payload.userId);
     } catch {

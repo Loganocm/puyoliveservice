@@ -41,6 +41,17 @@ export const config = {
   // CORS
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
 
+  // Internal API key for server-to-server calls (match recording)
+  internalApiKey: (() => {
+    const key = process.env.INTERNAL_API_KEY;
+    if (process.env.NODE_ENV === 'production') {
+      if (!key) throw new Error('INTERNAL_API_KEY must be set in production');
+      if (key.length < 32) throw new Error('INTERNAL_API_KEY must be at least 32 characters');
+      return key;
+    }
+    return key || crypto.randomBytes(32).toString('base64url');
+  })(),
+
   // ELO Configuration
   elo: {
     defaultRating: 1000,

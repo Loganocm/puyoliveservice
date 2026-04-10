@@ -26,19 +26,19 @@ export class NetworkManager {
 
         // Auto-detect URL
         if (!url) {
-            // Priority: Query Param > Env Var > Relative/Localhost
-            const params = new URLSearchParams(window.location.search);
-            url = params.get('server') ||
-                import.meta.env.VITE_SOCKET_URL ||
-                import.meta.env.VITE_SERVER_URL;
+            // Only allow query param override in development (prevents URL injection attacks in production)
+            const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-            if (!url) {
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                    url = 'http://localhost:3000';
-                } else {
-                    // Production: use the dedicated game subdomain
-                    url = 'https://game.puyo.live';
-                }
+            if (isDev) {
+                const params = new URLSearchParams(window.location.search);
+                url = params.get('server') ||
+                    import.meta.env.VITE_SOCKET_URL ||
+                    import.meta.env.VITE_SERVER_URL ||
+                    'http://localhost:3000';
+            } else {
+                url = import.meta.env.VITE_SOCKET_URL ||
+                    import.meta.env.VITE_SERVER_URL ||
+                    'https://game.puyo.live';
             }
         }
 

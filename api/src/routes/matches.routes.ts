@@ -1,15 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { MatchService } from '../services/match.service.js';
-import { authenticate, asyncHandler } from '../middleware/index.js';
+import { internalOnly, asyncHandler } from '../middleware/index.js';
 
 const router = Router();
 
 /**
  * POST /matches
- * Record a new match result (internal/server use)
- * Requires authentication (server-to-server should use a service token)
+ * Record a new match result (server-to-server ONLY)
+ * Requires X-Internal-Key header — NOT accessible with user JWTs
  */
-router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) => {
+router.post('/', internalOnly, asyncHandler(async (req: Request, res: Response) => {
   const {
     player1_id,
     player2_id,

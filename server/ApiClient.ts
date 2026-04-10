@@ -3,6 +3,7 @@
  */
 
 const API_URL = process.env.API_URL || 'http://localhost:3001';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
 interface RecordMatchParams {
   player1_id: number;
@@ -37,18 +38,17 @@ interface UserProfile {
 }
 
 /**
- * Record a match result with the API
+ * Record a match result with the API (server-to-server, uses internal API key)
  */
 export async function recordMatch(
-  params: RecordMatchParams,
-  authToken: string
+  params: RecordMatchParams
 ): Promise<MatchResult | null> {
   try {
     const response = await fetch(`${API_URL}/api/matches`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
+        'X-Internal-Key': INTERNAL_API_KEY
       },
       body: JSON.stringify(params)
     });

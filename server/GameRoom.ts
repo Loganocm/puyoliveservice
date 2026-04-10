@@ -261,14 +261,20 @@ export class GameRoom {
         };
     }
 
-    // Update room settings (host only)
+    // Update room settings (host only) — explicit key assignment to prevent prototype pollution
     updateSettings(newSettings: Partial<RoomSettings>) {
         if (newSettings.bestOf !== undefined && ![1, 3, 5].includes(newSettings.bestOf)) return;
         if (newSettings.maxPlayers !== undefined && ![2, 3, 4].includes(newSettings.maxPlayers)) return;
-        if (newSettings.garbageMultiplier !== undefined && (newSettings.garbageMultiplier < 0.5 || newSettings.garbageMultiplier > 3)) return;
-        if (newSettings.marginTime !== undefined && (newSettings.marginTime < 30 || newSettings.marginTime > 300)) return;
-        this.settings = { ...this.settings, ...newSettings };
-        this.maxPlayers = this.settings.maxPlayers;
+        if (newSettings.garbageMultiplier !== undefined && (typeof newSettings.garbageMultiplier !== 'number' || newSettings.garbageMultiplier < 0.5 || newSettings.garbageMultiplier > 3)) return;
+        if (newSettings.marginTime !== undefined && (typeof newSettings.marginTime !== 'number' || newSettings.marginTime < 30 || newSettings.marginTime > 300)) return;
+        // Only copy known keys (never use object spread with untrusted input)
+        if (newSettings.bestOf !== undefined) this.settings.bestOf = newSettings.bestOf;
+        if (newSettings.maxPlayers !== undefined) {
+            this.settings.maxPlayers = newSettings.maxPlayers;
+            this.maxPlayers = newSettings.maxPlayers;
+        }
+        if (newSettings.garbageMultiplier !== undefined) this.settings.garbageMultiplier = newSettings.garbageMultiplier;
+        if (newSettings.marginTime !== undefined) this.settings.marginTime = newSettings.marginTime;
     }
 
     // Reset for next game in a series

@@ -96,15 +96,29 @@ router.post('/change-password', authenticate, authLimiter, asyncHandler(async (r
   }
 }));
 
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60, // 60 verifications per window (game server calls this on each socket connect)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts' },
+});
+
 /**
  * POST /auth/verify
  * Verify if a token is valid
  */
-router.post('/verify', asyncHandler(async (req: Request, res: Response) => {
+router.post('/verify', verifyLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.body;
 
-  if (!token) {
+  if (!token || typeof token !== 'string') {
     res.status(400).json({ valid: false, error: 'Token required' });
+    return;
+  }
+
+  // Cap token length to prevent DoS via massive strings
+  if (token.length > 2048) {
+    res.status(400).json({ valid: false, error: 'Invalid token' });
     return;
   }
 
@@ -122,10 +136,15 @@ router.post('/verify', asyncHandler(async (req: Request, res: Response) => {
  * POST /auth/check
  * Check if username exists
  */
-router.post('/check', asyncHandler(async (req: Request, res: Response) => {
+router.post('/check', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { username } = req.body;
-  if (!username) {
+  if (!username || typeof username !== 'string') {
     res.status(400).json({ error: 'Username required' });
+    return;
+  }
+
+  if (username.length > 32) {
+    res.status(400).json({ error: 'Invalid username' });
     return;
   }
 
