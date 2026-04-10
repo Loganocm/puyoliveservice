@@ -259,7 +259,8 @@ export class QuickPlayScene implements IScene {
         this.engine.onGarbageGenerated = (amount) => {
             if (amount > 0) {
                 this.spawnFloatingText(300, 200, `ATTACK! +${amount}`, 0xff6600);
-                NetworkManager.minesSendGarbage(amount, this.engine.stats.chainCount);
+                // Only send chainLength — server calculates amount authoritatively
+                NetworkManager.minesSendGarbage(this.engine.stats.chainCount);
             }
         };
 
@@ -418,6 +419,7 @@ export class QuickPlayScene implements IScene {
 
         try {
             this.currentFrame++;
+            NetworkManager.minesTickFrame();
 
             // Escape to leave
             if (Input.isPressed('Escape')) {
@@ -496,6 +498,10 @@ export class QuickPlayScene implements IScene {
         }
     }
 
+    private recordInputForServer(inputType: string): void {
+        NetworkManager.minesRecordInput(inputType);
+    }
+
     private handleInput() {
         if (!this.engine.activePiece) return;
         const cf = this.currentFrame;
@@ -507,13 +513,17 @@ export class QuickPlayScene implements IScene {
             this.engine.movePiece(-1);
             this.dasFrameLeft = cf + das;
             this.lastMoveFrameLeft = cf;
+            this.recordInputForServer('L');
         } else if (Input.isActionDown('moveLeft')) {
             if (cf >= this.dasFrameLeft) {
                 if (arr === 0) {
-                    while (this.engine.movePiece(-1)) {}
+                    while (this.engine.movePiece(-1)) {
+                        this.recordInputForServer('L');
+                    }
                 } else if (cf - this.lastMoveFrameLeft >= arr) {
                     this.engine.movePiece(-1);
                     this.lastMoveFrameLeft = cf;
+                    this.recordInputForServer('L');
                 }
             }
         } else {
@@ -525,13 +535,17 @@ export class QuickPlayScene implements IScene {
             this.engine.movePiece(1);
             this.dasFrameRight = cf + das;
             this.lastMoveFrameRight = cf;
+            this.recordInputForServer('R');
         } else if (Input.isActionDown('moveRight')) {
             if (cf >= this.dasFrameRight) {
                 if (arr === 0) {
-                    while (this.engine.movePiece(1)) {}
+                    while (this.engine.movePiece(1)) {
+                        this.recordInputForServer('R');
+                    }
                 } else if (cf - this.lastMoveFrameRight >= arr) {
                     this.engine.movePiece(1);
                     this.lastMoveFrameRight = cf;
+                    this.recordInputForServer('R');
                 }
             }
         } else {
@@ -540,18 +554,22 @@ export class QuickPlayScene implements IScene {
 
         // Rotations
         if (Input.isActionPressed('rotateCW')) {
-            this.engine.rotate(1);
+            if (this.engine.rotate(1)) this.recordInputForServer('CW');
         }
         if (Input.isActionPressed('rotateCCW')) {
-            this.engine.rotate(-1);
+            if (this.engine.rotate(-1)) this.recordInputForServer('CC');
         }
 
         // Soft drop
-        this.engine.softDrop = Input.isActionDown('softDrop');
+        const softDropNow = Input.isActionDown('softDrop');
+        if (softDropNow !== this.engine.softDrop) {
+            this.engine.softDrop = softDropNow;
+            this.recordInputForServer(softDropNow ? 'SD' : 'SU');
+        }
 
         // Hard drop
         if (Input.isActionPressed('hardDrop')) {
-            this.engine.hardDrop();
+            if (this.engine.hardDrop()) this.recordInputForServer('HD');
         }
     }
 

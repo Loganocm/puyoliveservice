@@ -3,7 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { roomManager } from './RoomManager.js';
-import { minesRoom } from './MinesRoom.js';
+import { minesRoom, MinesRoom } from './MinesRoom.js';
 import { recordMatch, verifyToken, checkApiHealth } from './ApiClient.js';
 import { PuyoSimulator } from './PuyoSimulator.js';
 
@@ -146,10 +146,16 @@ function isValidGrid(grid: unknown): grid is number[][] {
 }
 
 /** Set up server-authoritative game simulators for a match room.
- *  Creates one PuyoSimulator per player, wired to send garbage to opponents. */
-function setupSimulators(room: ReturnType<typeof roomManager.createRoom>) {
+ *  Creates one PuyoSimulator per player, wired to send garbage to opponents.
+ *  Starts the server-side game loop that runs at ~60fps INDEPENDENT of client tick_frame,
+ *  eliminating any client-driven "freeze the sim" exploit (Never Lose, AFK bypass, etc.). */
+function setupSimulators(
+  room: ReturnType<typeof roomManager.createRoom>,
+  onPlayerDeath: (loserSocketId: string) => void
+) {
   const playerIds = Array.from(room.players.keys());
   room.simulators.clear();
+  room.stopTickLoop();
 
   for (const pid of playerIds) {
     const sim = new PuyoSimulator(room.seed);
@@ -174,6 +180,30 @@ function setupSimulators(room: ReturnType<typeof roomManager.createRoom>) {
       room.recordGarbage(pid, amount);
     };
   }
+
+  // ── Server-side game loop ──────────────────────────────────────────────────
+  // Advances simulators at ~60fps entirely on the server, independent of
+  // any client-sent tick_frame. This means:
+  //   • Cheater can't freeze the sim by stopping tick_frame.
+  //   • Cheater can't delay death detection by pausing their client loop.
+  //   • Both players die on the server's schedule, not the cheater's.
+  room.tickInterval = setInterval(() => {
+    if (room.matchConcluded) {
+      room.stopTickLoop();
+      return;
+    }
+    for (const [pid, sim] of room.simulators) {
+      if (room.matchConcluded) break;
+      (sim as PuyoSimulator).update();
+      if ((sim as PuyoSimulator).isGameOver && !room.matchConcluded) {
+        console.log(`[ServerLoop] Player ${room.players.get(pid)?.name} (${pid}) died in room ${room.id}`);
+        room.stopTickLoop();
+        onPlayerDeath(pid);
+        break;
+      }
+    }
+  }, 16); // ~62.5fps — close enough to client 60fps for death detection purposes
+
   console.log(`[Simulator] Created ${room.simulators.size} simulators for room ${room.id} (seed: ${room.seed})`);
 }
 
@@ -191,6 +221,48 @@ minesRoom.onBotGarbage = (targetSocketId: string, amount: number) => {
 };
 minesRoom.onBroadcastPlayerList = () => {
   io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+};
+
+minesRoom.onPlayerGarbage = (targetSocketId: string, amount: number, senderName: string, senderSocketId: string) => {
+  const targetSocket = io.sockets.sockets.get(targetSocketId);
+  if (targetSocket) {
+    targetSocket.emit('mines_receive_garbage', {
+      amount,
+      fromSocketId: senderSocketId,
+      fromUsername: senderName,
+    });
+  }
+  io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+};
+
+minesRoom.onPlayerDiedServer = (deadSocketId: string) => {
+  const player = minesRoom.players.get(deadSocketId);
+  if (!player || !player.alive) return;
+
+  for (const [id, p] of minesRoom.players) {
+    if (p.alive && p.currentTarget === deadSocketId && id !== deadSocketId) {
+      minesRoom.recordKO(id);
+      const killerSocket = io.sockets.sockets.get(id);
+      if (killerSocket) {
+        killerSocket.emit('mines_ko', {
+          targetUsername: player.username,
+          totalKOs: p.kos,
+        });
+      }
+      break;
+    }
+  }
+
+  const deadPlayer = minesRoom.killPlayer(deadSocketId);
+  if (deadPlayer) {
+    console.log(`[Mines] ${deadPlayer.username} died at depth ${deadPlayer.depth} (SERVER DETECTED)`);
+    io.to('MINES_LOBBY').emit('mines_player_died_broadcast', {
+      socketId: deadSocketId,
+      username: deadPlayer.username,
+      depth: deadPlayer.depth,
+    });
+    io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+  }
 };
 
 io.on('connection', (socket: Socket) => {
@@ -385,7 +457,7 @@ io.on('connection', (socket: Socket) => {
         // Auto-start game after short delay
         setTimeout(() => {
           room.startMatch();
-          setupSimulators(room);
+          setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
           const playerIds = Array.from(room.players.keys());
           io.to(room.id).emit('game_start', { seed: room.seed, roomId: room.id, players: playerIds });
         }, 3000);
@@ -493,7 +565,7 @@ io.on('connection', (socket: Socket) => {
 
         console.log(`Starting game in room ${roomId}`);
         room.startMatch();
-        setupSimulators(room);
+        setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
         const playerIds = Array.from(room.players.keys());
         io.to(roomId).emit('game_start', { seed: room.seed, roomId: room.id, players: playerIds });
       } else {
@@ -659,7 +731,8 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // V2 Replay: Tick frame counter (only player 0 is authoritative to prevent double-counting)
+  // V2 Replay: Tick frame counter — ONLY for replay frame numbering and AFK detection.
+  // Sim advancement now runs on the server-side game loop in setupSimulators.
   socket.on('tick_frame', (data: { roomId: string }) => {
     if (!data || typeof data.roomId !== 'string') return;
     if (!checkSocketRate(socket.id, 'tick_frame', 65)) return;
@@ -669,18 +742,7 @@ io.on('connection', (socket: Socket) => {
     const playerIndex = room.getPlayerIndex(socket.id);
     if (playerIndex === 0) {
       room.lastTickFrame = Date.now(); // Anti-cheat: tracks active ticking
-      room.tick();
-
-      // Advance all player simulators and check for death (server-authoritative)
-      for (const [pid, sim] of room.simulators) {
-        if (room.matchConcluded) break;
-        (sim as PuyoSimulator).update();
-        if ((sim as PuyoSimulator).isGameOver && !room.matchConcluded) {
-          console.log(`[Simulator] Player ${room.players.get(pid)?.name} (${pid}) died in room ${room.id} at frame ${room.frameCount}`);
-          handleMatchEnd(room.id, pid, 'lost');
-          break;
-        }
-      }
+      room.tick(); // Increment replay frame counter (sim advancement is server-side)
     }
   });
 
@@ -1009,7 +1071,7 @@ io.on('connection', (socket: Socket) => {
 
         setTimeout(() => {
           newRoom.startMatch();
-          setupSimulators(newRoom);
+          setupSimulators(newRoom, (loserSocketId) => handleMatchEnd(newRoom.id, loserSocketId, 'lost'));
           const replayerIds = Array.from(newRoom.players.keys());
           io.to(newRoom.id).emit('game_start', { seed: newRoom.seed, roomId: newRoom.id, players: replayerIds });
         }, 3000);
@@ -1121,97 +1183,28 @@ io.on('connection', (socket: Socket) => {
     });
   });
 
-  socket.on('mines_send_garbage', (data: { amount: number, chainLength?: number }) => {
-    if (!data || typeof data.amount !== 'number' || !Number.isInteger(data.amount) || data.amount <= 0 || data.amount > 100) return;
-    if (data.chainLength !== undefined && (typeof data.chainLength !== 'number' || !Number.isInteger(data.chainLength) || data.chainLength < 1 || data.chainLength > 25)) return;
-    if (!checkSocketRate(socket.id, 'mines_send_garbage', 30)) return;
-    // Must be an alive player in the mines lobby
-    const sender = minesRoom.players.get(socket.id);
-    if (!sender || !sender.alive) return;
-
-    const result = minesRoom.processGarbage(socket.id, data.amount, data.chainLength || 0);
-    if (!result) return;
-
-    // Send garbage only to the target player
-    const targetSocket = io.sockets.sockets.get(result.targetSocketId);
-    if (targetSocket) {
-      targetSocket.emit('mines_receive_garbage', {
-        amount: result.amount,
-        fromSocketId: socket.id,
-        fromUsername: minesRoom.players.get(socket.id)?.username || '???',
-      });
-    }
-
-    // Broadcast updated player list (garbage stats changed)
-    broadcastMinesPlayerList();
-  });
-
-  socket.on('mines_board_state', (data: { grid: number[][] }) => {
-    if (!isValidGrid(data?.grid)) return;
-    if (!checkSocketRate(socket.id, 'mines_board_state', 10)) return;
-    // Must be an alive player in the mines lobby
-    const boardPlayer = minesRoom.players.get(socket.id);
-    if (!boardPlayer || !boardPlayer.alive) return;
-    minesRoom.updateBoard(socket.id, data.grid);
-
-    // Relay board to everyone for sidebar mini-boards (optional, can be expensive)
-    // Only send to players targeting this player for efficiency
-    for (const [id, p] of minesRoom.players) {
-      if (p.currentTarget === socket.id && id !== socket.id) {
-        const s = io.sockets.sockets.get(id);
-        if (s) {
-          s.emit('mines_target_board', { grid: data.grid, socketId: socket.id });
-        }
-      }
-    }
-  });
-
-  socket.on('mines_score_update', (data: { score: number }) => {
-    if (!data || typeof data.score !== 'number' || !Number.isFinite(data.score)) return;
-    if (data.score < 0 || data.score > 100_000_000) return;
-    if (!checkSocketRate(socket.id, 'mines_score_update', 10)) return;
+  socket.on('mines_record_input', (data: { input: string }) => {
+    if (!data || typeof data.input !== 'string') return;
     const player = minesRoom.players.get(socket.id);
     if (!player || !player.alive) return;
-    // Score must not decrease (prevent manipulation)
-    if (data.score < player.score) return;
-    const depth = minesRoom.updateScore(socket.id, data.score);
-
-    // Periodically broadcast updated player list
-    // (to avoid flooding, client should throttle score updates)
-    broadcastMinesPlayerList();
+    
+    player.simulator.recordInput(data.input);
   });
 
-  socket.on('mines_player_died', () => {
-    if (!checkSocketRate(socket.id, 'mines_player_died', 3)) return;
+  socket.on('mines_tick_frame', () => {
     const player = minesRoom.players.get(socket.id);
     if (!player || !player.alive) return;
-
-    // Find who was targeting this player — they get the KO credit
-    for (const [id, p] of minesRoom.players) {
-      if (p.alive && p.currentTarget === socket.id && id !== socket.id) {
-        minesRoom.recordKO(id);
-        const killerSocket = io.sockets.sockets.get(id);
-        if (killerSocket) {
-          killerSocket.emit('mines_ko', {
-            targetUsername: player.username,
-            totalKOs: p.kos,
-          });
-        }
-        break; // Only one KO credit per death
-      }
-    }
-
-    const deadPlayer = minesRoom.killPlayer(socket.id);
-    if (deadPlayer) {
-      console.log(`[Mines] ${deadPlayer.username} died at depth ${deadPlayer.depth}`);
-      io.to('MINES_LOBBY').emit('mines_player_died_broadcast', {
-        socketId: socket.id,
-        username: deadPlayer.username,
-        depth: deadPlayer.depth,
-      });
-      broadcastMinesPlayerList();
-    }
+    
+    // In V2, we might track AFK by checking if tick_frame stops arriving.
+    // However, simulation progresses entirely on the server loop now anyway.
+    // Tracking this could be useful for AFK disconnects.
   });
+
+  // Client events below are deprecated. The server's PuyoSimulator calculates them natively.
+  socket.on('mines_send_garbage', () => {});
+  socket.on('mines_board_state', () => {});
+  socket.on('mines_score_update', () => {});
+  socket.on('mines_player_died', () => {});
 
   // ═══════════════════════════════════════════════════════
   // END PUYO MINES

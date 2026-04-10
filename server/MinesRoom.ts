@@ -11,6 +11,8 @@
  * - Bot fills in when < 10 players, scales difficulty by depth level
  */
 
+import { PuyoSimulator } from './PuyoSimulator';
+
 export type TargetingMode = 'random' | 'attackers' | 'badges' | 'vulnerable';
 
 /**
@@ -50,6 +52,7 @@ export interface MinesPlayer {
     kos: number;             // Number of kills this session
     garbageSent: number;     // Total garbage sent this session
     board: number[][] | null; // Last known board state (for spectating)
+    simulator: PuyoSimulator;
 
     // Targeting
     targetingMode: TargetingMode;
@@ -104,6 +107,19 @@ export class MinesRoom {
     public seed: number = Date.now();
     public createdAt: number = Date.now();
 
+    /**
+     * Server-authoritative garbage calculation from chain length.
+     * Client-reported amounts are NEVER trusted — this is the only source of truth.
+     */
+    static calculateGarbage(chainLength: number): number {
+        // Clamp to sane input range
+        const chain = Math.max(1, Math.min(chainLength, 25));
+        const base = CHAIN_GARBAGE_TABLE[Math.min(chain, 7)] ?? 10;
+        // For chains beyond 7, add 2 per additional chain level
+        const bonus = chain > 7 ? (chain - 7) * 2 : 0;
+        return base + bonus;
+    }
+
     // Round tracking
     private roundNumber: number = 0;
 
@@ -116,8 +132,12 @@ export class MinesRoom {
     public onBotGarbage: ((targetSocketId: string, amount: number) => void) | null = null;
     /** Callback for server to broadcast updated player list */
     public onBroadcastPlayerList: (() => void) | null = null;
+    /** Callback for server to notify a player death */
+    public onPlayerDiedServer: ((socketId: string) => void) | null = null;
     /** Seed rotation interval handle */
     private seedInterval: ReturnType<typeof setInterval> | null = null;
+    /** Server simulation tick interval */
+    private simulatorTickInterval: ReturnType<typeof setInterval> | null = null;
 
     constructor() {
         // Rotate seed periodically for variety
@@ -127,6 +147,9 @@ export class MinesRoom {
                 this.roundNumber++;
             }
         }, 60000); // Check every minute
+
+        // Server-authoritative tick loop
+        this.simulatorTickInterval = setInterval(() => this.tickSimulators(), 16);
     }
 
     // ── Bot Management ──
@@ -237,6 +260,29 @@ export class MinesRoom {
         this.tickBot();
     }
 
+    private tickSimulators(): void {
+        for (const [socketId, player] of this.players) {
+            if (socketId === MinesRoom.BOT_ID || !player.alive) continue;
+
+            player.simulator.update();
+            player.score = player.simulator.stats.score;
+            player.depth = Math.floor(player.score / DEPTH_DIVISOR);
+            
+            // Periodically sync the visible board
+            if (player.simulator.frameCount % 6 === 0) {
+                player.board = player.simulator.getSerializedData();
+            }
+
+            if (player.simulator.isGameOver && player.alive) {
+                if (this.onPlayerDiedServer) {
+                    this.onPlayerDiedServer(socketId);
+                } else {
+                    this.killPlayer(socketId);
+                }
+            }
+        }
+    }
+
     private stopBotLoop(): void {
         if (this.botInterval) {
             clearTimeout(this.botInterval);
@@ -304,9 +350,35 @@ export class MinesRoom {
             kos: 0,
             garbageSent: 0,
             board: null,
+            simulator: new PuyoSimulator(this.seed),
             targetingMode: 'random',
             currentTarget: null,
             joinedAt: Date.now(),
+        };
+
+        player.simulator.onGarbageGenerated = (amount: number) => {
+            // Note: client events now ignore 'mines_send_garbage' from clients
+            // Instead, this directly applies the server simulated garbage.
+            const chainLength = player.simulator.stats.chainCount;
+            // The simulation amount is the raw amount (which is 1:1 in simulator but we override using FFA logic)
+            // Replace standard PuyoSimulator garbage logic with FFA formula
+            const ffaAmount = MinesRoom.calculateGarbage(chainLength);
+            if (ffaAmount <= 0) return;
+
+            const targetId = player.currentTarget;
+            if (targetId) {
+                const target = this.players.get(targetId);
+                if (target && target.alive && this.onBotGarbage) {
+                     // We can reuse the onBotGarbage for standard player garbage dispatch!
+                     // Actually, we'll create a dedicated callback or update here.
+                     player.garbageSent += ffaAmount;
+                     target.simulator.addGarbage(ffaAmount);
+                     // The actual network emit must happen from index.ts, so we'll fire onPlayerGarbage
+                     if (this.onPlayerGarbage) {
+                         this.onPlayerGarbage(targetId, ffaAmount, player.username, socketId);
+                     }
+                }
+            }
         };
 
         this.players.set(data.socketId, player);
@@ -364,7 +436,24 @@ export class MinesRoom {
         player.depth = 0;
         player.score = 0;
         player.board = null;
+        player.simulator = new PuyoSimulator(this.seed);
         player.diedAt = undefined;
+
+        // Reattach garbage listener
+        player.simulator.onGarbageGenerated = (amount: number) => {
+            const chainLength = player.simulator.stats.chainCount;
+            const ffaAmount = MinesRoom.calculateGarbage(chainLength);
+            if (ffaAmount <= 0) return;
+            const targetId = player.currentTarget;
+            if (targetId) {
+                const target = this.players.get(targetId);
+                if (target && target.alive && this.onPlayerGarbage) {
+                     player.garbageSent += ffaAmount;
+                     target.simulator.addGarbage(ffaAmount);
+                     this.onPlayerGarbage(targetId, ffaAmount, player.username, socketId);
+                }
+            }
+        };
 
         this.reassignTarget(socketId);
         return true;
@@ -419,6 +508,9 @@ export class MinesRoom {
 
         return { targetSocketId: targetId, amount };
     }
+
+    /** Callback for server to route garbage from players */
+    public onPlayerGarbage: ((targetSocketId: string, amount: number, senderName: string, senderSocketId: string) => void) | null = null;
 
     /**
      * Record a KO (when targeted player dies from your garbage).

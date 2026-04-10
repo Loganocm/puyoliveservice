@@ -415,6 +415,28 @@ export default function App() {
               </span>
             </motion.button>
 
+            {/* Admin Tab - Left Side (admin only) */}
+            {user?.is_admin && (
+              <motion.button
+                initial={{ opacity: 0, x: -40 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{
+                  duration: hasVisitedMenu.current ? 0 : 0.5,
+                  delay: hasVisitedMenu.current ? 0 : 0.4,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+                whileHover={{ scale: 1.03, x: 4 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowAdmin(true)}
+                className="fixed left-0 top-[calc(50%+120px)] z-30 flex flex-col items-center gap-2 px-3 py-6 bg-red-700/80 hover:bg-red-600/90 border border-white/10 rounded-r-2xl shadow-lg shadow-red-500/20 backdrop-blur-sm transition-colors cursor-pointer"
+              >
+                <Shield className="w-5 h-5 text-white" />
+                <span className="text-[11px] font-bold tracking-widest text-white/90 [writing-mode:vertical-lr] rotate-180">
+                  ADMIN
+                </span>
+              </motion.button>
+            )}
+
             {/* Centered Logo */}
             <motion.div
               initial={{ opacity: 0, y: -20 }}

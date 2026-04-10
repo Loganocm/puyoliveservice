@@ -416,9 +416,10 @@ export class NetworkManager {
         this.socket.emit('mines_set_target', { mode });
     }
 
-    public static minesSendGarbage(amount: number, chainLength?: number) {
+    public static minesSendGarbage(chainLength: number) {
         if (!this.socket) return;
-        this.socket.emit('mines_send_garbage', { amount, chainLength });
+        // Only chainLength is sent — the server calculates the amount authoritatively
+        this.socket.emit('mines_send_garbage', { chainLength });
     }
 
     public static minesBoardState(grid: number[][]) {
@@ -434,6 +435,16 @@ export class NetworkManager {
     public static minesPlayerDied() {
         if (!this.socket) return;
         this.socket.emit('mines_player_died');
+    }
+
+    public static minesRecordInput(input: string) {
+        if (!this.socket) return;
+        this.socket.emit('mines_record_input', { input });
+    }
+
+    public static minesTickFrame() {
+        if (!this.socket) return;
+        this.socket.emit('mines_tick_frame');
     }
 }
 

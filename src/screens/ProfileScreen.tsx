@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useRef } from "react";
 import { APIClient } from "../api/client";
 import { AuthManager } from "../core/AuthManager";
-import { Clock, Calendar, Pencil, Check, X, Loader2 } from "lucide-react";
+import { GameEvents } from "../core/GameEvents";
+import {
+  Clock,
+  Calendar,
+  Pencil,
+  Check,
+  X,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
 
 interface MatchHistoryEntry {
   id: number;
@@ -47,6 +56,9 @@ export const ProfileScreen: React.FC<{
       // Reload user stats
       const me = await APIClient.getMe();
       setUser(me);
+      // Keep AuthManager and app state in sync (ensures is_admin propagates)
+      AuthManager.currentUser = me;
+      GameEvents.emit("user_update", me);
 
       const [history, pctData] = await Promise.all([
         APIClient.getMatchHistory(me.id),
@@ -203,6 +215,14 @@ export const ProfileScreen: React.FC<{
                   <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-amber-400">
                     {user?.elo_rating} Elo
                   </div>
+                  {(user as any)?.is_admin && (
+                    <div className="flex items-center gap-1 bg-red-500/15 border border-red-500/30 px-3 py-1 rounded-full">
+                      <ShieldCheck size={13} className="text-red-400" />
+                      <span className="text-xs font-bold text-red-400 uppercase tracking-wide">
+                        Admin
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

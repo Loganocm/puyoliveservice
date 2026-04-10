@@ -97,6 +97,16 @@ export class GameRoom {
     // If this goes stale during an active match, player 0 is forfeited
     lastTickFrame: number = 0;
 
+    // Server-side game loop interval (runs sim independently of client tick_frame)
+    tickInterval: ReturnType<typeof setInterval> | null = null;
+
+    stopTickLoop() {
+        if (this.tickInterval) {
+            clearInterval(this.tickInterval);
+            this.tickInterval = null;
+        }
+    }
+
     // Legacy (kept for backwards compat during transition)
     replayLog: ReplayEventLegacy[] = [];
 
@@ -167,6 +177,7 @@ export class GameRoom {
         this.matchConcluded = false;
         this.conclusionLoser = null;
         this.simulators.clear();
+        this.stopTickLoop(); // Clear any leftover loop from previous game
         this.lastTickFrame = Date.now(); // Initialize tick heartbeat
         // Initialize heartbeat + game state tracking for all players
         const now = Date.now();
