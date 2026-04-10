@@ -14,7 +14,7 @@
  * - Simplified opponent view (target board only)
  */
 
-import { Container, Graphics, Sprite, AnimatedSprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, AnimatedSprite, Text, TextStyle } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
 import { Board } from '../game/Board';
@@ -179,11 +179,10 @@ export class QuickPlayScene implements IScene {
         this.uiContainer.addChild(this.damageGraphics);
         this.uiContainer.addChild(this.garbageTrayGraphics);
 
-        // Target board display (smaller, on the left)
+        // Target board display (small, positioned in updateLayout)
         this.targetBoardContainer = new Container();
         this.gameContentWrapper.addChild(this.targetBoardContainer);
-        this.targetBoardContainer.position.set(40, 520);
-        this.targetBoardContainer.scale.set(0.45);
+        this.targetBoardContainer.scale.set(0.35);
 
         this.targetBoardBorder = new Graphics();
         this.targetBoardBorder.rect(0, 0, COLS * CELL_SIZE, (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE);
@@ -672,7 +671,7 @@ export class QuickPlayScene implements IScene {
         const boardH = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
         const boardW = COLS * CELL_SIZE;
         this.graphics.rect(0, 0, boardW, boardH);
-        this.graphics.fill({ color: 0x111122, alpha: 0.85 });
+        this.graphics.fill({ color: 0x000000, alpha: 0.75 });
         this.graphics.stroke({ color: 0x334466, width: 2, alpha: 0.4 });
 
         // Grid lines
@@ -700,112 +699,198 @@ export class QuickPlayScene implements IScene {
     }
 
     private renderPuyos() {
-        // Clear puyo container children
-        while (this.puyoContainer.children.length > 1) {
-            this.puyoContainer.children[this.puyoContainer.children.length - 1].destroy();
+        // Clear puyo container children (keep xMarkerSprite)
+        const children = this.puyoContainer.removeChildren();
+        for (const child of children) {
+            if (child !== this.xMarkerSprite) child.destroy();
         }
-        // Keep xMarkerSprite
-        if (!this.puyoContainer.children.includes(this.xMarkerSprite)) {
-            this.puyoContainer.addChild(this.xMarkerSprite);
-        }
+        this.puyoContainer.addChild(this.xMarkerSprite);
 
-        // Board puyos
-        for (let c = 0; c < COLS; c++) {
-            for (let r = HIDDEN_ROWS; r < TOTAL_ROWS; r++) {
-                const color = this.engine.board.grid[c][r];
-                if (color === PuyoColor.None) continue;
-
-                const texture = this.getPuyoTexture(color);
-                if (!texture) continue;
-
-                const sprite = new Sprite(texture);
-                const visR = r - HIDDEN_ROWS;
-                sprite.x = c * CELL_SIZE;
-                sprite.y = visR * CELL_SIZE;
-                sprite.width = CELL_SIZE;
-                sprite.height = CELL_SIZE;
-
-                // Landing jiggle
-                const key = c * 100 + r;
-                const anim = this.landingAnims.get(key);
-                if (anim) {
-                    const t = anim.t;
-                    const bounce = Math.sin(t * Math.PI * 3) * (1 - t) * 3;
-                    sprite.y += bounce;
-                    const squash = 1 + Math.sin(t * Math.PI * 2) * (1 - t) * 0.15;
-                    sprite.scale.set(1 / squash, squash);
-                    sprite.anchor.set(0.5);
-                    sprite.x += CELL_SIZE / 2;
-                    sprite.y += CELL_SIZE / 2;
-                }
-
-                // Pop animation
-                if (this.engine.state === GameState.POP_ANIM) {
-                    for (const group of this.engine.matchedPuyos) {
-                        for (const cell of group) {
-                            if (cell.c === c && cell.r === r) {
-                                const scale = 1 - this.popAnimProgress;
-                                sprite.scale.set(scale);
-                                sprite.alpha = 1 - this.popAnimProgress;
-                                sprite.anchor.set(0.5);
-                                if (!anim) {
-                                    sprite.x += CELL_SIZE / 2;
-                                    sprite.y += CELL_SIZE / 2;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                this.puyoContainer.addChild(sprite);
+        // Build lookup for gravity interpolation during FALLING state
+        const fallingLookup = new Map<number, number>();
+        let fallingProgress = 0;
+        if (this.engine.state === GameState.FALLING && this.engine.fallingDestinations.length > 0) {
+            const scaledDelay = this.engine.getChainScaledDuration(this.engine.FALL_STEP_DELAY);
+            fallingProgress = Math.min(1, this.engine.stateTimer / scaledDelay);
+            fallingProgress = fallingProgress * fallingProgress; // ease-in
+            for (const f of this.engine.fallingDestinations) {
+                fallingLookup.set(f.c * 100 + f.r, f.destR);
             }
         }
 
-        // Active piece
+        // Build lookup for pop animation
+        const poppingSet = new Set<number>();
+        if (this.engine.state === GameState.POP_ANIM && this.engine.matchedPuyos.length > 0) {
+            for (const group of this.engine.matchedPuyos) {
+                for (const p of group) {
+                    poppingSet.add(p.c * 100 + p.r);
+                }
+            }
+        }
+
+        // Board puyos with connections
+        for (let c = 0; c < COLS; c++) {
+            for (let r = 0; r < TOTAL_ROWS; r++) {
+                const color = this.engine.board.grid[c][r];
+                if (color === PuyoColor.None) continue;
+
+                // Calculate connection bitmask
+                let connections = 0;
+                if (this.checkColor(c, r - 1, color)) connections |= 1; // Top
+                if (this.checkColor(c + 1, r, color)) connections |= 2; // Right
+                if (this.checkColor(c, r + 1, color)) connections |= 4; // Bottom
+                if (this.checkColor(c - 1, r, color)) connections |= 8; // Left
+
+                const key = c * 100 + r;
+
+                // Pop animation
+                if (poppingSet.has(key)) {
+                    const popT = this.popAnimProgress;
+                    const flash = Math.sin(popT * Math.PI * 6) * 0.3 + 0.7;
+                    const shrink = popT < 0.6 ? 1.0 : 1.0 - ((popT - 0.6) / 0.4);
+                    this.drawPuyo(c, r, color, connections, flash, shrink);
+                    continue;
+                }
+
+                // Gravity interpolation
+                const destR = fallingLookup.get(key);
+                if (destR !== undefined) {
+                    const visualR = r + (destR - r) * fallingProgress;
+                    const fallDist = destR - r;
+                    let fallingConns = 0;
+                    const nTop = fallingLookup.get(c * 100 + (r - 1));
+                    const nRight = fallingLookup.get((c + 1) * 100 + r);
+                    const nBot = fallingLookup.get(c * 100 + (r + 1));
+                    const nLeft = fallingLookup.get((c - 1) * 100 + r);
+                    if (nTop !== undefined && (nTop - (r - 1)) === fallDist && this.checkColor(c, r - 1, color)) fallingConns |= 1;
+                    if (nRight !== undefined && (nRight - r) === fallDist && this.checkColor(c + 1, r, color)) fallingConns |= 2;
+                    if (nBot !== undefined && (nBot - (r + 1)) === fallDist && this.checkColor(c, r + 1, color)) fallingConns |= 4;
+                    if (nLeft !== undefined && (nLeft - r) === fallDist && this.checkColor(c - 1, r, color)) fallingConns |= 8;
+                    this.drawPuyo(c, visualR, color, fallingConns);
+                    continue;
+                }
+
+                this.drawPuyo(c, r, color, connections);
+            }
+        }
+
+        // Active piece with connections
         if (this.engine.activePiece && this.engine.state === GameState.ACTIVE) {
             const ap = this.engine.activePiece;
-            const scale = this.spawnAnim >= 0 && this.spawnAnim < 1
-                ? 0.5 + this.spawnAnim * 0.5
-                : 1;
+            const offsets = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+            const sx = offsets[ap.rot].x;
+            const sy = offsets[ap.rot].y;
 
-            this.renderPuyoAt(ap.x, ap.y - HIDDEN_ROWS, ap.mainColor, scale);
+            let mainConn = 0;
+            let subConn = 0;
+            if (ap.mainColor === ap.subColor) {
+                const mainMasks = [1, 2, 4, 8];
+                const subMasks = [4, 8, 1, 2];
+                mainConn = mainMasks[ap.rot];
+                subConn = subMasks[ap.rot];
+            }
 
-            // Sub puyo based on rotation
-            const dx = [0, 1, 0, -1];
-            const dy = [-1, 0, 1, 0];
-            const subX = ap.x + dx[ap.rot];
-            const subY = ap.y + dy[ap.rot] - HIDDEN_ROWS;
-            this.renderPuyoAt(subX, subY, ap.subColor, scale);
+            const spawnScale = this.spawnAnim >= 0 ? 0.5 + this.spawnAnim * 0.5 : 1.0;
+            const spawnAlpha = this.spawnAnim >= 0 ? this.spawnAnim : 1.0;
+
+            this.drawPuyo(ap.x, ap.y, ap.mainColor, mainConn, spawnAlpha, spawnScale);
+            this.drawPuyo(ap.x + sx, ap.y + sy, ap.subColor, subConn, spawnAlpha, spawnScale);
+
+            // Ghost piece
+            this.drawGhostPiece();
         }
 
         // Falling garbage animation
         for (const fg of this.engine.fallingGarbage) {
-            const texture = this.getPuyoTexture(PuyoColor.Garbage);
-            if (!texture) continue;
-            const sprite = new Sprite(texture);
-            sprite.x = fg.c * CELL_SIZE;
-            sprite.y = (fg.r - HIDDEN_ROWS) * CELL_SIZE;
-            sprite.width = CELL_SIZE;
-            sprite.height = CELL_SIZE;
-            this.puyoContainer.addChild(sprite);
+            if (fg.delay <= 10) {
+                this.drawPuyo(fg.c, fg.r, PuyoColor.Garbage, 0);
+            }
         }
     }
 
-    private renderPuyoAt(cx: number, cy: number, color: PuyoColor, scale: number = 1) {
-        const texture = this.getPuyoTexture(color);
-        if (!texture) return;
+    private checkColor(c: number, r: number, color: PuyoColor): boolean {
+        if (!this.engine.board.isValid(c, r)) return false;
+        return this.engine.board.grid[c][r] === color;
+    }
+
+    private drawPuyo(c: number, r: number, color: PuyoColor, connections: number, alpha: number = 1.0, scale: number = 1.0) {
+        const drawY = (r - HIDDEN_ROWS) * CELL_SIZE;
+        const drawX = c * CELL_SIZE;
+
+        const texture = ResourceManager.getPuyoTexture(color, connections);
         const sprite = new Sprite(texture);
-        sprite.x = cx * CELL_SIZE + CELL_SIZE / 2;
-        sprite.y = cy * CELL_SIZE + CELL_SIZE / 2;
-        sprite.width = CELL_SIZE * scale;
-        sprite.height = CELL_SIZE * scale;
+
+        const overlap = connections > 0 ? 4 : 0;
+        const baseW = (CELL_SIZE + overlap) * scale;
+        const baseH = (CELL_SIZE + overlap) * scale;
+
         sprite.anchor.set(0.5);
+        sprite.x = drawX + CELL_SIZE / 2;
+        sprite.y = drawY + CELL_SIZE / 2;
+        sprite.alpha = alpha;
+
+        // Landing jiggle
+        const animKey = Math.round(c) * 100 + Math.round(r);
+        const anim = this.landingAnims.get(animKey);
+        if (anim !== undefined) {
+            const amp = (1 - anim.t) * 0.18;
+            const wave = Math.sin(anim.t * Math.PI * 3);
+            const scaleX = 1 + amp * wave;
+            const scaleY = 1 - amp * wave;
+            sprite.width = baseW * scaleX;
+            sprite.height = baseH * scaleY;
+            sprite.x = anim.gcx + (sprite.x - anim.gcx) * scaleX;
+            sprite.y = anim.gcy + (sprite.y - anim.gcy) * scaleY + (baseH * (1 - scaleY)) * 0.25;
+        } else {
+            sprite.width = baseW;
+            sprite.height = baseH;
+        }
+
         this.puyoContainer.addChild(sprite);
     }
 
-    private getPuyoTexture(color: PuyoColor): Texture | null {
-        if (color === PuyoColor.None) return null;
-        return ResourceManager.getPuyoTexture(color);
+    private drawGhostPiece() {
+        if (!this.engine.activePiece) return;
+        const ap = this.engine.activePiece;
+        const board = this.engine.board;
+
+        let gY = ap.y;
+
+        const canPlace = (x: number, y: number, r: number) => {
+            if (y >= TOTAL_ROWS || x < 0 || x >= COLS) return false;
+            if (y >= 0 && board.grid[x][y] !== PuyoColor.None) return false;
+            const offsets = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+            const sx = x + offsets[r].x;
+            const sy = y + offsets[r].y;
+            if (sy >= TOTAL_ROWS || sx < 0 || sx >= COLS) return false;
+            if (sy >= 0 && board.grid[sx][sy] !== PuyoColor.None) return false;
+            return true;
+        };
+
+        while (canPlace(ap.x, gY + 1, ap.rot)) {
+            gY++;
+        }
+
+        // Don't draw ghost if it overlaps the active piece
+        if (gY === ap.y) return;
+
+        const { x, rot, mainColor, subColor } = ap;
+
+        let mainConn = 0;
+        let subConn = 0;
+        if (mainColor === subColor) {
+            const mainMasks = [1, 2, 4, 8];
+            const subMasks = [4, 8, 1, 2];
+            mainConn = mainMasks[rot];
+            subConn = subMasks[rot];
+        }
+
+        const offsets = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+        const sx = offsets[rot].x;
+        const sy = offsets[rot].y;
+
+        this.drawPuyo(x, gY, mainColor, mainConn, 0.3);
+        this.drawPuyo(x + sx, gY + sy, subColor, subConn, 0.3);
     }
 
     private renderUI() {
@@ -928,8 +1013,8 @@ export class QuickPlayScene implements IScene {
             const pair = this.engine.nextPieces[i];
             const py = nextY + 20 + i * (pieceSize * 2 + 10);
 
-            const subTex = this.getPuyoTexture(pair.sub);
-            const mainTex = this.getPuyoTexture(pair.main);
+            const subTex = ResourceManager.getPuyoTexture(pair.sub);
+            const mainTex = ResourceManager.getPuyoTexture(pair.main);
 
             if (subTex) {
                 const s = new Sprite(subTex);
@@ -994,13 +1079,23 @@ export class QuickPlayScene implements IScene {
             for (let r = HIDDEN_ROWS; r < TOTAL_ROWS; r++) {
                 const color = this.targetBoard.grid[c][r];
                 if (color === PuyoColor.None) continue;
-                const texture = this.getPuyoTexture(color);
+
+                // Calculate target board connections
+                let conn = 0;
+                if (this.targetBoard.isValid(c, r - 1) && this.targetBoard.grid[c][r - 1] === color) conn |= 1;
+                if (this.targetBoard.isValid(c + 1, r) && this.targetBoard.grid[c + 1][r] === color) conn |= 2;
+                if (this.targetBoard.isValid(c, r + 1) && this.targetBoard.grid[c][r + 1] === color) conn |= 4;
+                if (this.targetBoard.isValid(c - 1, r) && this.targetBoard.grid[c - 1][r] === color) conn |= 8;
+
+                const texture = ResourceManager.getPuyoTexture(color, conn);
                 if (!texture) continue;
                 const sprite = new Sprite(texture);
-                sprite.x = c * CELL_SIZE;
-                sprite.y = (r - HIDDEN_ROWS) * CELL_SIZE;
-                sprite.width = CELL_SIZE;
-                sprite.height = CELL_SIZE;
+                const overlap = conn > 0 ? 4 : 0;
+                sprite.anchor.set(0.5);
+                sprite.x = c * CELL_SIZE + CELL_SIZE / 2;
+                sprite.y = (r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
+                sprite.width = CELL_SIZE + overlap;
+                sprite.height = CELL_SIZE + overlap;
                 this.targetBoardContainer.addChild(sprite);
             }
         }
@@ -1110,6 +1205,10 @@ export class QuickPlayScene implements IScene {
         this.puyoContainer.position.set(contentX, topMargin);
         this.effectContainer.position.set(contentX, topMargin);
         this.uiContainer.position.set(contentX, topMargin);
+
+        // Position target board to the right of the stats panel, below next queue
+        const boardRightEdge = contentX + COLS * CELL_SIZE;
+        this.targetBoardContainer.position.set(boardRightEdge + 60, topMargin + 480);
     }
 
     private resizeBackground() {
@@ -1122,6 +1221,7 @@ export class QuickPlayScene implements IScene {
         const scale = Math.max(screenW / texW, screenH / texH);
         this.staticBg.scale.set(scale);
         this.staticBg.position.set(screenW / 2, screenH / 2);
+        this.staticBg.alpha = 0.4; // Dim background for gameplay visibility
     }
 
     onResize(_width: number, _height: number): void {

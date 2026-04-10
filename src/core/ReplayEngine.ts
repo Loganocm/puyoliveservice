@@ -85,6 +85,14 @@ export class ReplayEngine {
         return this._isComplete;
     }
 
+    get frame(): number {
+        return this.currentFrame;
+    }
+
+    get totalFrames(): number {
+        return this.replayData.duration;
+    }
+
     get progress(): number {
         return this.replayData.duration > 0
             ? this.currentFrame / this.replayData.duration
