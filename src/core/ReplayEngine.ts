@@ -120,6 +120,15 @@ export class ReplayEngine {
      * Main update loop - call each render frame with Pixi deltaTime.
      * Uses fixed timestep: accumulates dt and processes logical frames
      * at exactly 1.0 per game frame (60fps), regardless of monitor refresh rate.
+     *
+     * CRITICAL: The execution order must match the live game (GameScene.update):
+     *   1. engine.update(delta)  — state machine advances, pieces spawn
+     *   2. tickFrame             — room.frameCount increments
+     *   3. handleInput()         — player inputs applied & recorded at that frame
+     *
+     * Reversing this causes inputs to fire before the engine has processed
+     * the frame (e.g. before a piece spawns), silently failing and cascading
+     * into total desync.
      */
     update(dt: number = 1.0): void {
         if (this._isPaused || this._isComplete) return;
@@ -130,7 +139,16 @@ export class ReplayEngine {
         while (this.accumulator >= 1.0 && !this._isComplete) {
             this.accumulator -= 1.0;
 
-            // Process inputs at correct frame
+            // 1. Advance both engines by exactly 1 logical frame FIRST
+            //    (matches live game: engine.update runs before input handling)
+            this.engines[0].update(1.0);
+            this.engines[1].update(1.0);
+
+            // 2. Increment frame counter (matches tickFrame incrementing room.frameCount)
+            this.currentFrame++;
+
+            // 3. Process inputs for this frame AFTER engine update
+            //    (matches live game: handleInput runs after engine.update & tickFrame)
             while (this.inputCursor < this.replayData.inputs.length) {
                 const input = this.replayData.inputs[this.inputCursor];
                 if (input.f <= this.currentFrame) {
@@ -140,12 +158,6 @@ export class ReplayEngine {
                     break;
                 }
             }
-
-            // Advance both engines by exactly 1 logical frame
-            this.engines[0].update(1.0);
-            this.engines[1].update(1.0);
-
-            this.currentFrame++;
 
             // Check for completion
             if (this.currentFrame >= this.replayData.duration) {

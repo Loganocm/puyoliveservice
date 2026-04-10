@@ -847,7 +847,7 @@ export class GameEngine {
             }
         }
 
-        if (this.fallingGarbage.length > 0) {
+        if (this.fallingGarbage.length > 0 && !this.isReplaying) {
             SoundManager.play('tinygarbage');
         }
     }
@@ -1010,9 +1010,11 @@ export class GameEngine {
         this.scoreRemainder = generatedPoints % 70;
 
         if (rocksToSend > 0) {
-            // Play Garbage Sound
-            if (rocksToSend >= 15) SoundManager.play('hugegarbage');
-            else SoundManager.play('tinygarbage');
+            // Play Garbage Sound (suppress during replay - scene hooks handle audio)
+            if (!this.isReplaying) {
+                if (rocksToSend >= 15) SoundManager.play('hugegarbage');
+                else SoundManager.play('tinygarbage');
+            }
 
             this.stats.garbageSent += rocksToSend;
             this.onGarbageGenerated?.(rocksToSend);
