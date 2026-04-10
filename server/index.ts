@@ -161,20 +161,21 @@ function setupSimulators(
     const sim = new PuyoSimulator(room.seed);
     room.simulators.set(pid, sim);
 
-    // When this player's sim generates garbage, send to all opponents
+    // When this player's sim generates garbage...
     sim.onGarbageGenerated = (amount: number) => {
       for (const opponentId of playerIds) {
         if (opponentId === pid) continue;
         const opSim = room.simulators.get(opponentId) as PuyoSimulator | undefined;
         if (opSim) opSim.addGarbage(amount);
 
-        // Notify opponent client for display
-        const opSocket = io.sockets.sockets.get(opponentId);
-        if (opSocket) opSocket.emit('receive_garbage', { amount });
-
+        // DISABLED RELAY: Server simulator garbage causes desync with client due to timing mismatch.
+        // We now rely on the client's `send_garbage` packet until rollback is implemented.
+        // const opSocket = io.sockets.sockets.get(opponentId);
+        // if (opSocket) opSocket.emit('receive_garbage', { amount });
+        // 
         // Record 'G' input for replay
-        const targetIndex = room.getPlayerIndex(opponentId) as 0 | 1;
-        room.recordInput(targetIndex, 'G', amount);
+        // const targetIndex = room.getPlayerIndex(opponentId) as 0 | 1;
+        // room.recordInput(targetIndex, 'G', amount);
       }
       // Track stats
       room.recordGarbage(pid, amount);
@@ -182,11 +183,7 @@ function setupSimulators(
   }
 
   // ── Server-side game loop ──────────────────────────────────────────────────
-  // Advances simulators at ~60fps entirely on the server, independent of
-  // any client-sent tick_frame. This means:
-  //   • Cheater can't freeze the sim by stopping tick_frame.
-  //   • Cheater can't delay death detection by pausing their client loop.
-  //   • Both players die on the server's schedule, not the cheater's.
+  // Advances simulators at ~60fps entirely on the server.
   room.tickInterval = setInterval(() => {
     if (room.matchConcluded) {
       room.stopTickLoop();
@@ -196,13 +193,16 @@ function setupSimulators(
       if (room.matchConcluded) break;
       (sim as PuyoSimulator).update();
       if ((sim as PuyoSimulator).isGameOver && !room.matchConcluded) {
-        console.log(`[ServerLoop] Player ${room.players.get(pid)?.name} (${pid}) died in room ${room.id}`);
-        room.stopTickLoop();
-        onPlayerDeath(pid);
-        break;
+        // DISABLED: Server-side death detection triggers falsely due to TCP latency desyncing
+        // the simulator from the client's exact render frames. 
+        // We now rely solely on the client's explicit `player_lost` packet.
+        // console.log(`[ServerLoop] Player ${room.players.get(pid)?.name} (${pid}) died in room ${room.id}`);
+        // room.stopTickLoop();
+        // onPlayerDeath(pid);
+        // break;
       }
     }
-  }, 16); // ~62.5fps — close enough to client 60fps for death detection purposes
+  }, 16); 
 
   console.log(`[Simulator] Created ${room.simulators.size} simulators for room ${room.id} (seed: ${room.seed})`);
 }
@@ -765,8 +765,7 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // send_garbage: NO-OP for game logic — garbage is now calculated server-side by PuyoSimulator.
-  // Kept for backward compatibility; client still sends this but server ignores it.
+  // send_garbage
   // Chain length tracking is still recorded for match stats display.
   socket.on('send_garbage', (data: { roomId: string, amount: number, chainLength?: number }) => {
     if (!data || typeof data.roomId !== 'string') return;
@@ -775,11 +774,23 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
-    // Only record chain length for stats — garbage amount is ignored (server calculates)
+    // Only record chain length for stats
     if (data.chainLength && typeof data.chainLength === 'number' && Number.isInteger(data.chainLength) && data.chainLength >= 1 && data.chainLength <= 25) {
       room.recordChain(socket.id, data.chainLength);
     }
-    // DO NOT relay garbage or record 'G' input — simulator handles this authoritatively
+    
+    // Relay garbage using the client's calculation to prevent visual desyncs 
+    // until the server simulator is fully synchronized with tick_frames
+    socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
+    
+    // Disable server-only 'G' generation override, allow client 'G' to be recorded 
+    // for accurate V2 replays
+    const opponents = Array.from(room.players.keys()).filter(id => id !== socket.id);
+    for (const opponentId of opponents) {
+      const targetIndex = room.getPlayerIndex(opponentId) as 0 | 1;
+      room.recordInput(targetIndex, 'G', data.amount);
+    }
+    room.recordGarbage(socket.id, data.amount);
   });
 
   // send_board_state: Relay only for opponent display.
