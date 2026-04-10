@@ -24,7 +24,6 @@ const allowedOrigins = [
 ];
 
 const corsOrigin = process.env.CORS_ORIGIN || allowedOrigins;
-console.log(`🔒 CORS Origin configured: ${corsOrigin}`);
 
 // Explicitly add CORS middleware for the Express app
 app.use(cors({
@@ -1116,7 +1115,6 @@ io.on('connection', (socket: Socket) => {
   // Start listening IMMEDIATELY - Don't wait for API check
   httpServer.listen(Number(port), "0.0.0.0", () => {
     console.log(`🎮 Puyo Game Server running on port ${port}`);
-    console.log(`📡 URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`}`);
   });
 
   // Stale room cleanup — runs every 5 minutes
