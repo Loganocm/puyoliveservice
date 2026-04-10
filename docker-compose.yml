@@ -1,9 +1,17 @@
+# DevOps Hardening: Limit container logs to prevent MiniPC Out-of-Disk errors.
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # --- PostgreSQL Database ---
   db:
     image: postgres:18-alpine
     container_name: puyio-db
     restart: always
+    logging: *default-logging
     networks:
       - puyo-net
     environment:
@@ -26,6 +34,7 @@ services:
     image: ghcr.io/loganocm/puyio-api:latest
     container_name: puyio-api
     restart: always
+    logging: *default-logging
     networks:
       - puyo-net
     environment:
@@ -58,6 +67,7 @@ services:
       - puyo-net
     container_name: puyo-game
     restart: always
+    logging: *default-logging
     environment:
       PORT: 3000
       API_URL: http://api:8080
@@ -75,6 +85,7 @@ services:
       - puyo-net
     container_name: cloudflared-tunnel
     restart: always
+    logging: *default-logging
     command: tunnel run --protocol http2 --token ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}
     depends_on:
       - api
@@ -83,6 +94,7 @@ services:
   # --- Watchtower (auto-pulls new images from GHCR) ---
   watchtower:
     image: containrrr/watchtower:latest
+    logging: *default-logging
     networks:
       - puyo-net
     volumes:
@@ -98,6 +110,7 @@ services:
     image: postgres:18-alpine
     container_name: puyio-db-backup
     restart: always
+    logging: *default-logging
     networks:
       - puyo-net
     environment:
