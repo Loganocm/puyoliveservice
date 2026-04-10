@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Text, TextStyle, Texture, Assets } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
+import { SceneManager } from '../core/SceneManager';
 import { ReplayEngine, type ReplayFile } from '../core/ReplayEngine';
 import { CELL_SIZE, COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor, PUYO_COLORS } from '../core/Constants';
 import { GameEngine, GameState } from '../core/GameEngine';
@@ -46,9 +47,12 @@ export class ReplayScene implements IScene {
     private staticBg: Sprite;
 
     // Per-board rendering containers
+    private boardContainers: [Container, Container];
+    private boardBgGraphics: [Graphics, Graphics];
     private boardPuyoContainers: [Container, Container];
     private boardEffectContainers: [Container, Container];
     private boardParticleGraphics: [Graphics, Graphics];
+    private boardDamageGraphics: [Graphics, Graphics];
 
     // Per-board animation state
     private animStates: [BoardAnimState, BoardAnimState];
@@ -97,7 +101,7 @@ export class ReplayScene implements IScene {
         this.boardY = 60;
 
         // --- Build per-board containers ---
-        const buildBoard = (x: number): { cont: Container, bg: Graphics, puyos: Container, fx: Container, particles: Graphics } => {
+        const buildBoard = (x: number): { cont: Container, bg: Graphics, puyos: Container, fx: Container, particles: Graphics, damage: Graphics } => {
             const cont = new Container();
             cont.x = x;
             cont.y = this.boardY;
@@ -105,6 +109,9 @@ export class ReplayScene implements IScene {
 
             const bg = new Graphics();
             cont.addChild(bg);
+
+            const damage = new Graphics();
+            cont.addChild(damage);
 
             const puyos = new Container();
             cont.addChild(puyos);
@@ -115,15 +122,18 @@ export class ReplayScene implements IScene {
             const particles = new Graphics();
             fx.addChild(particles);
 
-            return { cont, bg, puyos, fx, particles };
+            return { cont, bg, puyos, fx, particles, damage };
         };
 
         const b1 = buildBoard(this.board1X);
         const b2 = buildBoard(this.board2X);
 
+        this.boardContainers = [b1.cont, b2.cont];
+        this.boardBgGraphics = [b1.bg, b2.bg];
         this.boardPuyoContainers = [b1.puyos, b2.puyos];
         this.boardEffectContainers = [b1.fx, b2.fx];
         this.boardParticleGraphics = [b1.particles, b2.particles];
+        this.boardDamageGraphics = [b1.damage, b2.damage];
 
         // Draw static backgrounds
         this.drawBoardBackground(b1.bg);
@@ -204,16 +214,9 @@ export class ReplayScene implements IScene {
             this.hookEngineEvents(1);
         };
 
-        // Start paused — ReplayOverlay will resume once mounted
-        this.replayEngine.pause();
-
-        // Emit initial state so overlay gets totalFrames immediately
-        GameEvents.emit('replay_update', {
-            currentFrame: 0,
-            totalFrames: replayData.duration,
-            isPaused: true,
-            speed: this.replayEngine.playbackSpeed,
-        });
+        // Start playing immediately — overlay syncs on mount
+        // (Don't start paused; the event handshake with the overlay is fragile
+        // due to AnimatePresence mode="wait" delaying the overlay mount.)
 
         // React UI controls
         GameEvents.on('replay_control', this.handleReplayControl);
@@ -285,7 +288,49 @@ export class ReplayScene implements IScene {
                 if (cmd.value !== undefined) this.replayEngine.setSpeed(cmd.value);
                 break;
         }
+        // Always emit current state so overlay stays in sync
+        this.emitReplayState();
     };
+
+    /** Emit current replay state to the React overlay */
+    private emitReplayState(): void {
+        GameEvents.emit('replay_update', {
+            currentFrame: this.replayEngine.frame,
+            totalFrames: this.replayEngine.totalFrames,
+            isPaused: this.replayEngine.isPaused,
+            speed: this.replayEngine.playbackSpeed,
+        });
+        this.timeLabel.text = this.replayEngine.getTimeString();
+    }
+
+    /** Damage meter: garbage queue bar on the left side of each board */
+    private drawDamageMeter(idx: 0 | 1, engine: GameEngine): void {
+        const g = this.boardDamageGraphics[idx];
+        g.clear();
+
+        const totalPoints = engine.garbageQueue + engine.nuisanceTray;
+        const totalRocks = Math.floor(totalPoints / 70);
+        if (totalRocks <= 0) return;
+
+        const barW = 12;
+        const barX = -barW - 6; // left of board
+        const barY = 0;
+        const barH = this.boardHeight;
+
+        const maxRocks = 24;
+        const fillPct = Math.min(totalRocks / maxRocks, 1.0);
+        const fillH = barH * fillPct;
+
+        // Background
+        g.rect(barX, barY, barW, barH);
+        g.fill({ color: 0x220000, alpha: 0.6 });
+        g.stroke({ color: 0x550000, width: 1 });
+
+        // Fill
+        const color = totalRocks > 39 ? 0xff0000 : 0xff4400;
+        g.rect(barX, barY + barH - fillH, barW, fillH);
+        g.fill({ color, alpha: 0.9 });
+    }
 
     // ─── Static board background ───
     private drawBoardBackground(g: Graphics): void {
@@ -485,28 +530,31 @@ export class ReplayScene implements IScene {
             }
         }
 
-        // --- Next piece preview ---
-        if (engine.nextPieces.length > 0) {
-            const next = engine.nextPieces[0];
-            const previewX = this.boardWidth + 20;
-            const previewY = 20;
-            this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.main, 0);
-            // Move the last two sprites into preview position
-            const mainSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
-            mainSpr.x = previewX + CELL_SIZE / 2;
-            mainSpr.y = previewY + CELL_SIZE + CELL_SIZE / 2;
-            mainSpr.width = CELL_SIZE * 0.7;
-            mainSpr.height = CELL_SIZE * 0.7;
+        // --- Next piece preview (two pieces) ---
+        const previewX = this.boardWidth + 20;
+        for (let i = 0; i < Math.min(engine.nextPieces.length, 2); i++) {
+            const next = engine.nextPieces[i];
+            const previewY = i === 0 ? 20 : 90;
+            const previewScale = i === 0 ? 0.7 : 0.55;
 
+            // Sub (top)
             this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.sub, 0);
             const subSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
             subSpr.x = previewX + CELL_SIZE / 2;
             subSpr.y = previewY + CELL_SIZE / 2;
-            subSpr.width = CELL_SIZE * 0.7;
-            subSpr.height = CELL_SIZE * 0.7;
+            subSpr.width = CELL_SIZE * previewScale;
+            subSpr.height = CELL_SIZE * previewScale;
+
+            // Main (bottom)
+            this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.main, 0);
+            const mainSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
+            mainSpr.x = previewX + CELL_SIZE / 2;
+            mainSpr.y = previewY + CELL_SIZE + CELL_SIZE / 2;
+            mainSpr.width = CELL_SIZE * previewScale;
+            mainSpr.height = CELL_SIZE * previewScale;
         }
 
-        // --- Score text ---
+        // --- Score & chain text ---
         const scoreText = new Text({
             text: `${engine.stats.score}`,
             style: new TextStyle({
@@ -520,6 +568,24 @@ export class ReplayScene implements IScene {
         scoreText.x = this.boardWidth / 2;
         scoreText.y = this.boardHeight + 4;
         puyoContainer.addChild(scoreText);
+
+        if (engine.stats.maxChain > 1) {
+            const chainText = new Text({
+                text: `${engine.stats.maxChain} chain`,
+                style: new TextStyle({
+                    fontFamily: 'Orbitron, sans-serif',
+                    fontSize: 13,
+                    fill: '#ffaa00',
+                }),
+            });
+            chainText.anchor.set(0.5, 0);
+            chainText.x = this.boardWidth / 2;
+            chainText.y = this.boardHeight + 26;
+            puyoContainer.addChild(chainText);
+        }
+
+        // --- Damage meter (garbage queue) ---
+        this.drawDamageMeter(idx, engine);
 
         // --- Tick animations ---
         // Landing jiggle
@@ -680,12 +746,13 @@ export class ReplayScene implements IScene {
 
     // ─── Main loop ───
     update(dt: number): void {
-        // Background fallback
-        if (!this.staticBg.texture || this.staticBg.texture === Texture.WHITE) {
+        // Background fallback (dark solid color when no image loaded)
+        if (!this.staticBg.texture || this.staticBg.texture === Texture.EMPTY) {
             this.staticBg.texture = Texture.WHITE;
             this.staticBg.tint = 0x0a0a12;
             this.staticBg.width = window.innerWidth;
             this.staticBg.height = window.innerHeight;
+            this.staticBg.alpha = 1;
         }
 
         this.replayEngine.update(dt);
@@ -694,6 +761,50 @@ export class ReplayScene implements IScene {
         this.renderBoard(1, this.replayEngine.player2Engine, dt);
 
         this.updateEffects(dt);
+    }
+
+    // ─── Layout ───
+    private updateLayout(): void {
+        const screenW = SceneManager.screenWidth;
+        const screenH = SceneManager.screenHeight;
+
+        const spacing = 120;
+        const totalWidth = this.boardWidth * 2 + spacing;
+        this.board1X = (screenW - totalWidth) / 2;
+        this.board2X = this.board1X + this.boardWidth + spacing;
+        this.boardY = 60;
+
+        // Reposition board containers
+        this.boardContainers[0].x = this.board1X;
+        this.boardContainers[0].y = this.boardY;
+        this.boardContainers[1].x = this.board2X;
+        this.boardContainers[1].y = this.boardY;
+
+        // Labels
+        this.player1Label.x = this.board1X + this.boardWidth / 2;
+        this.player1Label.y = this.boardY - 45;
+        this.player2Label.x = this.board2X + this.boardWidth / 2;
+        this.player2Label.y = this.boardY - 45;
+
+        // Time
+        this.timeLabel.x = screenW / 2;
+        this.timeLabel.y = this.boardY + this.boardHeight + 20;
+
+        // Pause indicator
+        this.pauseIndicator.x = screenW / 2;
+        this.pauseIndicator.y = screenH / 2;
+
+        // Winner overlay
+        if (this.winnerOverlay) {
+            this.winnerOverlay.x = screenW / 2;
+            this.winnerOverlay.y = this.boardY + this.boardHeight / 2;
+        }
+
+        this.resizeBackground();
+    }
+
+    onResize(_width: number, _height: number): void {
+        this.updateLayout();
     }
 
     getContainer(): Container {

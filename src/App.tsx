@@ -676,7 +676,7 @@ export default function App() {
         {screen === "replay" && (
           <motion.div
             key="replay"
-            className="size-full"
+            className="size-full pointer-events-auto"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

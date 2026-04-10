@@ -42,6 +42,18 @@ interface LeaderboardPlayer {
   level?: number;
 }
 
+interface AllPlayer {
+  id: number;
+  username: string;
+  elo_rating: number;
+  level: number;
+  avatar_url?: string;
+  games_played: number;
+  games_won: number;
+  win_rate: number;
+  created_at: string;
+}
+
 interface SearchUser {
   id: number;
   username: string;
@@ -104,10 +116,10 @@ export const CommunityScreen: React.FC<{
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
-  const [rankedPlayers, setRankedPlayers] = useState<LeaderboardPlayer[]>([]);
-  const [rankedPage, setRankedPage] = useState(0);
-  const [rankedHasMore, setRankedHasMore] = useState(false);
-  const [rankedLoading, setRankedLoading] = useState(false);
+  const [allPlayers, setAllPlayers] = useState<AllPlayer[]>([]);
+  const [allPlayersPage, setAllPlayersPage] = useState(0);
+  const [allPlayersHasMore, setAllPlayersHasMore] = useState(false);
+  const [allPlayersLoading, setAllPlayersLoading] = useState(false);
   const PLAYERS_PER_PAGE = 20;
 
   // Profile view (inline)
@@ -167,25 +179,15 @@ export const CommunityScreen: React.FC<{
           break;
         }
         case "players":
-          // Load initial ranked players list
+          // Load all players list
           try {
-            setRankedLoading(true);
-            const data = await APIClient.getLeaderboard(PLAYERS_PER_PAGE, 0);
-            setRankedPlayers(
-              data.leaderboard.map((p: any) => ({
-                rank: p.rank,
-                username: p.username,
-                elo_rating: p.elo_rating,
-                win_rate: p.win_rate,
-                games_played: p.games_played,
-                avatar_url: p.avatar_url,
-                level: p.level,
-              })),
-            );
-            setRankedHasMore(data.pagination?.hasMore ?? false);
-            setRankedPage(0);
+            setAllPlayersLoading(true);
+            const data = await APIClient.getAllPlayers(PLAYERS_PER_PAGE, 0);
+            setAllPlayers(data.players);
+            setAllPlayersHasMore(data.pagination?.hasMore ?? false);
+            setAllPlayersPage(0);
           } finally {
-            setRankedLoading(false);
+            setAllPlayersLoading(false);
           }
           break;
       }
@@ -239,31 +241,21 @@ export const CommunityScreen: React.FC<{
     }, 300);
   }, []);
 
-  // Navigate ranked players pages
-  const loadRankedPage = useCallback(async (page: number) => {
-    setRankedLoading(true);
+  // Navigate all players pages
+  const loadAllPlayersPage = useCallback(async (page: number) => {
+    setAllPlayersLoading(true);
     try {
-      const data = await APIClient.getLeaderboard(
+      const data = await APIClient.getAllPlayers(
         PLAYERS_PER_PAGE,
         page * PLAYERS_PER_PAGE,
       );
-      setRankedPlayers(
-        data.leaderboard.map((p: any) => ({
-          rank: p.rank,
-          username: p.username,
-          elo_rating: p.elo_rating,
-          win_rate: p.win_rate,
-          games_played: p.games_played,
-          avatar_url: p.avatar_url,
-          level: p.level,
-        })),
-      );
-      setRankedHasMore(data.pagination?.hasMore ?? false);
-      setRankedPage(page);
+      setAllPlayers(data.players);
+      setAllPlayersHasMore(data.pagination?.hasMore ?? false);
+      setAllPlayersPage(page);
     } catch (e) {
-      console.error("[Community] Ranked page load failed:", e);
+      console.error("[Community] Players page load failed:", e);
     } finally {
-      setRankedLoading(false);
+      setAllPlayersLoading(false);
     }
   }, []);
 
@@ -434,12 +426,11 @@ export const CommunityScreen: React.FC<{
                 searching={searching}
                 onSearch={handleSearch}
                 onPlayerClick={openProfile}
-                rankedPlayers={rankedPlayers}
-                rankedPage={rankedPage}
-                rankedHasMore={rankedHasMore}
-                rankedLoading={rankedLoading}
-                onPageChange={loadRankedPage}
-                getRankColor={getRankColor}
+                allPlayers={allPlayers}
+                allPlayersPage={allPlayersPage}
+                allPlayersHasMore={allPlayersHasMore}
+                allPlayersLoading={allPlayersLoading}
+                onPageChange={loadAllPlayersPage}
               />
             )}
           </AnimatePresence>
@@ -708,26 +699,32 @@ const PlayersTab: React.FC<{
   searching: boolean;
   onSearch: (q: string) => void;
   onPlayerClick: (id: string | number) => void;
-  rankedPlayers: LeaderboardPlayer[];
-  rankedPage: number;
-  rankedHasMore: boolean;
-  rankedLoading: boolean;
+  allPlayers: AllPlayer[];
+  allPlayersPage: number;
+  allPlayersHasMore: boolean;
+  allPlayersLoading: boolean;
   onPageChange: (page: number) => void;
-  getRankColor: (rank: number) => string;
 }> = ({
   searchQuery,
   searchResults,
   searching,
   onSearch,
   onPlayerClick,
-  rankedPlayers,
-  rankedPage,
-  rankedHasMore,
-  rankedLoading,
+  allPlayers,
+  allPlayersPage,
+  allPlayersHasMore,
+  allPlayersLoading,
   onPageChange,
-  getRankColor,
 }) => {
   const showSearchResults = searchQuery.trim().length >= 2;
+
+  const formatDate = (iso: string) => {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
   return (
     <motion.div
@@ -808,47 +805,35 @@ const PlayersTab: React.FC<{
           </div>
         )
       ) : (
-        /* Ranked Players List */
+        /* All Players List */
         <>
           {/* Table Header */}
-          <div className="grid grid-cols-[50px_1fr_90px_70px] gap-2 px-4 pb-2 text-xs font-bold text-white/30 uppercase tracking-wider">
-            <div>Rank</div>
+          <div className="grid grid-cols-[1fr_80px_70px_100px] gap-2 px-4 pb-2 text-xs font-bold text-white/30 uppercase tracking-wider">
             <div>Player</div>
             <div className="text-right">Elo</div>
-            <div className="text-right">Win%</div>
+            <div className="text-right">Games</div>
+            <div className="text-right">Joined</div>
           </div>
 
-          {rankedLoading ? (
+          {allPlayersLoading ? (
             <div className="flex items-center justify-center py-12 text-white/30">
               Loading...
             </div>
-          ) : rankedPlayers.length === 0 ? (
+          ) : allPlayers.length === 0 ? (
             <div className="text-center py-12 text-white/30">
-              No ranked players yet
+              No players yet
             </div>
           ) : (
             <div className="space-y-1">
-              {rankedPlayers.map((p, i) => (
+              {allPlayers.map((p, i) => (
                 <motion.button
-                  key={`${p.rank}-${p.username}`}
+                  key={p.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.015 }}
-                  onClick={() => onPlayerClick(p.username)}
-                  className="w-full grid grid-cols-[50px_1fr_90px_70px] gap-2 px-4 py-2.5 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-colors items-center text-left group"
+                  onClick={() => onPlayerClick(p.id)}
+                  className="w-full grid grid-cols-[1fr_80px_70px_100px] gap-2 px-4 py-2.5 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.06] transition-colors items-center text-left group"
                 >
-                  <div className="flex items-center gap-1">
-                    {p.rank <= 3 ? (
-                      <Trophy
-                        size={15}
-                        style={{ color: getRankColor(p.rank) }}
-                      />
-                    ) : (
-                      <span className="text-sm font-bold text-white/30">
-                        #{p.rank}
-                      </span>
-                    )}
-                  </div>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/30 to-violet-500/30 flex items-center justify-center text-xs font-bold shrink-0 border border-white/5 overflow-hidden">
                       {p.avatar_url ? (
@@ -865,18 +850,19 @@ const PlayersTab: React.FC<{
                       <span className="font-bold group-hover:text-indigo-300 transition-colors">
                         {p.username}
                       </span>
-                      {p.level && (
-                        <span className="ml-2 text-xs text-white/20">
-                          Lv.{p.level}
-                        </span>
-                      )}
+                      <span className="ml-2 text-xs text-white/20">
+                        Lv.{p.level}
+                      </span>
                     </div>
                   </div>
                   <div className="text-right font-bold text-amber-400/80 text-sm">
                     {p.elo_rating}
                   </div>
                   <div className="text-right text-sm text-white/50">
-                    {p.win_rate}%
+                    {p.games_played}
+                  </div>
+                  <div className="text-right text-xs text-white/30">
+                    {formatDate(p.created_at)}
                   </div>
                 </motion.button>
               ))}
@@ -886,19 +872,19 @@ const PlayersTab: React.FC<{
           {/* Pagination */}
           <div className="flex items-center justify-between mt-4 px-2">
             <button
-              onClick={() => onPageChange(rankedPage - 1)}
-              disabled={rankedPage === 0 || rankedLoading}
+              onClick={() => onPageChange(allPlayersPage - 1)}
+              disabled={allPlayersPage === 0 || allPlayersLoading}
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-20 disabled:cursor-not-allowed text-white/60 hover:text-white hover:bg-white/5"
             >
               <ChevronLeft size={16} />
               Prev
             </button>
             <span className="text-xs text-white/30 font-medium">
-              Page {rankedPage + 1}
+              Page {allPlayersPage + 1}
             </span>
             <button
-              onClick={() => onPageChange(rankedPage + 1)}
-              disabled={!rankedHasMore || rankedLoading}
+              onClick={() => onPageChange(allPlayersPage + 1)}
+              disabled={!allPlayersHasMore || allPlayersLoading}
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold rounded-lg transition-colors disabled:opacity-20 disabled:cursor-not-allowed text-white/60 hover:text-white hover:bg-white/5"
             >
               Next

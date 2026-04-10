@@ -92,6 +92,10 @@ export class APIClient {
         return this.request(`/users/search?q=${encodeURIComponent(query)}&limit=${limit}`);
     }
 
+    static async getAllPlayers(limit: number = 20, offset: number = 0) {
+        return this.request(`/users/all?limit=${limit}&offset=${offset}`);
+    }
+
     static async getRecentMatches(limit: number = 10) {
         return this.request(`/matches/recent/all?limit=${limit}`);
     }

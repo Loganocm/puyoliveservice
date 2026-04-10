@@ -32,6 +32,44 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
+ * GET /users/all?limit=20&offset=0
+ * List all players (including those with 0 games), newest first
+ */
+router.get('/all', asyncHandler(async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      select: {
+        id: true, username: true, elo_rating: true, level: true,
+        avatar_url: true, games_played: true, games_won: true,
+        created_at: true,
+      },
+      orderBy: [{ created_at: 'desc' }],
+      take: limit,
+      skip: offset,
+    }),
+    prisma.user.count(),
+  ]);
+
+  res.json({
+    players: users.map((u, i) => ({
+      ...u,
+      win_rate: u.games_played > 0
+        ? Math.round((u.games_won / u.games_played) * 100)
+        : 0,
+    })),
+    pagination: {
+      total,
+      offset,
+      limit,
+      hasMore: offset + limit < total,
+    },
+  });
+}));
+
+/**
  * GET /users/:identifier
  * Get a user's public profile by ID or username
  */

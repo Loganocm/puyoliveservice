@@ -38,9 +38,6 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
 
     GameEvents.on("replay_update", handleUpdate);
 
-    // Auto-play once overlay is mounted (scene starts paused)
-    GameEvents.emit("replay_control", { action: "play" });
-
     return () => {
       GameEvents.off("replay_update", handleUpdate);
     };
