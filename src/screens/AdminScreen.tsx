@@ -1,0 +1,541 @@
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  Shield,
+  Users,
+  Swords,
+  Trash2,
+  Pencil,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Check,
+  Loader2,
+} from "lucide-react";
+import { BackButton } from "@/components/BackButton";
+import { APIClient } from "@/api/client";
+
+interface AdminUser {
+  id: number;
+  username: string;
+  email: string | null;
+  elo_rating: number;
+  games_played: number;
+  games_won: number;
+  games_lost: number;
+  highest_chain: number;
+  total_garbage_sent: number;
+  level: number;
+  current_xp: number;
+  is_admin: boolean;
+  created_at: string;
+}
+
+interface AdminStats {
+  totalUsers: number;
+  totalMatches: number;
+  recentUsers: number;
+  recentMatches: number;
+}
+
+interface EditingState {
+  userId: number;
+  field: string;
+  value: string;
+}
+
+export function AdminScreen({ onBack }: { onBack: () => void }) {
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<EditingState | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const LIMIT = 20;
+
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await APIClient.adminGetStats();
+      setStats(data);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await APIClient.adminGetUsers(page, LIMIT, search);
+      setUsers(data.users);
+      setTotal(data.total);
+      setTotalPages(data.totalPages);
+    } catch (e: any) {
+      setError(e.message || "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const handleSearch = () => {
+    setPage(1);
+    setSearch(searchInput);
+  };
+
+  const startEdit = (userId: number, field: string, currentValue: any) => {
+    setEditing({ userId, field, value: String(currentValue ?? "") });
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSaving(true);
+    setError("");
+    try {
+      const numericFields = [
+        "elo_rating",
+        "games_played",
+        "games_won",
+        "games_lost",
+        "highest_chain",
+        "total_garbage_sent",
+        "level",
+        "current_xp",
+      ];
+      const val = numericFields.includes(editing.field)
+        ? Number(editing.value)
+        : editing.value;
+      await APIClient.adminUpdateUser(editing.userId, { [editing.field]: val });
+      setSuccess(`Updated ${editing.field} for user #${editing.userId}`);
+      setEditing(null);
+      setTimeout(() => setSuccess(""), 3000);
+      loadUsers();
+    } catch (e: any) {
+      setError(e.message || "Update failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    setError("");
+    try {
+      const result = await APIClient.adminDeleteUser(id);
+      setSuccess(`Deleted user: ${result.deleted}`);
+      setDeleteConfirm(null);
+      setTimeout(() => setSuccess(""), 3000);
+      loadUsers();
+      loadStats();
+    } catch (e: any) {
+      setError(e.message || "Delete failed");
+    }
+  };
+
+  const editableFields = [
+    { key: "username", label: "Username" },
+    { key: "email", label: "Email" },
+    { key: "elo_rating", label: "ELO" },
+    { key: "games_played", label: "Games" },
+    { key: "games_won", label: "Wins" },
+    { key: "games_lost", label: "Losses" },
+    { key: "highest_chain", label: "Best Chain" },
+    { key: "total_garbage_sent", label: "Garbage" },
+    { key: "level", label: "Level" },
+    { key: "current_xp", label: "XP" },
+  ];
+
+  return (
+    <div className="size-full relative overflow-hidden bg-transparent flex items-center justify-center">
+      {/* Grid bg */}
+      <div
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)
+          `,
+          backgroundSize: "40px 40px",
+        }}
+      />
+
+      <BackButton onClick={onBack} />
+
+      <div className="w-full max-w-6xl px-6 py-20 overflow-y-auto max-h-full">
+        {/* Header */}
+        <motion.div
+          className="flex items-center justify-center gap-3 mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Shield className="w-8 h-8 text-red-400" />
+          <h1 className="text-4xl font-black text-white tracking-tighter italic drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+            ADMIN PANEL
+          </h1>
+        </motion.div>
+
+        {/* Stats Cards */}
+        {stats && (
+          <motion.div
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {[
+              {
+                label: "Total Users",
+                value: stats.totalUsers,
+                icon: Users,
+                color: "text-blue-400",
+              },
+              {
+                label: "Total Matches",
+                value: stats.totalMatches,
+                icon: Swords,
+                color: "text-purple-400",
+              },
+              {
+                label: "New Users (24h)",
+                value: stats.recentUsers,
+                icon: Users,
+                color: "text-green-400",
+              },
+              {
+                label: "Matches (24h)",
+                value: stats.recentMatches,
+                icon: Swords,
+                color: "text-yellow-400",
+              },
+            ].map((s, i) => (
+              <div
+                key={i}
+                className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <s.icon className={`w-4 h-4 ${s.color}`} />
+                  <span className="text-white/50 text-xs font-medium uppercase tracking-wider">
+                    {s.label}
+                  </span>
+                </div>
+                <span className="text-2xl font-black text-white">
+                  {s.value.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Alerts */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              className="bg-red-500/20 border border-red-500/30 rounded-lg px-4 py-2 mb-4 text-red-300 text-sm"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              {error}
+            </motion.div>
+          )}
+          {success && (
+            <motion.div
+              className="bg-green-500/20 border border-green-500/30 rounded-lg px-4 py-2 mb-4 text-green-300 text-sm"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              {success}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Search Bar */}
+        <motion.div
+          className="flex gap-2 mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              placeholder="Search by username..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 text-sm focus:outline-none focus:border-white/30 transition"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            className="px-5 py-2.5 bg-white/10 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/15 transition"
+          >
+            Search
+          </button>
+        </motion.div>
+
+        {/* Users Table */}
+        <motion.div
+          className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm shadow-2xl mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 text-white/50 animate-spin" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-16 text-white/40 text-sm">
+              No users found
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      User
+                    </th>
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      ELO
+                    </th>
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      Games
+                    </th>
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      W/L
+                    </th>
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      Lvl
+                    </th>
+                    <th className="px-4 py-3 text-left text-white/50 font-medium text-xs uppercase tracking-wider">
+                      Joined
+                    </th>
+                    <th className="px-4 py-3 text-right text-white/50 font-medium text-xs uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="border-b border-white/5 hover:bg-white/5 transition group"
+                    >
+                      <td className="px-4 py-3 text-white/60 font-mono text-xs">
+                        #{u.id}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-medium">
+                            {u.username}
+                          </span>
+                          {u.is_admin && (
+                            <Shield className="w-3 h-3 text-red-400" />
+                          )}
+                        </div>
+                        {u.email && (
+                          <div className="text-white/30 text-xs">{u.email}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-white/80 font-mono">
+                        {u.elo_rating}
+                      </td>
+                      <td className="px-4 py-3 text-white/60">
+                        {u.games_played}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-green-400">{u.games_won}</span>
+                        <span className="text-white/20 mx-1">/</span>
+                        <span className="text-red-400">{u.games_lost}</span>
+                      </td>
+                      <td className="px-4 py-3 text-white/60">{u.level}</td>
+                      <td className="px-4 py-3 text-white/40 text-xs">
+                        {new Date(u.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition">
+                          <button
+                            onClick={() =>
+                              startEdit(u.id, "elo_rating", u.elo_rating)
+                            }
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition"
+                            title="Edit user"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          {!u.is_admin &&
+                            (deleteConfirm === u.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleDelete(u.id)}
+                                  className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition"
+                                  title="Confirm delete"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(null)}
+                                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 transition"
+                                  title="Cancel"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirm(u.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/50 hover:text-red-400 transition"
+                                title="Delete user"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-4 mb-8">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="p-2 rounded-lg border border-white/10 text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-white/60 text-sm font-medium">
+              Page {page} of {totalPages} ({total} users)
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="p-2 rounded-lg border border-white/10 text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        <AnimatePresence>
+          {editing && (
+            <motion.div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditing(null)}
+            >
+              <motion.div
+                className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-white/50" />
+                  Edit User #{editing.userId}
+                </h2>
+
+                <div className="space-y-3 mb-6">
+                  {editableFields.map((f) => {
+                    const user = users.find((u) => u.id === editing.userId);
+                    const currentVal = user ? (user as any)[f.key] : "";
+                    const isActive = editing.field === f.key;
+                    return (
+                      <div key={f.key} className="flex items-center gap-3">
+                        <label className="text-white/50 text-xs font-medium uppercase tracking-wider w-24 shrink-0">
+                          {f.label}
+                        </label>
+                        <input
+                          type={
+                            ["username", "email"].includes(f.key)
+                              ? "text"
+                              : "number"
+                          }
+                          value={
+                            isActive ? editing.value : String(currentVal ?? "")
+                          }
+                          onChange={(e) => {
+                            if (isActive) {
+                              setEditing({ ...editing, value: e.target.value });
+                            } else {
+                              setEditing({
+                                userId: editing.userId,
+                                field: f.key,
+                                value: e.target.value,
+                              });
+                            }
+                          }}
+                          onFocus={() => {
+                            if (!isActive) {
+                              setEditing({
+                                userId: editing.userId,
+                                field: f.key,
+                                value: String(currentVal ?? ""),
+                              });
+                            }
+                          }}
+                          className={`flex-1 px-3 py-2 bg-white/5 border rounded-lg text-white text-sm focus:outline-none transition ${
+                            isActive
+                              ? "border-red-400/50 bg-red-500/5"
+                              : "border-white/10"
+                          }`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="px-4 py-2 rounded-lg border border-white/10 text-white/60 text-sm hover:bg-white/5 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-sm font-medium hover:bg-red-500/30 disabled:opacity-50 transition flex items-center gap-2"
+                  >
+                    {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Save Changes
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}

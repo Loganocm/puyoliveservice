@@ -103,4 +103,31 @@ export class APIClient {
     static async getUserPercentiles(userId: number) {
         return this.request(`/leaderboard/percentiles/${userId}`);
     }
+
+    // ── Admin API ──
+
+    static async adminGetStats() {
+        return this.request('/admin/stats');
+    }
+
+    static async adminGetUsers(page: number = 1, limit: number = 25, search: string = '') {
+        const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+        if (search) params.set('search', search);
+        return this.request(`/admin/users?${params}`);
+    }
+
+    static async adminGetUser(id: number) {
+        return this.request(`/admin/users/${id}`);
+    }
+
+    static async adminUpdateUser(id: number, data: Record<string, any>) {
+        return this.request(`/admin/users/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    }
+
+    static async adminDeleteUser(id: number) {
+        return this.request(`/admin/users/${id}`, { method: 'DELETE' });
+    }
 }

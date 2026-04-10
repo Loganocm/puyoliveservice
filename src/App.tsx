@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Gamepad2, Trophy, Settings, Swords, User, Users } from "lucide-react";
+import {
+  Gamepad2,
+  Trophy,
+  Settings,
+  Swords,
+  User,
+  Users,
+  Shield,
+} from "lucide-react";
 import puyoHeaderLogo from "@/resources/puyoheader.svg";
 import { backgroundManager } from "@/core/BackgroundManager";
 import { PuyoFooter } from "@/components/PuyoFooter";
@@ -30,6 +38,7 @@ import { MenuScene } from "@/scenes/MenuScene";
 import { NetworkManager } from "@/core/NetworkManager";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import { CommunityScreen } from "@/screens/CommunityScreen";
+import { AdminScreen } from "@/screens/AdminScreen";
 
 type Screen =
   | "menu"
@@ -54,6 +63,7 @@ export default function App() {
     AuthManager.currentUser as UserData | null,
   );
   const [showCommunity, setShowCommunity] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
   const [bgImage, setBgImage] = useState<string>("");
@@ -357,6 +367,17 @@ export default function App() {
                         >
                           <User size={16} /> My Profile
                         </button>
+                        {user?.is_admin && (
+                          <button
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setShowAdmin(true);
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
+                          >
+                            <Shield size={16} /> Admin Panel
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             AuthManager.logout();
@@ -674,6 +695,12 @@ export default function App() {
             setScreen("replay");
           }}
         />
+      )}
+
+      {showAdmin && (
+        <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm pointer-events-auto">
+          <AdminScreen onBack={() => setShowAdmin(false)} />
+        </div>
       )}
 
       <VolumeHUD />

@@ -104,3 +104,19 @@ export async function internalOnly(
 
   next();
 }
+
+/**
+ * Admin-only middleware — must be chained AFTER authenticate.
+ * Checks that req.user.is_admin is true.
+ */
+export async function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  if (!req.user || !(req.user as any).is_admin) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  next();
+}

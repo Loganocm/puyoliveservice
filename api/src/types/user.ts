@@ -12,6 +12,7 @@ export interface User {
   total_garbage_sent: number;
   level: number;
   current_xp: number;
+  is_admin: boolean;
   created_at: Date;
   updated_at: Date;
   last_login_at: Date | null;

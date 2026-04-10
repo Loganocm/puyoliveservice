@@ -69,7 +69,8 @@ router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response)
   // Include private info for own profile
   const fullProfile = {
     ...profile,
-    email: req.user!.email
+    email: req.user!.email,
+    is_admin: req.user!.is_admin || false,
   };
 
   res.json(fullProfile);

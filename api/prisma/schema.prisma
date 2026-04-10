@@ -24,6 +24,7 @@ model User {
   total_garbage_sent Int    @default(0)
   level            Int      @default(1)
   current_xp       Int      @default(0)
+  is_admin         Boolean  @default(false)
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 

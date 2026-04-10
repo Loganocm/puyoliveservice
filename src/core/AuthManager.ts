@@ -5,7 +5,7 @@ export interface User {
     id: number;
     username: string;
     elo_rating: number;
-    avatar_url?: string; // Add avatar_url
+    avatar_url?: string;
     email?: string | null;
     rank?: number;
     games_played: number;
@@ -15,6 +15,7 @@ export interface User {
     total_garbage_sent: number;
     level?: number;
     current_xp?: number;
+    is_admin?: boolean;
 }
 
 export class AuthManager {
