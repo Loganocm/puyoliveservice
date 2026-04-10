@@ -179,6 +179,14 @@ export function MultiplayerLobby({
       }
     };
 
+    // Listen for queue errors (like not enough games played)
+    const onError = (data: { message: string }) => {
+      console.warn("Lobby Error:", data);
+      setIsSearching(false);
+      isSearchingRef.current = false;
+      alert(data.message); // Inform the user why they couldn't join the queue
+    };
+
     // Listeners
     NetworkManager.on("connect", onConnect);
     NetworkManager.on("disconnect", onDisconnect);
@@ -188,10 +196,17 @@ export function MultiplayerLobby({
     NetworkManager.on("room_created", onRoomCreated);
     NetworkManager.on("game_ended", onGameEnded);
     NetworkManager.on("game_start", onGameStart);
+    NetworkManager.on("error", onError);
 
     // Initial Rooms Fetch
     setIsLoadingRooms(true);
     NetworkManager.getRooms();
+    
+    // Request Queue Stats for Realtime Metric
+    const socketRef = NetworkManager.getSocket();
+    if (socketRef && socketRef.connected) {
+      socketRef.emit('get_queue_stats');
+    }
 
     return () => {
       // Leave queue if still searching when component unmounts
@@ -206,6 +221,7 @@ export function MultiplayerLobby({
       NetworkManager.off("room_created", onRoomCreated);
       NetworkManager.off("game_ended", onGameEnded);
       NetworkManager.off("game_start", onGameStart);
+      NetworkManager.off("error", onError);
     };
   }, []);
 

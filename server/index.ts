@@ -343,6 +343,15 @@ io.on('connection', (socket: Socket) => {
     });
   };
 
+  socket.on('get_queue_stats', () => {
+    if (!checkSocketRate(socket.id, 'get_queue_stats', 5)) return;
+    socket.emit('queue_update', {
+      count: rankedQueue.length + unrankedQueue.length,
+      ranked: rankedQueue.length,
+      unranked: unrankedQueue.length
+    });
+  });
+
   // Helper to remove a socket from all queues
   const removeFromQueues = (socketId: string) => {
     let changed = false;
