@@ -125,14 +125,6 @@ export class QuickPlayScene implements IScene {
     private lastMoveFrameRight: number = -999;
     private currentFrame: number = 0;
 
-    // Score throttle (don't flood server)
-    private lastScoreSent: number = 0;
-    private scoreThrottleFrames: number = 30; // Every 0.5s
-
-    // Board state throttle
-    private boardSendTimer: number = 0;
-    private boardSendInterval: number = 6; // Every ~100ms
-
     // Network listeners (for cleanup)
     private networkListeners: { event: string, cb: any }[] = [];
 
@@ -243,10 +235,11 @@ export class QuickPlayScene implements IScene {
                 this.popAnimProgress = 0;
             }
 
+            // Client-side GAMEOVER is only used as a visual hint.
+            // The authoritative death comes from 'mines_server_death' event.
             if (state === GameState.GAMEOVER) {
                 if (this.alive) {
                     this.alive = false;
-                    NetworkManager.minesPlayerDied();
                     GameEvents.emit('mines_died', {
                         depth: this.depth,
                         kos: this.kos,
@@ -256,11 +249,11 @@ export class QuickPlayScene implements IScene {
             }
         };
 
+        // Garbage generated is handled entirely by the server simulator.
+        // Client only shows the visual feedback.
         this.engine.onGarbageGenerated = (amount) => {
             if (amount > 0) {
                 this.spawnFloatingText(300, 200, `ATTACK! +${amount}`, 0xff6600);
-                // Only send chainLength — server calculates amount authoritatively
-                NetworkManager.minesSendGarbage(this.engine.stats.chainCount);
             }
         };
 
@@ -412,6 +405,49 @@ export class QuickPlayScene implements IScene {
         };
         NetworkManager.on('mines_ko', onKO);
         this.networkListeners.push({ event: 'mines_ko', cb: onKO });
+
+        // Server-authoritative death — forces GAMEOVER regardless of local engine state
+        const onServerDeath = (data: { depth: number, score: number, kos: number }) => {
+            if (this.container.destroyed) return;
+            if (this.alive) {
+                this.alive = false;
+                // Force local engine to GAMEOVER if it hasn't caught up
+                if (this.engine.state !== GameState.GAMEOVER) {
+                    (this.engine as any).state = GameState.GAMEOVER;
+                }
+                this.depth = data.depth;
+                this.kos = data.kos;
+                GameEvents.emit('mines_died', {
+                    depth: data.depth,
+                    kos: data.kos,
+                    score: data.score,
+                });
+            }
+        };
+        NetworkManager.on('mines_server_death', onServerDeath);
+        this.networkListeners.push({ event: 'mines_server_death', cb: onServerDeath });
+
+        // Server state sync — reconcile score/depth drift, enforce death
+        const onStateSync = (data: { score: number, depth: number, alive: boolean, garbageQueue: number, nuisanceTray: number }) => {
+            if (this.container.destroyed) return;
+            // If server says dead but client thinks alive — force death
+            if (!data.alive && this.alive) {
+                console.warn('[QuickPlayScene] Server says dead but client alive — forcing death');
+                this.alive = false;
+                if (this.engine.state !== GameState.GAMEOVER) {
+                    (this.engine as any).state = GameState.GAMEOVER;
+                }
+                GameEvents.emit('mines_died', {
+                    depth: data.depth,
+                    kos: this.kos,
+                    score: data.score,
+                });
+            }
+            // Always trust server depth/score
+            this.depth = data.depth;
+        };
+        NetworkManager.on('mines_state_sync', onStateSync);
+        this.networkListeners.push({ event: 'mines_state_sync', cb: onStateSync });
     }
 
     update(delta: number): void {
@@ -476,19 +512,7 @@ export class QuickPlayScene implements IScene {
                 }
             }
 
-            // Throttled network updates
-            this.boardSendTimer++;
-            if (this.boardSendTimer >= this.boardSendInterval) {
-                this.boardSendTimer = 0;
-                NetworkManager.minesBoardState(this.engine.board.getSerializedData());
-            }
-
-            if (this.currentFrame - this.lastScoreSent >= this.scoreThrottleFrames) {
-                this.lastScoreSent = this.currentFrame;
-                NetworkManager.minesScoreUpdate(this.engine.stats.score);
-            }
-
-            // Update depth
+            // Update depth from local engine (server reconciles periodically)
             this.depth = Math.floor(this.engine.stats.score / DEPTH_DIVISOR);
 
             this.updateEffects(delta);

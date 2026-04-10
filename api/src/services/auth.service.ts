@@ -178,7 +178,7 @@ export class AuthService {
     const profile = this.toProfile(user as unknown as User);
     const token = this.generateToken(user as unknown as User);
 
-    return { user: { ...profile, is_admin: (user as any).is_admin || false }, token };
+    return { user: profile, token };
   }
 
   /**
@@ -240,7 +240,7 @@ export class AuthService {
     const profile = this.toProfile(user as unknown as User);
     const token = this.generateToken(user as unknown as User);
 
-    return { user: { ...profile, is_admin: (user as any).is_admin || false }, token };
+    return { user: profile, token };
   }
 
   /**
@@ -355,7 +355,8 @@ export class AuthService {
       win_rate: winRate,
       avatar_url: (user as any).avatar_url,
       level: (user as any).level || 1,         // Added level
-      current_xp: (user as any).current_xp || 0 // Added xp
+      current_xp: (user as any).current_xp || 0, // Added xp
+      is_admin: user.is_admin || false         // Admin flair
     };
   }
 

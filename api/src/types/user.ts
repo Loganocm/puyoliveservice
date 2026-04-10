@@ -34,6 +34,7 @@ export interface UserProfile {
   current_xp?: number;
   win_rate?: number;
   avatar_url?: string;
+  is_admin?: boolean;
 }
 
 // Registration input
@@ -51,7 +52,7 @@ export interface LoginInput {
 
 // Auth response
 export interface AuthResponse {
-  user: UserProfile & { is_admin?: boolean };
+  user: UserProfile;
   token: string;
 }
 

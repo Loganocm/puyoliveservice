@@ -256,12 +256,31 @@ minesRoom.onPlayerDiedServer = (deadSocketId: string) => {
   const deadPlayer = minesRoom.killPlayer(deadSocketId);
   if (deadPlayer) {
     console.log(`[Mines] ${deadPlayer.username} died at depth ${deadPlayer.depth} (SERVER DETECTED)`);
+
+    // Notify the dead player directly so their client can force GAMEOVER
+    const deadSocket = io.sockets.sockets.get(deadSocketId);
+    if (deadSocket) {
+      deadSocket.emit('mines_server_death', {
+        depth: deadPlayer.depth,
+        score: deadPlayer.score,
+        kos: deadPlayer.kos,
+      });
+    }
+
     io.to('MINES_LOBBY').emit('mines_player_died_broadcast', {
       socketId: deadSocketId,
       username: deadPlayer.username,
       depth: deadPlayer.depth,
     });
     io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+  }
+};
+
+// Server-authoritative state sync — periodically sends score/depth/garbage to each client
+minesRoom.onStateSync = (socketId: string, state: { score: number; depth: number; alive: boolean; garbageQueue: number; nuisanceTray: number }) => {
+  const sock = io.sockets.sockets.get(socketId);
+  if (sock) {
+    sock.emit('mines_state_sync', state);
   }
 };
 
@@ -1200,11 +1219,20 @@ io.on('connection', (socket: Socket) => {
     // Tracking this could be useful for AFK disconnects.
   });
 
-  // Client events below are deprecated. The server's PuyoSimulator calculates them natively.
-  socket.on('mines_send_garbage', () => {});
-  socket.on('mines_board_state', () => {});
-  socket.on('mines_score_update', () => {});
-  socket.on('mines_player_died', () => {});
+  // Client events below are deprecated. The server's PuyoSimulator handles them natively.
+  // Log warnings for exploit detection — if clients are sending these, they're using old/hacked clients.
+  socket.on('mines_send_garbage', () => {
+    console.warn(`[Mines Anti-Cheat] ${socket.id} sent deprecated 'mines_send_garbage' — ignoring`);
+  });
+  socket.on('mines_board_state', () => {
+    // Silently ignore — high frequency, don't spam logs
+  });
+  socket.on('mines_score_update', () => {
+    // Silently ignore — high frequency
+  });
+  socket.on('mines_player_died', () => {
+    console.warn(`[Mines Anti-Cheat] ${socket.id} sent deprecated 'mines_player_died' — ignoring (server detects death)`);
+  });
 
   // ═══════════════════════════════════════════════════════
   // END PUYO MINES

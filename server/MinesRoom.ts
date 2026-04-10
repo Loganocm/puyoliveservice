@@ -134,10 +134,14 @@ export class MinesRoom {
     public onBroadcastPlayerList: (() => void) | null = null;
     /** Callback for server to notify a player death */
     public onPlayerDiedServer: ((socketId: string) => void) | null = null;
+    /** Callback for server to send authoritative state sync to a player */
+    public onStateSync: ((socketId: string, state: { score: number; depth: number; alive: boolean; garbageQueue: number; nuisanceTray: number }) => void) | null = null;
     /** Seed rotation interval handle */
     private seedInterval: ReturnType<typeof setInterval> | null = null;
     /** Server simulation tick interval */
     private simulatorTickInterval: ReturnType<typeof setInterval> | null = null;
+    /** Tick counter for throttled operations */
+    private tickCount: number = 0;
 
     constructor() {
         // Rotate seed periodically for variety
@@ -148,8 +152,7 @@ export class MinesRoom {
             }
         }, 60000); // Check every minute
 
-        // Server-authoritative tick loop
-        this.simulatorTickInterval = setInterval(() => this.tickSimulators(), 16);
+        // Tick loop starts paused — resumed on first player join
     }
 
     // ── Bot Management ──
@@ -262,6 +265,8 @@ export class MinesRoom {
     }
 
     private tickSimulators(): void {
+        this.tickCount++;
+
         for (const [socketId, player] of this.players) {
             if (socketId === MinesRoom.BOT_ID || !player.alive) continue;
 
@@ -269,7 +274,7 @@ export class MinesRoom {
             player.score = player.simulator.stats.score;
             player.depth = Math.floor(player.score / DEPTH_DIVISOR);
             
-            // Periodically sync the visible board
+            // Periodically sync the visible board (every ~100ms)
             if (player.simulator.frameCount % 6 === 0) {
                 player.board = player.simulator.board.grid;
             }
@@ -281,6 +286,37 @@ export class MinesRoom {
                     this.killPlayer(socketId);
                 }
             }
+        }
+
+        // Periodic authoritative state sync to all alive players (~every 500ms = 30 ticks)
+        if (this.tickCount % 30 === 0 && this.onStateSync) {
+            for (const [socketId, player] of this.players) {
+                if (socketId === MinesRoom.BOT_ID || !player.alive) continue;
+                this.onStateSync(socketId, {
+                    score: player.score,
+                    depth: player.depth,
+                    alive: player.alive,
+                    garbageQueue: player.simulator.garbageQueue,
+                    nuisanceTray: player.simulator.nuisanceTray,
+                });
+            }
+        }
+    }
+
+    /** Start the server tick loop (called when first real player joins) */
+    private startTickLoop(): void {
+        if (this.simulatorTickInterval) return; // already running
+        this.tickCount = 0;
+        this.simulatorTickInterval = setInterval(() => this.tickSimulators(), 16);
+        console.log('[Mines] Tick loop started');
+    }
+
+    /** Stop the server tick loop (called when last real player leaves) */
+    private stopTickLoop(): void {
+        if (this.simulatorTickInterval) {
+            clearInterval(this.simulatorTickInterval);
+            this.simulatorTickInterval = null;
+            console.log('[Mines] Tick loop stopped');
         }
     }
 
@@ -309,10 +345,15 @@ export class MinesRoom {
 
         // Pick a random alive real player to send garbage to
         const targets = this.getAlivePlayers().filter(p => p.socketId !== MinesRoom.BOT_ID);
-        if (targets.length > 0 && this.onBotGarbage) {
+        if (targets.length > 0) {
             const target = targets[Math.floor(Math.random() * targets.length)];
             try {
-                this.onBotGarbage(target.socketId, schedule.amount);
+                // Route through target's simulator so server state stays in sync
+                target.simulator.addGarbage(schedule.amount);
+                // Also notify the client for visual display
+                if (this.onBotGarbage) {
+                    this.onBotGarbage(target.socketId, schedule.amount);
+                }
             } catch (err) {
                 console.error('[Mines Bot] Error sending garbage:', err);
             }
@@ -357,35 +398,16 @@ export class MinesRoom {
             joinedAt: Date.now(),
         };
 
-        player.simulator.onGarbageGenerated = (amount: number) => {
-            // Note: client events now ignore 'mines_send_garbage' from clients
-            // Instead, this directly applies the server simulated garbage.
-            const chainLength = player.simulator.stats.chainCount;
-            // The simulation amount is the raw amount (which is 1:1 in simulator but we override using FFA logic)
-            // Replace standard PuyoSimulator garbage logic with FFA formula
-            const ffaAmount = MinesRoom.calculateGarbage(chainLength);
-            if (ffaAmount <= 0) return;
-
-            const targetId = player.currentTarget;
-            if (targetId) {
-                const target = this.players.get(targetId);
-                if (target && target.alive && this.onBotGarbage) {
-                     // We can reuse the onBotGarbage for standard player garbage dispatch!
-                     // Actually, we'll create a dedicated callback or update here.
-                     player.garbageSent += ffaAmount;
-                     target.simulator.addGarbage(ffaAmount);
-                     // The actual network emit must happen from index.ts, so we'll fire onPlayerGarbage
-                     if (this.onPlayerGarbage) {
-                         this.onPlayerGarbage(targetId, ffaAmount, player.username, data.socketId);
-                     }
-                }
-            }
-        };
-
+        this.attachGarbageHandler(player);
         this.players.set(data.socketId, player);
 
         // Auto-assign initial target
         this.reassignTarget(data.socketId);
+
+        // Start tick loop if this is the first real player
+        if (this.getRealPlayerCount() === 1) {
+            this.startTickLoop();
+        }
 
         return true;
     }
@@ -402,6 +424,11 @@ export class MinesRoom {
             if (p.currentTarget === socketId) {
                 this.reassignTarget(id);
             }
+        }
+
+        // Stop tick loop if no real players remain
+        if (this.getRealPlayerCount() === 0) {
+            this.stopTickLoop();
         }
     }
 
@@ -440,24 +467,37 @@ export class MinesRoom {
         player.simulator = new PuyoSimulator(this.seed);
         player.diedAt = undefined;
 
-        // Reattach garbage listener
-        player.simulator.onGarbageGenerated = (amount: number) => {
-            const chainLength = player.simulator.stats.chainCount;
-            const ffaAmount = MinesRoom.calculateGarbage(chainLength);
-            if (ffaAmount <= 0) return;
-            const targetId = player.currentTarget;
-            if (targetId) {
-                const target = this.players.get(targetId);
-                if (target && target.alive && this.onPlayerGarbage) {
-                     player.garbageSent += ffaAmount;
-                     target.simulator.addGarbage(ffaAmount);
-                     this.onPlayerGarbage(targetId, ffaAmount, player.username, socketId);
-                }
-            }
-        };
-
+        this.attachGarbageHandler(player);
         this.reassignTarget(socketId);
         return true;
+    }
+
+    /**
+     * Attach the server-authoritative garbage handler to a player's simulator.
+     * Uses native Puyo scoring (70pts = 1 rock) — no FFA table override.
+     * Reads currentTarget at call-time (not closure-time) to avoid stale routing.
+     */
+    private attachGarbageHandler(player: MinesPlayer): void {
+        player.simulator.onGarbageGenerated = (amount: number) => {
+            if (amount <= 0) return;
+
+            const targetId = player.currentTarget;
+            if (!targetId) return;
+
+            const target = this.players.get(targetId);
+            if (!target || !target.alive) {
+                // Target died/left, reassign
+                this.reassignTarget(player.socketId);
+                return;
+            }
+
+            player.garbageSent += amount;
+            target.simulator.addGarbage(amount);
+
+            if (this.onPlayerGarbage) {
+                this.onPlayerGarbage(targetId, amount, player.username, player.socketId);
+            }
+        };
     }
 
     /**

@@ -66,11 +66,10 @@ router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response)
     return;
   }
 
-  // Include private info for own profile
+  // Include email for own profile
   const fullProfile = {
     ...profile,
     email: req.user!.email,
-    is_admin: req.user!.is_admin || false,
   };
 
   res.json(fullProfile);
@@ -127,7 +126,7 @@ router.post('/verify', verifyLimiter, asyncHandler(async (req: Request, res: Res
 
   if (user) {
     const profile = await AuthService.getProfileById(user.id);
-    res.json({ valid: true, user: profile ? { ...profile, is_admin: (user as any).is_admin || false } : profile });
+    res.json({ valid: true, user: profile });
   } else {
     res.json({ valid: false });
   }
