@@ -17,7 +17,7 @@ services:
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      POSTGRES_DB: ${DB_NAME:-puyolive}
+      POSTGRES_DB: ${DB_NAME:-puyio_db}
     volumes:
       - ./data/postgres:/var/lib/postgresql
     healthcheck:
@@ -38,7 +38,7 @@ services:
     networks:
       - puyo-net
     environment:
-      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-puyolive}
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-puyio_db}
       PORT: 8080
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -117,7 +117,7 @@ services:
       PGHOST: db
       PGUSER: ${DB_USER:-postgres}
       PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      PGDATABASE: ${DB_NAME:-puyolive}
+      PGDATABASE: ${DB_NAME:-puyio_db}
     volumes:
       - puyio_backups:/backups
     entrypoint: /bin/sh
