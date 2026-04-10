@@ -745,6 +745,8 @@ io.on('connection', (socket: Socket) => {
       const newRoom = roomManager.createRoom();
       const socket1 = io.sockets.sockets.get(p1);
       const socket2 = io.sockets.sockets.get(p2);
+      const auth1 = authenticatedUsers.get(p1);
+      const auth2 = authenticatedUsers.get(p2);
 
       if (socket1 && socket2) {
         newRoom.addPlayer({ id: p1, name: auth1?.username || `Player ${p1.substring(0, 4)}`, ready: true, userId: auth1?.userId, authToken: auth1?.token });
