@@ -434,7 +434,7 @@ export function WaterFillButton({
       }
       
       if (appRef.current) {
-        appRef.current.destroy(true, { children: true, texture: true });
+        appRef.current.destroy(true);
         appRef.current = null;
       }
       
