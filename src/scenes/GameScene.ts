@@ -1616,8 +1616,8 @@ export class GameScene implements IScene {
             // Draw board background
             this.graphics.rect(0, 0, boardWidth, visibleHeight);
 
-            // Solid dark background for playfield visibility
-            this.graphics.fill({ color: 0x0a0a12, alpha: 1.0 });
+            // Dark background for playfield visibility
+            this.graphics.fill({ color: 0x000000, alpha: 0.75 });
 
             // Draw X Marker (PPT Style) - Column 2, Row HIDDEN_ROWS (first visible top row)
             // The X marks where you die if you lock a piece there

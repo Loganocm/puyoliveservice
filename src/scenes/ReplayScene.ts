@@ -291,7 +291,7 @@ export class ReplayScene implements IScene {
             this.staticBg.height = screenH;
             this.staticBg.width = screenH * bgRatio;
         }
-        this.staticBg.alpha = 0.5;
+        this.staticBg.alpha = 0.4;
     }
 
     // ─── Replay Controls ───
@@ -352,7 +352,7 @@ export class ReplayScene implements IScene {
     // ─── Static board background ───
     private drawBoardBackground(g: Graphics): void {
         g.rect(0, 0, this.boardWidth, this.boardHeight);
-        g.fill({ color: 0x0a0a12, alpha: 1.0 });
+        g.fill({ color: 0x000000, alpha: 0.75 });
         g.stroke({ color: 0xffffff, width: 4, alpha: 1.0 });
     }
 

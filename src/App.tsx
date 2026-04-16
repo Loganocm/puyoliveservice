@@ -283,6 +283,8 @@ export default function App() {
     <div className="relative h-screen w-screen bg-transparent overflow-hidden font-sans text-white z-50 pointer-events-none">
       {bgImage &&
         screen !== "game" &&
+        screen !== "replay" &&
+        screen !== "quickplay" &&
         screen !== "onboarding" &&
         screen !== "transition" && (
           <motion.div
