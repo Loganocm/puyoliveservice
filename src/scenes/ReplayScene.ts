@@ -57,6 +57,8 @@ export class ReplayScene implements IScene {
     private boardEffectContainers: [Container, Container];
     private boardParticleGraphics: [Graphics, Graphics];
     private boardDamageGraphics: [Graphics, Graphics];
+    private boardScoreTexts: [Text, Text];
+    private boardChainTexts: [Text, Text];
 
     // Per-board animation state
     private animStates: [BoardAnimState, BoardAnimState];
@@ -126,7 +128,26 @@ export class ReplayScene implements IScene {
             const particles = new Graphics();
             fx.addChild(particles);
 
-            return { cont, bg, puyos, fx, particles, damage };
+            const scoreText = new Text({
+                text: '0',
+                style: new TextStyle({ fontFamily: 'Orbitron, sans-serif', fontSize: 18, fontWeight: 'bold', fill: '#ffffff' }),
+            });
+            scoreText.anchor.set(0.5, 0);
+            scoreText.x = this.boardWidth / 2;
+            scoreText.y = this.boardHeight + 4;
+            cont.addChild(scoreText);
+
+            const chainText = new Text({
+                text: '',
+                style: new TextStyle({ fontFamily: 'Orbitron, sans-serif', fontSize: 13, fill: '#ffaa00' }),
+            });
+            chainText.anchor.set(0.5, 0);
+            chainText.x = this.boardWidth / 2;
+            chainText.y = this.boardHeight + 26;
+            chainText.visible = false;
+            cont.addChild(chainText);
+
+            return { cont, bg, puyos, fx, particles, damage, scoreText, chainText };
         };
 
         const b1 = buildBoard(this.board1X);
@@ -137,6 +158,8 @@ export class ReplayScene implements IScene {
         this.boardEffectContainers = [b1.fx, b2.fx];
         this.boardParticleGraphics = [b1.particles, b2.particles];
         this.boardDamageGraphics = [b1.damage, b2.damage];
+        this.boardScoreTexts = [b1.scoreText, b2.scoreText];
+        this.boardChainTexts = [b1.chainText, b2.chainText];
 
         // Draw static backgrounds
         this.drawBoardBackground(b1.bg);
@@ -200,6 +223,7 @@ export class ReplayScene implements IScene {
                 totalFrames: total,
                 isPaused: this.replayEngine.isPaused,
                 speed: this.replayEngine.playbackSpeed,
+                isLoaded: this.replayEngine.isLoaded,
             });
             this.timeLabel.text = this.replayEngine.getTimeString();
         };
@@ -249,6 +273,7 @@ export class ReplayScene implements IScene {
             totalFrames: this.replayEngine.totalFrames,
             isPaused: this.replayEngine.isPaused,
             speed: this.replayEngine.playbackSpeed,
+            isLoaded: this.replayEngine.isLoaded,
         });
         this.timeLabel.text = this.replayEngine.getTimeString();
     }
@@ -576,33 +601,13 @@ export class ReplayScene implements IScene {
         }
 
         // --- Score & chain text ---
-        const scoreText = new Text({
-            text: `${board.score}`,
-            style: new TextStyle({
-                fontFamily: 'Orbitron, sans-serif',
-                fontSize: 18,
-                fontWeight: 'bold',
-                fill: '#ffffff',
-            }),
-        });
-        scoreText.anchor.set(0.5, 0);
-        scoreText.x = this.boardWidth / 2;
-        scoreText.y = this.boardHeight + 4;
-        puyoContainer.addChild(scoreText);
+        this.boardScoreTexts[idx].text = `${board.score}`;
 
         if (board.maxChain > 1) {
-            const chainText = new Text({
-                text: `${board.maxChain} chain`,
-                style: new TextStyle({
-                    fontFamily: 'Orbitron, sans-serif',
-                    fontSize: 13,
-                    fill: '#ffaa00',
-                }),
-            });
-            chainText.anchor.set(0.5, 0);
-            chainText.x = this.boardWidth / 2;
-            chainText.y = this.boardHeight + 26;
-            puyoContainer.addChild(chainText);
+            this.boardChainTexts[idx].text = `${board.maxChain} chain`;
+            this.boardChainTexts[idx].visible = true;
+        } else {
+            this.boardChainTexts[idx].visible = false;
         }
 
         // --- Damage meter ---

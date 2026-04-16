@@ -37,6 +37,7 @@ type GameEventMap = {
         totalFrames: number;
         isPaused: boolean;
         speed: number;
+        isLoaded: boolean;
     };
     'replay_control': {
         action: 'play' | 'pause' | 'seek' | 'speed' | 'exit';

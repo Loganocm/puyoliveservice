@@ -27,11 +27,17 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
       totalFrames: number;
       isPaused: boolean;
       speed: number;
+      isLoaded?: boolean; // Optional for backward compatibility with older events momentarily
     }) => {
       setCurrentFrame(data.currentFrame);
       setTotalFrames(data.totalFrames);
       setIsPlaying(!data.isPaused);
       setSpeed(data.speed);
+      
+      if (data.isLoaded !== undefined) {
+          setIsLoaded(data.isLoaded);
+      }
+      
       currentFrameRef.current = data.currentFrame;
       totalFramesRef.current = data.totalFrames;
       isPlayingRef.current = !data.isPaused;
