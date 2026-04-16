@@ -43,7 +43,7 @@ export const ProfileScreen: React.FC<{
   const [newUsername, setNewUsername] = useState("");
   const [nameError, setNameError] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -53,6 +53,7 @@ export const ProfileScreen: React.FC<{
     if (!user) return;
     try {
       setLoading(true);
+      setError(null);
       // Reload user stats
       const me = await APIClient.getMe();
       setUser(me);
@@ -66,8 +67,9 @@ export const ProfileScreen: React.FC<{
       ]);
       setMatches(history.matches);
       setPercentiles(pctData);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("ProfileScreen load error:", e);
+      setError(e?.message || "Failed to load match history");
     } finally {
       setLoading(false);
     }
@@ -267,7 +269,12 @@ export const ProfileScreen: React.FC<{
             </div>
           ) : activeTab === "history" ? (
             <div className="space-y-3">
-              {matches.length === 0 && (
+              {error && (
+                <div className="text-center py-6 border-2 border-red-500/20 bg-red-500/10 rounded-xl">
+                  <div className="text-red-400 font-medium">{error}</div>
+                </div>
+              )}
+              {!error && matches.length === 0 && (
                 <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-xl">
                   <div className="text-white/40 font-medium">
                     No matches played yet
