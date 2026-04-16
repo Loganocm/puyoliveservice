@@ -44,6 +44,9 @@ type GameEventMap = {
         value?: number; // frame for seek, multiplier for speed
     };
     'replay_loaded': {};
+    'replay_match_result': { winner: string };
+    'replay_match_result_clear': {};
+    'bgm_state_change': { isPlaying: boolean; songName: string; artist: string } | null;
     // Puyo Mines (Quick Play) events
     'mines_died': { depth: number; kos: number; score: number };
     'mines_left': void;

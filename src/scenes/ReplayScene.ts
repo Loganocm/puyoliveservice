@@ -8,6 +8,7 @@ import { ResourceManager } from '../core/ResourceManager';
 import { GameEvents } from '../core/GameEvents';
 import { backgroundManager } from '../core/BackgroundManager';
 import { SoundManager } from '../core/SoundManager';
+import { BGMManager } from '../core/BGMManager';
 
 const VISIBLE_ROWS = TOTAL_ROWS - HIDDEN_ROWS;
 
@@ -78,6 +79,7 @@ export class ReplayScene implements IScene {
 
     constructor(replayData: ReplayFile) {
         this.container = new Container();
+        BGMManager.play('game');
         this.replayEngine = new ReplayEngine(replayData);
 
         // --- Background ---
@@ -334,7 +336,7 @@ export class ReplayScene implements IScene {
                     this.boardParticleGraphics[1].clear();
 
                     // Remove winner overlay on seek
-                    if (this.winnerOverlay) { this.winnerOverlay.destroy(); this.winnerOverlay = null; }
+                    GameEvents.emit('replay_match_result_clear', {});
                 }
                 break;
             case 'speed':
@@ -350,7 +352,7 @@ export class ReplayScene implements IScene {
     // ─── Static board background ───
     private drawBoardBackground(g: Graphics): void {
         g.rect(0, 0, this.boardWidth, this.boardHeight);
-        g.fill({ color: 0x000000, alpha: 0.75 });
+        g.fill({ color: 0x0a0a14, alpha: 1.0 });
         g.stroke({ color: 0xffffff, width: 4, alpha: 1.0 });
     }
 
@@ -733,24 +735,11 @@ export class ReplayScene implements IScene {
 
     // ─── Game Over ───
     private showGameOverOverlay(winnerIndex: 0 | 1 | null): void {
-        if (this.winnerOverlay) return;
         const winnerName = winnerIndex !== null
             ? this.replayEngine.players[winnerIndex]?.username || `Player ${winnerIndex + 1}`
             : 'Draw';
 
-        const style = new TextStyle({
-            fontFamily: 'Orbitron, sans-serif',
-            fontSize: 36,
-            fontWeight: 'bold',
-            fill: '#4eff4e',
-            dropShadow: { color: '#000000', blur: 8, angle: 0, distance: 0 },
-        });
-
-        this.winnerOverlay = new Text({ text: `WINNER: ${winnerName}`, style });
-        this.winnerOverlay.anchor.set(0.5);
-        this.winnerOverlay.x = window.innerWidth / 2;
-        this.winnerOverlay.y = this.boardY + this.boardHeight / 2;
-        this.container.addChild(this.winnerOverlay);
+        GameEvents.emit('replay_match_result', { winner: winnerName });
     }
 
     // ─── Main loop ───

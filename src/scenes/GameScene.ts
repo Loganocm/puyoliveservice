@@ -14,6 +14,7 @@ import { GameEvents } from '../core/GameEvents';
 import { SettingsOverlay } from '../ui/SettingsOverlay';
 import { backgroundManager } from '../core/BackgroundManager';
 import { Assets } from 'pixi.js';
+import { BGMManager } from '../core/BGMManager';
 
 interface Particle {
     x: number; y: number;
@@ -135,6 +136,8 @@ export class GameScene implements IScene {
 
         // Visibility / AFK Handler
         document.addEventListener('visibilitychange', this.handleVisibilityChange);
+        
+        BGMManager.play('game');
 
         this.container = new Container();
 

@@ -19,6 +19,7 @@ import { XpCalculator } from "./core/XpCalculator";
 import { GameEvents } from "@/core/GameEvents";
 import { LevelUpOverlay } from "@/components/LevelUpOverlay";
 import { VolumeHUD } from "@/components/VolumeHUD";
+import { BGMPlayer } from "@/components/BGMPlayer";
 
 import { SinglePlayerModeSelect } from "@/screens/SinglePlayerModeSelect";
 import { MultiplayerLobby } from "@/screens/MultiplayerLobby";
@@ -731,6 +732,7 @@ export default function App() {
       )}
 
       <VolumeHUD />
+      <BGMPlayer />
     </div>
   );
 }

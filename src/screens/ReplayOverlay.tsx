@@ -14,6 +14,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
   const [speed, setSpeed] = useState(1);
   const [uiVisible, setUiVisible] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [matchResult, setMatchResult] = useState<{ winner: string } | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Refs for stable closures in keyboard/mouse handlers
@@ -34,11 +35,11 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
       setTotalFrames(data.totalFrames);
       setIsPlaying(!data.isPaused);
       setSpeed(data.speed);
-      
+
       if (data.isLoaded !== undefined) {
-          setIsLoaded(data.isLoaded);
+        setIsLoaded(data.isLoaded);
       }
-      
+
       currentFrameRef.current = data.currentFrame;
       totalFramesRef.current = data.totalFrames;
       isPlayingRef.current = !data.isPaused;
@@ -50,10 +51,23 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
 
     GameEvents.on("replay_update", handleUpdate);
     GameEvents.on("replay_loaded", handleLoaded);
+    
+    const handleMatchResult = (data: { winner: string }) => {
+      setMatchResult(data);
+    };
+    
+    const handleMatchResultClear = () => {
+      setMatchResult(null);
+    };
+
+    GameEvents.on("replay_match_result", handleMatchResult);
+    GameEvents.on("replay_match_result_clear", handleMatchResultClear);
 
     return () => {
       GameEvents.off("replay_update", handleUpdate);
       GameEvents.off("replay_loaded", handleLoaded);
+      GameEvents.off("replay_match_result", handleMatchResult);
+      GameEvents.off("replay_match_result_clear", handleMatchResultClear);
     };
   }, []);
 
@@ -88,7 +102,10 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
       if (e.code === "ArrowRight") {
         GameEvents.emit("replay_control", {
           action: "seek",
-          value: Math.min(totalFramesRef.current, currentFrameRef.current + 300),
+          value: Math.min(
+            totalFramesRef.current,
+            currentFrameRef.current + 300,
+          ),
         });
       }
       if (e.code === "ArrowLeft") {
@@ -109,9 +126,12 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
     onExit();
   }, [onExit]);
 
-  useMenuInput({
-    onBack: handleExit
-  }, [handleExit]);
+  useMenuInput(
+    {
+      onBack: handleExit,
+    },
+    [handleExit],
+  );
 
   const sendControl = useCallback(
     (action: "play" | "pause" | "seek" | "speed" | "exit", value?: number) => {
@@ -149,7 +169,10 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
             LOADING REPLAY
           </div>
           <div className="w-64 h-2 bg-white/20 rounded-full overflow-hidden">
-            <div className="h-full bg-orange-500 rounded-full animate-pulse" style={{ width: '100%' }} />
+            <div
+              className="h-full bg-orange-500 rounded-full animate-pulse"
+              style={{ width: "100%" }}
+            />
           </div>
         </div>
       </div>
@@ -176,6 +199,33 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
         </button>
       </div>
 
+      {/* Match Result Overlay */}
+      {matchResult && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-auto z-40">
+          <div
+            className="rounded-3xl p-12 backdrop-blur-xl text-center transform scale-110"
+            style={{
+              background: 'linear-gradient(135deg, rgba(20,20,30,1), rgba(10,10,20,1))',
+              border: '2px solid rgba(78, 255, 78, 0.4)',
+              boxShadow: '0 0 80px rgba(78, 255, 78, 0.2), 0 25px 50px rgba(0,0,0,0.8)',
+            }}
+          >
+            <h1
+              className="text-6xl font-black mb-4 tracking-wider"
+              style={{
+                color: '#4eff4e',
+                textShadow: '0 0 40px rgba(78, 255, 78, 0.8)',
+              }}
+            >
+              WINNER
+            </h1>
+            <p className="text-4xl font-bold text-white tracking-widest uppercase">
+              {matchResult.winner}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Controls */}
       <div className="absolute bottom-0 left-0 w-full p-8 pb-12 pointer-events-auto bg-gradient-to-t from-black/90 via-black/60 to-transparent">
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
@@ -185,14 +235,29 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
               {formatFrameTime(currentFrame)}
             </span>
             <div className="relative flex-1 group">
-              <input
-                type="range"
-                min={0}
-                max={totalFrames}
-                value={currentFrame}
-                onChange={handleSeek}
-                className="w-full h-2 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-orange-500 [&::-webkit-slider-thumb]:transition-transform group-hover:[&::-webkit-slider-thumb]:scale-125"
-              />
+              <div className="relative h-2 w-full">
+                {/* Track background */}
+                <div className="absolute inset-0 bg-white/20 rounded-full" />
+                {/* Orange progress fill */}
+                <div
+                  className="absolute top-0 left-0 h-full bg-orange-500 rounded-full pointer-events-none"
+                  style={{
+                    width:
+                      totalFrames > 0
+                        ? `${(currentFrame / totalFrames) * 100}%`
+                        : "0%",
+                  }}
+                />
+                {/* Range input */}
+                <input
+                  type="range"
+                  min={0}
+                  max={totalFrames}
+                  value={currentFrame}
+                  onChange={handleSeek}
+                  className="absolute inset-0 w-full h-full appearance-none cursor-pointer bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-orange-500 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(0,0,0,0.5)] [&::-webkit-slider-thumb]:transition-transform group-hover:[&::-webkit-slider-thumb]:scale-125"
+                />
+              </div>
             </div>
             <span className="text-white/60 font-mono w-16">
               {formatFrameTime(totalFrames)}

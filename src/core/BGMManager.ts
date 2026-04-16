@@ -1,62 +1,39 @@
 import { SettingsManager } from './SettingsManager';
+import { GameEvents } from './GameEvents';
 
 export type BGMContext = 'menu' | 'game' | 'none';
 
-/**
- * Background Music Manager
- * 
- * Manages looping BGM playback with crossfade transitions,
- * volume control (bgmVolume × masterVolume), and context-aware track selection.
- * 
- * Usage:
- *   BGMManager.init();                     // Call once on first user interaction
- *   BGMManager.registerTrack('menu', url); // Register tracks by context
- *   BGMManager.play('menu');               // Start playing a context
- *   BGMManager.stop();                     // Fade out and stop
- *   BGMManager.updateVolume();             // Call when volume settings change
- */
 export class BGMManager {
-  private static tracks: Map<string, string[]> = new Map(); // context -> urls[]
+  private static tracks: Map<string, string[]> = new Map();
+  private static currentIndices: Map<string, number> = new Map();
   private static currentAudio: HTMLAudioElement | null = null;
   private static currentContext: BGMContext = 'none';
+  private static currentUrl: string | null = null;
   private static _initialized = false;
 
   static get initialized() { return this._initialized; }
 
-  /**
-   * Initialize the audio context. Must be called from a user gesture (click/keydown).
-   */
   static init() {
     if (this._initialized) return;
     this._initialized = true;
     console.log('[BGM] Initialized');
   }
 
-  /**
-   * Register one or more track URLs for a context.
-   * Multiple tracks for the same context will be picked randomly.
-   */
   static registerTrack(context: BGMContext, url: string) {
     const existing = this.tracks.get(context) || [];
     existing.push(url);
     this.tracks.set(context, existing);
+    if (!this.currentIndices.has(context)) {
+      this.currentIndices.set(context, 0); // initialize index
+    }
   }
 
-  /**
-   * Get the effective volume (0-1) based on master + bgm sliders.
-   * Master 100 + BGM 50 => 0.1 * 0.5 = 0.05
-   */
   static getEffectiveVolume(): number {
     const master = SettingsManager.masterVolume / 100;
     const bgm = SettingsManager.bgmVolume / 100;
-    // BGM max gain = 0.3 (louder than SFX which caps at 0.1)
     return master * bgm * 0.3;
   }
 
-  /**
-   * Play BGM for a given context. If already playing that context, do nothing.
-   * Crossfades from current track if one is playing.
-   */
   static play(context: BGMContext) {
     if (!this._initialized) return;
     if (context === 'none') { this.stop(); return; }
@@ -68,43 +45,54 @@ export class BGMManager {
       return;
     }
 
-    // Pick a random track
-    const url = urls[Math.floor(Math.random() * urls.length)];
+    let index = this.currentIndices.get(context) || 0;
+    // If we are already playing this context, don't restart play unless it's genuinely the start.
+    // Wait, play() is called to switch context. If it's the same context but paused, we resume.
+    if (context === this.currentContext && this.currentAudio && this.currentAudio.paused) {
+        this.resume();
+        return;
+    }
+
+    const url = urls[index];
     this.crossfadeTo(url, context);
   }
 
-  /**
-   * Stop all BGM with a fade out.
-   */
+  static next() {
+    if (this.currentContext === 'none') return;
+    const urls = this.tracks.get(this.currentContext);
+    if (!urls || urls.length === 0) return;
+
+    let index = this.currentIndices.get(this.currentContext) || 0;
+    index = (index + 1) % urls.length;
+    this.currentIndices.set(this.currentContext, index);
+
+    const url = urls[index];
+    this.crossfadeTo(url, this.currentContext, 200); // Faster crossfade for manual skip
+  }
+
   static stop(fadeDurationMs = 800) {
     this.currentContext = 'none';
     if (this.currentAudio) {
       this.fadeOut(this.currentAudio, fadeDurationMs);
       this.currentAudio = null;
     }
+    this.emitState();
   }
 
-  /**
-   * Pause current BGM (e.g., when tab loses focus).
-   */
   static pause() {
     if (this.currentAudio && !this.currentAudio.paused) {
       this.currentAudio.pause();
+      this.emitState();
     }
   }
 
-  /**
-   * Resume current BGM.
-   */
   static resume() {
     if (this.currentAudio && this.currentAudio.paused && this.currentContext !== 'none') {
       this.currentAudio.play().catch(() => {});
+      this.emitState();
     }
   }
 
-  /**
-   * Update volume on all active audio elements. Call when settings change.
-   */
   static updateVolume() {
     const vol = Math.max(0, Math.min(1, this.getEffectiveVolume()));
     if (this.currentAudio) {
@@ -112,25 +100,55 @@ export class BGMManager {
     }
   }
 
+  private static emitState() {
+    if (!this.currentUrl || this.currentContext === 'none') {
+      GameEvents.emit('bgm_state_change', null);
+      return;
+    }
+
+    const isPlaying = this.currentAudio ? !this.currentAudio.paused : false;
+    
+    // Extract filename without extension
+    const parts = this.currentUrl.split('/');
+    const filename = parts[parts.length - 1];
+    const songName = filename.split('.')[0] || 'Unknown Track';
+
+    // Format for display
+    const formattedName = songName.charAt(0).toUpperCase() + songName.slice(1).replace(/_/g, ' ');
+
+    GameEvents.emit('bgm_state_change', {
+      isPlaying,
+      songName: formattedName,
+      artist: 'xaptiox'
+    });
+  }
+
   private static crossfadeTo(url: string, context: BGMContext, fadeDurationMs = 600) {
-    // Fade out old
     if (this.currentAudio) {
+      // Remove old ended listener
+      this.currentAudio.onended = null;
       this.fadeOut(this.currentAudio, fadeDurationMs);
     }
 
-    // Create new
     const audio = new Audio(url);
-    audio.loop = true;
+    // Don't loop a single track, we want rotation
+    audio.loop = false;
     audio.volume = 0;
     audio.preload = 'auto';
 
+    audio.onended = () => {
+      this.next();
+    };
+
     this.currentAudio = audio;
     this.currentContext = context;
+    this.currentUrl = url;
 
     const targetVol = Math.max(0, Math.min(1, this.getEffectiveVolume()));
 
     audio.play().then(() => {
-      // Fade in
+      this.emitState();
+      
       const steps = 20;
       const stepMs = fadeDurationMs / steps;
       let step = 0;
@@ -144,7 +162,7 @@ export class BGMManager {
         audio.volume = targetVol * (step / steps);
       }, stepMs);
     }).catch(e => {
-      console.warn('[BGM] Play failed (no user interaction yet?):', e);
+      console.warn('[BGM] Play failed:', e);
     });
   }
 
@@ -163,10 +181,11 @@ export class BGMManager {
         audio.volume = 0;
         audio.pause();
         audio.removeAttribute('src');
-        audio.load(); // Release resource without spurious network request
+        audio.load();
         return;
       }
       audio.volume = startVol * (1 - step / steps);
     }, stepMs);
   }
 }
+

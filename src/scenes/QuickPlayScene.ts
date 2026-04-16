@@ -28,6 +28,7 @@ import { NetworkManager } from '../core/NetworkManager';
 import { GameEvents } from '../core/GameEvents';
 import { backgroundManager } from '../core/BackgroundManager';
 import { Assets } from 'pixi.js';
+import { BGMManager } from '../core/BGMManager';
 
 /** Depth = score / 100 */
 const DEPTH_DIVISOR = 100;
@@ -130,6 +131,7 @@ export class QuickPlayScene implements IScene {
 
     constructor(seed: number) {
         this.seed = seed;
+        BGMManager.play('game');
 
         console.log(`[QuickPlayScene] Initializing. Seed: ${seed}`);
 
