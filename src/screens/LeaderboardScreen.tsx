@@ -14,7 +14,7 @@ interface Player {
 
 import { useState, useEffect } from 'react';
 import { BackButton } from '@/components/BackButton';
-import { APIClient } from '@/core/APIClient';
+import { APIClient } from '@/api/client';
 import { useMenuInput } from '@/hooks/useMenuInput';
 
 export function LeaderboardScreen({ onBack }: LeaderboardScreenProps) {
