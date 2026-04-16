@@ -91,6 +91,10 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
   // Keyboard controls — uses refs, never needs re-registration
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Escape") {
+        onExit();
+        return;
+      }
       if (e.code === "Space") {
         e.preventDefault();
         if (isPlayingRef.current) {
