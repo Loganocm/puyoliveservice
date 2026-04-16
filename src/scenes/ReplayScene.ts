@@ -59,6 +59,8 @@ export class ReplayScene implements IScene {
     private boardDamageGraphics: [Graphics, Graphics];
     private boardScoreTexts: [Text, Text];
     private boardChainTexts: [Text, Text];
+    private boardNextLabels: [Text, Text];
+    private boardNextGraphics: [Graphics, Graphics];
 
     // Per-board animation state
     private animStates: [BoardAnimState, BoardAnimState];
@@ -86,11 +88,14 @@ export class ReplayScene implements IScene {
         this.staticBg.position.set(window.innerWidth / 2, window.innerHeight / 2);
         this.container.addChild(this.staticBg);
 
+        // Prepare a fresh background for replay
+        backgroundManager.prepareGameBackground();
         const bgUrl = backgroundManager.getGameBackground();
         if (bgUrl) {
             Assets.load(bgUrl).then((texture) => {
                 if (this.staticBg && !this.staticBg.destroyed) {
                     this.staticBg.texture = texture;
+                    this.staticBg.tint = 0xffffff; // Reset tint in case fallback set it
                     this.resizeBackground();
                 }
             }).catch(() => {});
@@ -99,11 +104,21 @@ export class ReplayScene implements IScene {
         // --- Layout ---
         this.boardWidth = COLS * CELL_SIZE;
         this.boardHeight = VISIBLE_ROWS * CELL_SIZE;
-        const spacing = 120;
-        const totalWidth = this.boardWidth * 2 + spacing;
+        
+        // A player's area is the board + next queue column
+        const queueColumnWidth = 80; // Width for next piece queue
+        const playerAreaWidth = this.boardWidth + queueColumnWidth + 20; 
+        const spacing = 40; // Gap between the two player areas
+        const totalWidth = playerAreaWidth * 2 + spacing;
+        
+        // Center horizontally
         this.board1X = (window.innerWidth - totalWidth) / 2;
-        this.board2X = this.board1X + this.boardWidth + spacing;
-        this.boardY = 60;
+        this.board2X = this.board1X + playerAreaWidth + spacing;
+        // Center vertically between header (60px) and footer controls (~160px)
+        const headerSpace = 60;
+        const footerSpace = 160;
+        const availableH = window.innerHeight - headerSpace - footerSpace;
+        this.boardY = headerSpace + Math.max(0, (availableH - this.boardHeight) / 2);
 
         // --- Build per-board containers ---
         const buildBoard = (x: number) => {
@@ -146,7 +161,21 @@ export class ReplayScene implements IScene {
             chainText.visible = false;
             cont.addChild(chainText);
 
-            return { cont, bg, puyos, fx, particles, damage, scoreText, chainText };
+            // NEXT label
+            const nextLabel = new Text({
+                text: 'NEXT',
+                style: new TextStyle({ fontFamily: 'Orbitron, sans-serif', fontSize: 12, fontWeight: 'bold', fill: '#aaaaaa' }),
+            });
+            nextLabel.anchor.set(0.5, 0);
+            nextLabel.x = this.boardWidth + 50;
+            nextLabel.y = -5;
+            cont.addChild(nextLabel);
+
+            // Next queue graphics (persistent, redrawn each frame)
+            const nextGfx = new Graphics();
+            cont.addChild(nextGfx);
+
+            return { cont, bg, puyos, fx, particles, damage, scoreText, chainText, nextLabel, nextGfx };
         };
 
         const b1 = buildBoard(this.board1X);
@@ -159,6 +188,8 @@ export class ReplayScene implements IScene {
         this.boardDamageGraphics = [b1.damage, b2.damage];
         this.boardScoreTexts = [b1.scoreText, b2.scoreText];
         this.boardChainTexts = [b1.chainText, b2.chainText];
+        this.boardNextLabels = [b1.nextLabel, b2.nextLabel];
+        this.boardNextGraphics = [b1.nextGfx, b2.nextGfx];
 
         // Draw static backgrounds
         this.drawBoardBackground(b1.bg);
@@ -261,7 +292,7 @@ export class ReplayScene implements IScene {
             this.staticBg.height = screenH;
             this.staticBg.width = screenH * bgRatio;
         }
-        this.staticBg.alpha = 0.4;
+        this.staticBg.alpha = 0.5;
     }
 
     // ─── Replay Controls ───
@@ -323,7 +354,7 @@ export class ReplayScene implements IScene {
     private drawBoardBackground(g: Graphics): void {
         g.rect(0, 0, this.boardWidth, this.boardHeight);
         g.fill({ color: 0x000000, alpha: 0.75 });
-        g.stroke({ color: 0x555555, width: 2 });
+        g.stroke({ color: 0xffffff, width: 4, alpha: 1.0 });
     }
 
     // ─── Puyo sprite helper ───
@@ -565,26 +596,47 @@ export class ReplayScene implements IScene {
             }
         }
 
-        // --- Next piece preview ---
-        const previewX = this.boardWidth + 20;
+        // --- Next piece preview (vertical layout like actual game) ---
+        const nextGfx = this.boardNextGraphics[idx];
+        nextGfx.clear();
+        const queueCenterX = this.boardWidth + 50;
+        let nextY = 12; // Starting Y for first piece
+
         for (let i = 0; i < Math.min(board.nextPieces.length, 2); i++) {
             const next = board.nextPieces[i];
-            const previewY = i === 0 ? 20 : 90;
-            const previewScale = i === 0 ? 0.7 : 0.55;
+            let displaySize: number;
 
+            if (i === 0) {
+                // Primary next piece — larger, with box frame
+                displaySize = 32;
+                const boxW = 50;
+                const boxH = displaySize * 2 + 12;
+                nextGfx.rect(queueCenterX - boxW / 2, nextY - 4, boxW, boxH);
+                nextGfx.fill({ color: 0x000000, alpha: 0.3 });
+                nextGfx.stroke({ color: 0xFF5733, width: 2 });
+            } else {
+                // Secondary next piece — smaller
+                displaySize = 24;
+                nextY += 8; // Extra gap between pieces
+            }
+
+            // Sub puyo (top)
             this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.sub, 0);
             const subSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
-            subSpr.x = previewX + CELL_SIZE / 2;
-            subSpr.y = previewY + CELL_SIZE / 2;
-            subSpr.width = CELL_SIZE * previewScale;
-            subSpr.height = CELL_SIZE * previewScale;
+            subSpr.x = queueCenterX;
+            subSpr.y = nextY + displaySize / 2;
+            subSpr.width = displaySize;
+            subSpr.height = displaySize;
 
+            // Main puyo (bottom)
             this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.main, 0);
             const mainSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
-            mainSpr.x = previewX + CELL_SIZE / 2;
-            mainSpr.y = previewY + CELL_SIZE + CELL_SIZE / 2;
-            mainSpr.width = CELL_SIZE * previewScale;
-            mainSpr.height = CELL_SIZE * previewScale;
+            mainSpr.x = queueCenterX;
+            mainSpr.y = nextY + displaySize / 2 + displaySize + 4;
+            mainSpr.width = displaySize;
+            mainSpr.height = displaySize;
+
+            nextY += displaySize * 2 + 12;
         }
 
         // --- Score & chain text ---
@@ -730,14 +782,21 @@ export class ReplayScene implements IScene {
 
     // ─── Layout ───
     private updateLayout(): void {
-        const screenW = SceneManager.screenWidth;
-        const screenH = SceneManager.screenHeight;
+        const screenW = window.innerWidth;
+        const screenH = window.innerHeight;
 
-        const spacing = 120;
-        const totalWidth = this.boardWidth * 2 + spacing;
+        const queueColumnWidth = 80;
+        const playerAreaWidth = this.boardWidth + queueColumnWidth + 20; 
+        const spacing = 40;
+        const totalWidth = playerAreaWidth * 2 + spacing;
+        
         this.board1X = (screenW - totalWidth) / 2;
-        this.board2X = this.board1X + this.boardWidth + spacing;
-        this.boardY = 60;
+        this.board2X = this.board1X + playerAreaWidth + spacing;
+        // Center vertically between header and footer
+        const headerSpace = 60;
+        const footerSpace = 160;
+        const availableH = screenH - headerSpace - footerSpace;
+        this.boardY = headerSpace + Math.max(0, (availableH - this.boardHeight) / 2);
 
         this.boardContainers[0].x = this.board1X;
         this.boardContainers[0].y = this.boardY;

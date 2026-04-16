@@ -34,6 +34,26 @@ export class AuthManager {
             }
         });
 
+        // Handle socket auth failure (e.g. expired token on reconnect)
+        NetworkManager.on('auth_failed', async () => {
+            console.warn('Auth: Socket auth failed, attempting to refresh session...');
+            try {
+                // Validate token via API — if still valid server-side, re-fetch user
+                const user = await APIClient.getMe();
+                if (user) {
+                    this.currentUser = user;
+                    // Token is valid for API but socket rejected it — re-authenticate
+                    if (this.token) {
+                        NetworkManager.authenticate(this.token);
+                    }
+                }
+            } catch {
+                // Token is truly invalid — clear session
+                console.warn('Auth: Token expired, logging out');
+                this.logout();
+            }
+        });
+
         // Listen for match results to update user state immediately
         NetworkManager.on('match_result', (data: any) => {
             console.log("Auth: Received match_result", data);

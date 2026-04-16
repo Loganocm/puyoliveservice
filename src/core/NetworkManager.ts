@@ -221,6 +221,8 @@ export class NetworkManager {
             console.log('Socket Auth:', data);
             if (!data.success) {
                 console.warn('Socket authentication failed:', data.error);
+                // Emit event so AuthManager can handle token refresh
+                this.emit('auth_failed', data);
             }
         });
     }
