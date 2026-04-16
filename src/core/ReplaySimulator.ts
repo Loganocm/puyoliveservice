@@ -115,6 +115,7 @@ export class ReplaySimulator {
         const snapshots: FrameSnapshot[] = [];
         let inputCursor = 0;
         let currentFrame = 0;
+        let gameEndedFrame = -1;
 
         // Capture frame 0 (initial state)
         snapshots.push({
@@ -150,6 +151,14 @@ export class ReplaySimulator {
                 // 4. Report progress (every 100 frames to avoid callback overhead)
                 if (onProgress && currentFrame % 100 === 0) {
                     onProgress(currentFrame / totalFrames);
+                }
+
+                // 5. Check for Game Over Truncation
+                if (gameEndedFrame === -1 && (engine1.state === GameState.GAMEOVER || engine2.state === GameState.GAMEOVER)) {
+                    gameEndedFrame = currentFrame;
+                }
+                if (gameEndedFrame !== -1 && currentFrame > gameEndedFrame + 60) {
+                    break;
                 }
             }
         } catch (error) {

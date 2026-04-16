@@ -66,7 +66,6 @@ export class ReplayScene implements IScene {
     // UI Elements
     private player1Label: Text;
     private player2Label: Text;
-    private timeLabel: Text;
     private pauseIndicator: Text;
     private winnerOverlay: Text | null = null;
 
@@ -199,13 +198,7 @@ export class ReplayScene implements IScene {
         this.player2Label.y = this.boardY - 45;
         this.container.addChild(this.player2Label);
 
-        // Time
-        const timeStyle = new TextStyle({ fontFamily: 'Orbitron, sans-serif', fontSize: 20, fill: '#cccccc' });
-        this.timeLabel = new Text({ text: '0:00 / 0:00', style: timeStyle });
-        this.timeLabel.anchor.set(0.5, 0);
-        this.timeLabel.x = window.innerWidth / 2;
-        this.timeLabel.y = this.boardY + this.boardHeight + 20;
-        this.container.addChild(this.timeLabel);
+        // Time Label Removed (UI handles this natively)
 
         // Pause indicator
         const pauseStyle = new TextStyle({ fontFamily: 'Orbitron, sans-serif', fontSize: 48, fontWeight: 'bold', fill: '#ff4d00' });
@@ -225,7 +218,6 @@ export class ReplayScene implements IScene {
                 speed: this.replayEngine.playbackSpeed,
                 isLoaded: this.replayEngine.isLoaded,
             });
-            this.timeLabel.text = this.replayEngine.getTimeString();
         };
 
         this.replayEngine.onGameOver = (winnerIndex) => {
@@ -269,7 +261,7 @@ export class ReplayScene implements IScene {
             this.staticBg.height = screenH;
             this.staticBg.width = screenH * bgRatio;
         }
-        this.staticBg.alpha = 0.3;
+        this.staticBg.alpha = 0.4;
     }
 
     // ─── Replay Controls ───
@@ -282,7 +274,6 @@ export class ReplayScene implements IScene {
             speed: this.replayEngine.playbackSpeed,
             isLoaded: this.replayEngine.isLoaded,
         });
-        this.timeLabel.text = this.replayEngine.getTimeString();
     }
 
     private handleReplayControl = (cmd: { action: string; value?: number }) => {
@@ -332,18 +323,7 @@ export class ReplayScene implements IScene {
     private drawBoardBackground(g: Graphics): void {
         g.rect(0, 0, this.boardWidth, this.boardHeight);
         g.fill({ color: 0x000000, alpha: 0.75 });
-        g.stroke({ color: 0x333333, width: 2 });
-
-        for (let c = 1; c < COLS; c++) {
-            g.moveTo(c * CELL_SIZE, 0);
-            g.lineTo(c * CELL_SIZE, this.boardHeight);
-            g.stroke({ color: 0x222222, width: 1 });
-        }
-        for (let r = 1; r < VISIBLE_ROWS; r++) {
-            g.moveTo(0, r * CELL_SIZE);
-            g.lineTo(this.boardWidth, r * CELL_SIZE);
-            g.stroke({ color: 0x222222, width: 1 });
-        }
+        g.stroke({ color: 0x555555, width: 2 });
     }
 
     // ─── Puyo sprite helper ───
@@ -768,9 +748,6 @@ export class ReplayScene implements IScene {
         this.player1Label.y = this.boardY - 45;
         this.player2Label.x = this.board2X + this.boardWidth / 2;
         this.player2Label.y = this.boardY - 45;
-
-        this.timeLabel.x = screenW / 2;
-        this.timeLabel.y = this.boardY + this.boardHeight + 20;
 
         this.pauseIndicator.x = screenW / 2;
         this.pauseIndicator.y = screenH / 2;
