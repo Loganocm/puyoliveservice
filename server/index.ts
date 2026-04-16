@@ -1395,14 +1395,11 @@ io.on('connection', (socket: Socket) => {
     io.emit('room_list_update', publicRooms);
   }, STALE_ROOM_INTERVAL);
 
-  // ── Board state heartbeat — auto-forfeit players who stop sending board updates ──
-  // If a player doesn't send a board state for 7 seconds during an active match,
-  // they are auto-forfeited. This prevents: hiding board, refusing to die, AFK stalling.
-  // Also detects topped-out boards (death column filled for 3+ seconds).
-  const HEARTBEAT_INTERVAL = 3_000; // Check every 3 seconds
-  const HEARTBEAT_TIMEOUT = 7_000; // 7 seconds without board update = forfeit
+  // ── Board state heartbeat — auto-abort players who stall / background ──
+  // If a player doesn't send a board state for 7 seconds during an active match (e.g. background tab),
+  // the game is safely aborted. This prevents ELO inflation or deflation from network desyncs.
+  const HEARTBEAT_TIMEOUT = 7_000; // 7 seconds without board update = disconnected
   const HEARTBEAT_GRACE = 7_000;   // Don't check until 7s after match start (loading grace)
-  // Death detection is now handled by server-side PuyoSimulator (no more DEATH_SUSPECT_TIMEOUT)
 
   setInterval(() => {
     const now = Date.now();
@@ -1412,54 +1409,23 @@ io.on('connection', (socket: Socket) => {
       const matchAge = now - room.matchStats.startedAt.getTime();
       if (matchAge < HEARTBEAT_GRACE) continue; // Still in grace period
 
-      // Check: player 0 stopped sending tick_frame (AFK bypass exploit)
-      // A cheater can satisfy the board-state heartbeat by sending empty boards
-      // while also freezing the server sim by not sending tick_frame.
-      // This covers that gap independently of board state.
-      const lastTick = room.lastTickFrame || 0;
-      if (lastTick > 0 && now - lastTick > HEARTBEAT_TIMEOUT) {
-        // Find player 0 (first in insertion order) and forfeit them
-        const playerIds = Array.from(room.players.keys());
-        const player0Id = playerIds[0];
-        const player0 = room.players.get(player0Id);
-        if (player0Id && player0 && !room.matchConcluded) {
-          const reason = `tick_frame stalled for ${Math.round((now - lastTick) / 1000)}s (AFK bypass)`;
-          console.log(`[Heartbeat] Player 0 ${player0.name} (${player0Id}) in room ${room.id}: ${reason}. Auto-forfeiting.`);
-          if (room.concludeMatch(player0Id)) {
-            for (const pid of room.players.keys()) {
-              if (pid === player0Id) continue;
-              const ws = io.sockets.sockets.get(pid);
-              if (ws) ws.emit('opponent_lost');
-            }
-            io.to(room.id).emit('game_ended', { roomId: room.id, reason: 'timeout' });
-            setTimeout(() => {
-              for (const pid of room.players.keys()) {
-                const ps = io.sockets.sockets.get(pid);
-                if (ps) ps.leave(room.id);
-              }
-              roomManager.deleteRoom(room.id);
-            }, 1000);
-            continue; // Move to next room
-          }
-        }
-      }
-
       for (const [socketId, player] of room.players) {
         const lastUpdate = player.lastBoardUpdate || 0;
 
-        // Check: No board state sent for 20 seconds (AFK / disconnected / hiding board)
+        // Check: No board state sent for 7 seconds (AFK / disconnected / background tab)
         if (now - lastUpdate > HEARTBEAT_TIMEOUT) {
           const reason = `no board state for ${Math.round((now - lastUpdate) / 1000)}s`;
-          console.log(`[Heartbeat] Player ${player.name} (${socketId}) in room ${room.id}: ${reason}. Auto-forfeiting.`);
+          console.log(`[Heartbeat] Player ${player.name} (${socketId}) in room ${room.id}: ${reason}. Auto-aborting match.`);
+          
           if (!room.concludeMatch(socketId)) continue; // Already concluded
-          // Notify winner(s) directly (don't use socket.broadcast — socket may not be the forfeiter)
-          for (const pid of room.players.keys()) {
-            if (pid === socketId) continue;
-            const winnerSocket = io.sockets.sockets.get(pid);
-            if (winnerSocket) winnerSocket.emit('opponent_lost');
-          }
-          // Emit game_ended
-          io.to(room.id).emit('game_ended', { roomId: room.id, reason: 'timeout' });
+
+          // Emit game_ended with aborted reason
+          io.to(room.id).emit('game_ended', { 
+            roomId: room.id, 
+            reason: 'aborted',
+            message: 'Opponent Disconnected (Match Aborted)'
+          });
+
           // Clean up after delay
           setTimeout(() => {
             for (const pid of room.players.keys()) {

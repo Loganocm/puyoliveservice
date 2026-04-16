@@ -308,6 +308,19 @@ export class GameScene implements IScene {
             };
             NetworkManager.on('opponent_left', onOpponentLeft);
             this.networkListeners.push({ event: 'opponent_left', cb: onOpponentLeft });
+
+            const onGameEnded = (data: any) => {
+                // If game was explicitly aborted via server anticheat or timeout
+                if (data.reason === 'aborted' || data.reason === 'timeout' || data.reason === 'admin_closed') {
+                    console.log(`[GameScene] Match aborted by server. Reason: ${data.reason}`);
+                    this.gameMessage = data.message || "GAME ABORTED";
+                    this.engine.state = GameState.GAMEOVER;
+                    // Emit game_over to freeze the overlay, with tie so no winner logic executes
+                    GameEvents.emit('game_over', { score: this.engine.stats.score, message: this.gameMessage, result: 'tie' });
+                }
+            };
+            NetworkManager.on('game_ended', onGameEnded);
+            this.networkListeners.push({ event: 'game_ended', cb: onGameEnded });
         }
 
         // Global Disconnect Handler
