@@ -163,7 +163,7 @@ export class ReplaySimulator {
                 }
             }
         } catch (error) {
-            console.error(`[ReplaySimulator] CRITICAL SIMULATION CRASH at frame ${currentFrame}/${totalFrames}`);
+            console.error(`[ReplaySimulator] CRITICAL SIMULATION CRASH at frame ${currentFrame}/${maxFrames}`);
             console.error(`[ReplaySimulator] Error Context:`, error);
             console.error(`[ReplaySimulator] Pending Inputs Queue cursor at ${inputCursor}. Next 5 inputs:`, sortedInputs.slice(inputCursor, inputCursor + 5));
             console.error(`[ReplaySimulator] Engine 1 State: ${engine1.state}, Board Active Piece: ${engine1.activePiece ? 'Yes' : 'No'}`);
