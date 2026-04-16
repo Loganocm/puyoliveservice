@@ -48,7 +48,6 @@ export class ReplayScene implements IScene {
 
     // Per-board rendering containers
     private boardContainers: [Container, Container];
-    private boardBgGraphics: [Graphics, Graphics];
     private boardPuyoContainers: [Container, Container];
     private boardEffectContainers: [Container, Container];
     private boardParticleGraphics: [Graphics, Graphics];
@@ -129,7 +128,6 @@ export class ReplayScene implements IScene {
         const b2 = buildBoard(this.board2X);
 
         this.boardContainers = [b1.cont, b2.cont];
-        this.boardBgGraphics = [b1.bg, b2.bg];
         this.boardPuyoContainers = [b1.puyos, b2.puyos];
         this.boardEffectContainers = [b1.fx, b2.fx];
         this.boardParticleGraphics = [b1.particles, b2.particles];
