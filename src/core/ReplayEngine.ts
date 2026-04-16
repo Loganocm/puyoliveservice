@@ -1,4 +1,5 @@
-import { GameEngine } from './GameEngine';
+import type { BoardSnapshot, FrameSnapshot } from './ReplaySimulator';
+import { ReplaySimulator } from './ReplaySimulator';
 
 // Replay input types (must match server)
 export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
@@ -33,188 +34,151 @@ export function isReplayFileV2(data: any): data is ReplayFile {
 }
 
 /**
- * ReplayEngine - Deterministic playback of recorded games
- * Uses a fixed timestep accumulator so playback runs at real-time
- * regardless of monitor refresh rate.
+ * ReplayEngine — Snapshot-based playback of pre-rendered replays.
+ *
+ * Instead of running GameEngine instances in real-time (which requires perfect
+ * timing parity with the live game), this engine reads from a pre-computed
+ * FrameSnapshot[] array. This eliminates ALL forms of desync by design.
+ *
+ * Playback just advances a frame counter. Seeking is instant (array index).
+ * Memory is freed when dispose() is called on exit.
  */
 export class ReplayEngine {
-    private engines: [GameEngine, GameEngine];
     private replayData: ReplayFile;
+    private snapshots: FrameSnapshot[] | null = null;
     private currentFrame: number = 0;
-    private inputCursor: number = 0;
     private accumulator: number = 0;
 
     // Playback state
-    private _isPaused: boolean = false;
+    private _isPaused: boolean = true; // Start paused until simulation completes
     private _playbackSpeed: number = 1.0;
     private _isComplete: boolean = false;
+    private _isLoaded: boolean = false;
 
     // Callbacks
     public onFrameUpdate?: (frame: number, total: number) => void;
     public onGameOver?: (winnerIndex: 0 | 1 | null) => void;
-    public onEngineReset?: () => void;
+    public onLoadProgress?: (progress: number) => void;
+    public onLoaded?: () => void;
 
     constructor(replayData: ReplayFile) {
         this.replayData = replayData;
 
-        // Safety: ensure duration is valid (fallback to last input frame + 60)
+        // Safety: ensure duration is valid
         if (!Number.isFinite(replayData.duration) || replayData.duration <= 0) {
             const lastInput = replayData.inputs[replayData.inputs.length - 1];
             this.replayData = { ...replayData, duration: (lastInput?.f ?? 0) + 60 };
         }
-
-        // Safety: sort inputs by frame to handle potential server-side interleaving
-        this.replayData.inputs.sort((a, b) => a.f - b.f);
-
-        // Create two engines with identical seeds for deterministic playback
-        const engine1 = new GameEngine(this.replayData.seed);
-        const engine2 = new GameEngine(this.replayData.seed);
-        engine1.isReplaying = true;
-        engine2.isReplaying = true;
-        this.engines = [engine1, engine2];
-    }
-
-    get player1Engine(): GameEngine {
-        return this.engines[0];
-    }
-
-    get player2Engine(): GameEngine {
-        return this.engines[1];
-    }
-
-    get isPaused(): boolean {
-        return this._isPaused;
-    }
-
-    get playbackSpeed(): number {
-        return this._playbackSpeed;
-    }
-
-    get isComplete(): boolean {
-        return this._isComplete;
-    }
-
-    get frame(): number {
-        return this.currentFrame;
-    }
-
-    get totalFrames(): number {
-        return this.replayData.duration;
-    }
-
-    get progress(): number {
-        return this.replayData.duration > 0
-            ? this.currentFrame / this.replayData.duration
-            : 0;
-    }
-
-    get players(): ReplayPlayer[] {
-        return this.replayData.players;
-    }
-
-    get winnerIndex(): 0 | 1 | null {
-        return this.replayData.winner;
     }
 
     /**
-     * Main update loop - call each render frame with Pixi deltaTime.
-     * Uses fixed timestep: accumulates dt and processes logical frames
-     * at exactly 1.0 per game frame (60fps), regardless of monitor refresh rate.
-     *
-     * CRITICAL: The execution order must match the live game (GameScene.update):
-     *   1. engine.update(delta)  — state machine advances, pieces spawn
-     *   2. tickFrame             — room.frameCount increments
-     *   3. handleInput()         — player inputs applied & recorded at that frame
-     *
-     * Reversing this causes inputs to fire before the engine has processed
-     * the frame (e.g. before a piece spawns), silently failing and cascading
-     * into total desync.
+     * Pre-simulate the entire replay. Call this before starting playback.
+     * Runs synchronously (~50-200ms for a typical match).
      */
-    update(dt: number = 1.0): void {
-        if (this._isPaused || this._isComplete) return;
+    load(): void {
+        const simulator = new ReplaySimulator(this.replayData);
+        this.snapshots = simulator.simulate((progress) => {
+            this.onLoadProgress?.(progress);
+        });
+        this._isLoaded = true;
+        this._isPaused = false; // Auto-play after load
+        this.onLoaded?.();
+        this.onFrameUpdate?.(0, this.totalFrames);
+    }
+
+    /**
+     * Get the current frame's snapshot for rendering.
+     */
+    getSnapshot(): FrameSnapshot | null {
+        if (!this.snapshots || this.snapshots.length === 0) return null;
+        const idx = Math.min(this.currentFrame, this.snapshots.length - 1);
+        return this.snapshots[idx];
+    }
+
+    /**
+     * Get a specific player's board snapshot for the current frame.
+     */
+    getPlayerBoard(playerIndex: 0 | 1): BoardSnapshot | null {
+        const snap = this.getSnapshot();
+        return snap ? snap.boards[playerIndex] : null;
+    }
+
+    // --- Getters ---
+
+    get isPaused(): boolean { return this._isPaused; }
+    get playbackSpeed(): number { return this._playbackSpeed; }
+    get isComplete(): boolean { return this._isComplete; }
+    get isLoaded(): boolean { return this._isLoaded; }
+    get frame(): number { return this.currentFrame; }
+
+    get totalFrames(): number {
+        return this.snapshots ? this.snapshots.length - 1 : this.replayData.duration;
+    }
+
+    get progress(): number {
+        const total = this.totalFrames;
+        return total > 0 ? this.currentFrame / total : 0;
+    }
+
+    get players(): ReplayPlayer[] { return this.replayData.players; }
+    get winnerIndex(): 0 | 1 | null { return this.replayData.winner; }
+
+    /**
+     * Main update loop. Call each render frame with Pixi deltaTime.
+     * Advances frame counter based on playback speed. No engine simulation.
+     */
+    update(dt: number): void {
+        if (this._isPaused || this._isComplete || !this.snapshots) return;
 
         this.accumulator += dt * this._playbackSpeed;
 
-        // Process logical frames at a fixed rate
+        // Advance frame by frame
         while (this.accumulator >= 1.0 && !this._isComplete) {
             this.accumulator -= 1.0;
-
-            // 1. Advance both engines by exactly 1 logical frame FIRST
-            //    (matches live game: engine.update runs before input handling)
-            this.engines[0].update(1.0);
-            this.engines[1].update(1.0);
-
-            // 2. Increment frame counter (matches tickFrame incrementing room.frameCount)
             this.currentFrame++;
 
-            // 3. Process inputs for this frame AFTER engine update
-            //    (matches live game: handleInput runs after engine.update & tickFrame)
-            while (this.inputCursor < this.replayData.inputs.length) {
-                const input = this.replayData.inputs[this.inputCursor];
-                if (input.f <= this.currentFrame) {
-                    this.executeInput(input);
-                    this.inputCursor++;
-                } else {
-                    break;
-                }
-            }
-
-            // Check for completion
-            if (this.currentFrame >= this.replayData.duration) {
+            // Check completion
+            if (this.currentFrame >= this.totalFrames) {
+                this.currentFrame = this.totalFrames;
                 this._isComplete = true;
                 this.onGameOver?.(this.replayData.winner);
             }
         }
 
-        // Callback — once per render frame (not per logical frame)
-        this.onFrameUpdate?.(this.currentFrame, this.replayData.duration);
+        this.onFrameUpdate?.(this.currentFrame, this.totalFrames);
     }
 
     /**
-     * Execute input on the appropriate player's engine
+     * Seek to a specific frame. INSTANT — just changes the array index.
+     * No engine rebuild, no fast-forward, no callback suppression needed.
      */
-    private executeInput(input: ReplayInput): void {
-        const engine = this.engines[input.p];
+    seekToFrame(targetFrame: number): void {
+        if (!this.snapshots) return;
 
-        switch (input.i) {
-            case 'L':
-                engine.movePiece(-1);
-                break;
-            case 'R':
-                engine.movePiece(1);
-                break;
-            case 'CW':
-                engine.rotate(1);
-                break;
-            case 'CC':
-                engine.rotate(-1);
-                break;
-            case 'SD':
-                engine.setSoftDrop(true);
-                break;
-            case 'SU':
-                engine.setSoftDrop(false);
-                break;
-            case 'HD':
-                engine.hardDrop();
-                break;
-            case 'G':
-                engine.addGarbage(input.a ?? 0);
-                break;
+        this.currentFrame = Math.max(0, Math.min(targetFrame, this.totalFrames));
+        this.accumulator = 0;
+        this._isComplete = this.currentFrame >= this.totalFrames;
+
+        this.onFrameUpdate?.(this.currentFrame, this.totalFrames);
+    }
+
+    // --- Playback Controls ---
+
+    pause(): void { this._isPaused = true; }
+
+    resume(): void {
+        if (!this._isLoaded) return;
+        this._isPaused = false;
+        // If we were at the end, restart
+        if (this._isComplete) {
+            this.currentFrame = 0;
+            this._isComplete = false;
         }
     }
 
-    // Playback controls
-    pause(): void {
-        this._isPaused = true;
-    }
-
-    resume(): void {
-        this._isPaused = false;
-    }
-
     togglePause(): void {
-        this._isPaused = !this._isPaused;
+        if (this._isPaused) this.resume();
+        else this.pause();
     }
 
     setSpeed(speed: number): void {
@@ -222,108 +186,28 @@ export class ReplayEngine {
     }
 
     /**
-     * Seek to a specific frame (resets and replays to that point)
-     */
-    seekToFrame(targetFrame: number): void {
-        // Reset engines
-        const engine1 = new GameEngine(this.replayData.seed);
-        const engine2 = new GameEngine(this.replayData.seed);
-        engine1.isReplaying = true;
-        engine2.isReplaying = true;
-        this.engines = [engine1, engine2];
-
-        // Let the scene re-hook events on the new engines
-        this.onEngineReset?.();
-
-        this.currentFrame = 0;
-        this.inputCursor = 0;
-        this.accumulator = 0;
-        this._isComplete = false;
-
-        // Suppress ALL callbacks during fast-forward (no sound, no UI updates)
-        const savedFrameUpdate = this.onFrameUpdate;
-        const savedGameOver = this.onGameOver;
-        const savedEngineReset = this.onEngineReset;
-        this.onFrameUpdate = undefined;
-        this.onGameOver = undefined;
-        this.onEngineReset = undefined;
-
-        // Suppress engine-level callbacks during seek (prevents chain sounds playing)
-        const savedE1ChainStep = engine1.onChainStep;
-        const savedE2ChainStep = engine2.onChainStep;
-        const savedE1PieceSpawn = engine1.onPieceSpawn;
-        const savedE2PieceSpawn = engine2.onPieceSpawn;
-        const savedE1PieceLock = engine1.onPieceLock;
-        const savedE2PieceLock = engine2.onPieceLock;
-        const savedE1GravityLanded = engine1.onGravityLanded;
-        const savedE2GravityLanded = engine2.onGravityLanded;
-        const savedE1HardDrop = engine1.onHardDrop;
-        const savedE2HardDrop = engine2.onHardDrop;
-        engine1.onChainStep = undefined;
-        engine2.onChainStep = undefined;
-        engine1.onPieceSpawn = undefined;
-        engine2.onPieceSpawn = undefined;
-        engine1.onPieceLock = undefined;
-        engine2.onPieceLock = undefined;
-        engine1.onGravityLanded = undefined;
-        engine2.onGravityLanded = undefined;
-        engine1.onHardDrop = undefined;
-        engine2.onHardDrop = undefined;
-
-        // Force speed to 1.0 during fast-forward to prevent overshoot/undershoot
-        const wasPaused = this._isPaused;
-        const wasSpeed = this._playbackSpeed;
-        this._isPaused = false;
-        this._playbackSpeed = 1.0;
-
-        // Fast-forward to target frame
-        while (this.currentFrame < targetFrame && !this._isComplete) {
-            this.update(1.0);
-        }
-
-        this._isPaused = wasPaused;
-        this._playbackSpeed = wasSpeed;
-
-        // Restore all callbacks
-        this.onFrameUpdate = savedFrameUpdate;
-        this.onGameOver = savedGameOver;
-        this.onEngineReset = savedEngineReset;
-        engine1.onChainStep = savedE1ChainStep;
-        engine2.onChainStep = savedE2ChainStep;
-        engine1.onPieceSpawn = savedE1PieceSpawn;
-        engine2.onPieceSpawn = savedE2PieceSpawn;
-        engine1.onPieceLock = savedE1PieceLock;
-        engine2.onPieceLock = savedE2PieceLock;
-        engine1.onGravityLanded = savedE1GravityLanded;
-        engine2.onGravityLanded = savedE2GravityLanded;
-        engine1.onHardDrop = savedE1HardDrop;
-        engine2.onHardDrop = savedE2HardDrop;
-
-        this.onFrameUpdate?.(this.currentFrame, this.replayData.duration);
-    }
-
-    /**
-     * Seek by percentage (0.0 - 1.0)
-     */
-    seekToPercent(percent: number): void {
-        const targetFrame = Math.floor(this.replayData.duration * Math.max(0, Math.min(1, percent)));
-        this.seekToFrame(targetFrame);
-    }
-
-    /**
-     * Get current time string (MM:SS)
+     * Format current playback time as "M:SS / M:SS"
      */
     getTimeString(): string {
         const fps = this.replayData.fps || 60;
-        const currentSeconds = Math.floor(this.currentFrame / fps);
-        const totalSeconds = Math.floor(this.replayData.duration / fps);
+        const cur = Math.floor(this.currentFrame / fps);
+        const tot = Math.floor(this.totalFrames / fps);
+        const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+        return `${fmt(cur)} / ${fmt(tot)}`;
+    }
 
-        const formatTime = (s: number) => {
-            const m = Math.floor(s / 60);
-            const sec = s % 60;
-            return `${m}:${sec.toString().padStart(2, '0')}`;
-        };
-
-        return `${formatTime(currentSeconds)} / ${formatTime(totalSeconds)}`;
+    /**
+     * Release all snapshot memory. MUST be called on exit.
+     * After this, the engine is unusable.
+     */
+    dispose(): void {
+        this.snapshots = null;
+        this._isLoaded = false;
+        this._isComplete = true;
+        this._isPaused = true;
+        this.onFrameUpdate = undefined;
+        this.onGameOver = undefined;
+        this.onLoadProgress = undefined;
+        this.onLoaded = undefined;
     }
 }

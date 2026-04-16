@@ -42,6 +42,7 @@ type GameEventMap = {
         action: 'play' | 'pause' | 'seek' | 'speed' | 'exit';
         value?: number; // frame for seek, multiplier for speed
     };
+    'replay_loaded': {};
     // Puyo Mines (Quick Play) events
     'mines_died': { depth: number; kos: number; score: number };
     'mines_left': void;

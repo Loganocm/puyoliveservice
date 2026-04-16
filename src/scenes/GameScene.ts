@@ -800,18 +800,22 @@ export class GameScene implements IScene {
                 // normalize delta:
                 // Pixi delta is roughly 1.0 at 60fps.
                 // engine.dt expects 1.0 = normal speed.
-                // so we pass delta directly.
-                this.engine.update(delta);
 
-
-                // V2 Replay: Tick frame counter on server for multiplayer
-                // Fixed timestep: only tick at 60 logical fps, not per render frame
                 if (this.roomId && !this.replayData) {
+                    // MULTIPLAYER: Use fixed timestep for engine updates
+                    // The replay system replays at exactly 1.0 dt per frame.
+                    // If we use variable dt here, the engine state drifts from what
+                    // the replay will reproduce, causing desync after 1-2 seconds.
+                    // Unify engine.update + tickFrame into the same accumulator.
                     this.tickFrameAccumulator += delta;
                     while (this.tickFrameAccumulator >= 1.0) {
                         this.tickFrameAccumulator -= 1.0;
+                        this.engine.update(1.0);
                         NetworkManager.tickFrame(this.roomId);
                     }
+                } else {
+                    // SINGLE PLAYER / REPLAY: variable delta for smooth visuals
+                    this.engine.update(delta);
                 }
 
                 // Log state transitions

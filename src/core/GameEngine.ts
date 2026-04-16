@@ -891,6 +891,8 @@ export class GameEngine {
         }
     }
 
+
+
     private handleCheckMatch() {
         const matches = this.board.findMatches();
         if (matches.length > 0) {

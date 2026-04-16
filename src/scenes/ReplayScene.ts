@@ -2,8 +2,9 @@ import { Container, Graphics, Sprite, Text, TextStyle, Texture, Assets } from 'p
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
 import { ReplayEngine, type ReplayFile } from '../core/ReplayEngine';
+import type { BoardSnapshot } from '../core/ReplaySimulator';
 import { CELL_SIZE, COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor, PUYO_COLORS } from '../core/Constants';
-import { GameEngine, GameState } from '../core/GameEngine';
+import { GameState } from '../core/GameEngine';
 import { ResourceManager } from '../core/ResourceManager';
 import { GameEvents } from '../core/GameEvents';
 import { backgroundManager } from '../core/BackgroundManager';
@@ -32,12 +33,15 @@ interface BoardAnimState {
     popAnimProgress: number;
     particles: Particle[];
     trackedTexts: TrackedText[];
-    prevState: GameState;
+    prevState: typeof GameState[keyof typeof GameState];
+    hadActivePiece: boolean;
 }
 
 /**
- * ReplayScene - Watch recorded games with dual-board view
- * Full sprite-based rendering with animations matching the live GameScene.
+ * ReplayScene — Snapshot-based replay viewer with dual-board layout.
+ *
+ * Renders from pre-computed FrameSnapshot[] arrays (no live GameEngine).
+ * Seeking is instant. Memory is freed on destroy().
  */
 export class ReplayScene implements IScene {
     container: Container;
@@ -49,6 +53,7 @@ export class ReplayScene implements IScene {
     // Per-board rendering containers
     private boardContainers: [Container, Container];
     private boardPuyoContainers: [Container, Container];
+    // @ts-ignore - retained for container hierarchy (particle graphics are children)
     private boardEffectContainers: [Container, Container];
     private boardParticleGraphics: [Graphics, Graphics];
     private boardDamageGraphics: [Graphics, Graphics];
@@ -100,7 +105,7 @@ export class ReplayScene implements IScene {
         this.boardY = 60;
 
         // --- Build per-board containers ---
-        const buildBoard = (x: number): { cont: Container, bg: Graphics, puyos: Container, fx: Container, particles: Graphics, damage: Graphics } => {
+        const buildBoard = (x: number) => {
             const cont = new Container();
             cont.x = x;
             cont.y = this.boardY;
@@ -145,12 +150,9 @@ export class ReplayScene implements IScene {
             particles: [],
             trackedTexts: [],
             prevState: GameState.SPAWN,
+            hadActivePiece: false,
         });
         this.animStates = [makeAnimState(), makeAnimState()];
-
-        // --- Hook engine events for animations ---
-        this.hookEngineEvents(0);
-        this.hookEngineEvents(1);
 
         // --- Labels ---
         const players = this.replayEngine.players;
@@ -206,69 +208,49 @@ export class ReplayScene implements IScene {
             this.showGameOverOverlay(winnerIndex);
         };
 
-        // Re-hook engine events after seek rebuilds engines
-        this.replayEngine.onEngineReset = () => {
-            this.hookEngineEvents(0);
-            this.hookEngineEvents(1);
+        this.replayEngine.onLoaded = () => {
+            // Emit initial state for the React overlay
+            GameEvents.emit('replay_loaded', {});
+            this.emitReplayState();
         };
 
-        // Start playing immediately — overlay syncs on mount
-        // (Don't start paused; the event handshake with the overlay is fragile
-        // due to AnimatePresence mode="wait" delaying the overlay mount.)
+        // --- Pre-simulate the replay ---
+        // This runs synchronously (~50-200ms) and produces all frame snapshots
+        this.replayEngine.load();
 
         // React UI controls
         GameEvents.on('replay_control', this.handleReplayControl);
-    }
-
-    // ─── Engine event hooks (per board) ───
-    private hookEngineEvents(idx: 0 | 1): void {
-        const engine = idx === 0 ? this.replayEngine.player1Engine : this.replayEngine.player2Engine;
-        const anim = this.animStates[idx];
-
-        engine.onPieceSpawn = () => {
-            anim.spawnAnim = 0;
-        };
-
-        engine.onPieceLock = (cells) => {
-            this.startLandingJiggle(anim, cells);
-        };
-
-        engine.onGravityLanded = (cells) => {
-            this.startLandingJiggle(anim, cells);
-        };
-
-        engine.onChainStep = (chain) => {
-            this.spawnChainText(idx, engine, chain);
-            this.spawnParticles(idx, engine);
-            SoundManager.playCombo(chain);
-        };
-
-        engine.onHardDrop = (cells) => {
-            this.startLandingJiggle(anim, cells);
-        };
-    }
-
-    /** Remove engine event hooks (used before seek to prevent rapid sounds) */
-    private unhookEngineEvents(idx: 0 | 1): void {
-        const engine = idx === 0 ? this.replayEngine.player1Engine : this.replayEngine.player2Engine;
-        engine.onPieceSpawn = undefined;
-        engine.onPieceLock = undefined;
-        engine.onGravityLanded = undefined;
-        engine.onChainStep = undefined;
-        engine.onHardDrop = undefined;
     }
 
     // ─── Layout helpers ───
     private resizeBackground(): void {
         if (!this.staticBg.texture || this.staticBg.texture === Texture.WHITE) return;
         const tex = this.staticBg.texture;
-        const scaleX = window.innerWidth / tex.width;
-        const scaleY = window.innerHeight / tex.height;
-        const s = Math.max(scaleX, scaleY);
-        this.staticBg.width = tex.width * s;
-        this.staticBg.height = tex.height * s;
-        this.staticBg.alpha = 0.4;
-        this.staticBg.position.set(window.innerWidth / 2, window.innerHeight / 2);
+        const screenW = window.innerWidth;
+        const screenH = window.innerHeight;
+        this.staticBg.position.set(screenW / 2, screenH / 2);
+        const bgRatio = tex.width / tex.height;
+        const screenRatio = screenW / screenH;
+        if (screenRatio > bgRatio) {
+            this.staticBg.width = screenW;
+            this.staticBg.height = screenW / bgRatio;
+        } else {
+            this.staticBg.height = screenH;
+            this.staticBg.width = screenH * bgRatio;
+        }
+        this.staticBg.alpha = 0.3;
+    }
+
+    // ─── Replay Controls ───
+
+    private emitReplayState(): void {
+        GameEvents.emit('replay_update', {
+            currentFrame: this.replayEngine.frame,
+            totalFrames: this.replayEngine.totalFrames,
+            isPaused: this.replayEngine.isPaused,
+            speed: this.replayEngine.playbackSpeed,
+        });
+        this.timeLabel.text = this.replayEngine.getTimeString();
     }
 
     private handleReplayControl = (cmd: { action: string; value?: number }) => {
@@ -283,20 +265,22 @@ export class ReplayScene implements IScene {
                 break;
             case 'seek':
                 if (cmd.value !== undefined) {
-                    // Unhook events on old engines (about to be destroyed by seek)
-                    this.unhookEngineEvents(0);
-                    this.unhookEngineEvents(1);
-
-                    // seekToFrame rebuilds engines and fast-forwards (events suppressed internally)
+                    // Instant seek — just changes array index, no engine rebuild
                     this.replayEngine.seekToFrame(cmd.value);
 
-                    // Reset animation state BEFORE re-hooking (hooks capture animState refs)
-                    this.animStates[0] = { landingAnims: new Map(), spawnAnim: -1, popAnimProgress: 0, particles: [], trackedTexts: [], prevState: GameState.SPAWN };
-                    this.animStates[1] = { landingAnims: new Map(), spawnAnim: -1, popAnimProgress: 0, particles: [], trackedTexts: [], prevState: GameState.SPAWN };
-
-                    // Re-hook events on the new engines with fresh animState
-                    this.hookEngineEvents(0);
-                    this.hookEngineEvents(1);
+                    // Reset animation state for clean visuals at new position
+                    for (const anim of this.animStates) {
+                        for (const tt of anim.trackedTexts) {
+                            if (!tt.pixiText.destroyed) tt.pixiText.destroy();
+                        }
+                        anim.landingAnims.clear();
+                        anim.spawnAnim = -1;
+                        anim.popAnimProgress = 0;
+                        anim.particles = [];
+                        anim.trackedTexts = [];
+                    }
+                    this.boardParticleGraphics[0].clear();
+                    this.boardParticleGraphics[1].clear();
 
                     // Remove winner overlay on seek
                     if (this.winnerOverlay) { this.winnerOverlay.destroy(); this.winnerOverlay = null; }
@@ -306,53 +290,11 @@ export class ReplayScene implements IScene {
                 if (cmd.value !== undefined) this.replayEngine.setSpeed(cmd.value);
                 break;
             case 'exit':
-                // Cleanup is handled by the App-level onExit callback
-                // which calls SceneManager.changeScene(new MenuScene())
+                // Cleanup handled by App-level onExit → destroy()
                 break;
         }
-        // Always emit current state so overlay stays in sync
         this.emitReplayState();
     };
-
-    /** Emit current replay state to the React overlay */
-    private emitReplayState(): void {
-        GameEvents.emit('replay_update', {
-            currentFrame: this.replayEngine.frame,
-            totalFrames: this.replayEngine.totalFrames,
-            isPaused: this.replayEngine.isPaused,
-            speed: this.replayEngine.playbackSpeed,
-        });
-        this.timeLabel.text = this.replayEngine.getTimeString();
-    }
-
-    /** Damage meter: garbage queue bar on the left side of each board */
-    private drawDamageMeter(idx: 0 | 1, engine: GameEngine): void {
-        const g = this.boardDamageGraphics[idx];
-        g.clear();
-
-        const totalPoints = engine.garbageQueue + engine.nuisanceTray;
-        const totalRocks = Math.floor(totalPoints / 70);
-        if (totalRocks <= 0) return;
-
-        const barW = 12;
-        const barX = -barW - 6; // left of board
-        const barY = 0;
-        const barH = this.boardHeight;
-
-        const maxRocks = 24;
-        const fillPct = Math.min(totalRocks / maxRocks, 1.0);
-        const fillH = barH * fillPct;
-
-        // Background
-        g.rect(barX, barY, barW, barH);
-        g.fill({ color: 0x220000, alpha: 0.6 });
-        g.stroke({ color: 0x550000, width: 1 });
-
-        // Fill
-        const color = totalRocks > 39 ? 0xff0000 : 0xff4400;
-        g.rect(barX, barY + barH - fillH, barW, fillH);
-        g.fill({ color, alpha: 0.9 });
-    }
 
     // ─── Static board background ───
     private drawBoardBackground(g: Graphics): void {
@@ -372,7 +314,7 @@ export class ReplayScene implements IScene {
         }
     }
 
-    // ─── Puyo sprite helper (matches GameScene.drawPuyo) ───
+    // ─── Puyo sprite helper ───
     private addPuyoSprite(
         puyoContainer: Container,
         anim: BoardAnimState,
@@ -399,9 +341,9 @@ export class ReplayScene implements IScene {
         sprite.alpha = alpha;
 
         // Landing jiggle
-        const animKey = Math.round(c) * 100 + Math.round(r);
-        const jiggle = anim.landingAnims.get(animKey);
-        if (jiggle !== undefined) {
+        const key = Math.round(c) * 100 + Math.round(r);
+        const jiggle = anim.landingAnims.get(key);
+        if (jiggle) {
             const amp = (1 - jiggle.t) * 0.18;
             const wave = Math.sin(jiggle.t * Math.PI * 3);
             const scaleX = 1 + amp * wave;
@@ -420,37 +362,92 @@ export class ReplayScene implements IScene {
         puyoContainer.addChild(sprite);
     }
 
-    private checkColor(engine: GameEngine, c: number, r: number, color: PuyoColor): boolean {
-        if (!engine.board.isValid(c, r)) return false;
-        return engine.board.grid[c][r] === color;
+    private checkGrid(grid: number[][], c: number, r: number, color: PuyoColor): boolean {
+        if (c < 0 || c >= COLS || r < 0 || r >= TOTAL_ROWS) return false;
+        return grid[c][r] === color;
     }
 
-    // ─── Full board render (sprites + animations) ───
-    private renderBoard(idx: 0 | 1, engine: GameEngine, delta: number): void {
+    /** Damage meter: garbage queue bar on the left side of each board */
+    private drawDamageMeter(idx: 0 | 1, board: BoardSnapshot): void {
+        const g = this.boardDamageGraphics[idx];
+        g.clear();
+
+        const totalPoints = board.garbageQueue + board.nuisanceTray;
+        const totalRocks = Math.floor(totalPoints / 70);
+        if (totalRocks <= 0) return;
+
+        const barW = 12;
+        const barX = -barW - 6;
+        const barY = 0;
+        const barH = this.boardHeight;
+
+        const maxRocks = 24;
+        const fillPct = Math.min(totalRocks / maxRocks, 1.0);
+        const fillH = barH * fillPct;
+
+        g.rect(barX, barY, barW, barH);
+        g.fill({ color: 0x220000, alpha: 0.6 });
+        g.stroke({ color: 0x550000, width: 1 });
+
+        const color = totalRocks > 39 ? 0xff0000 : 0xff4400;
+        g.rect(barX, barY + barH - fillH, barW, fillH);
+        g.fill({ color, alpha: 0.9 });
+    }
+
+    // ─── Full board render from snapshot ───
+    private renderBoard(idx: 0 | 1, board: BoardSnapshot, delta: number): void {
         const anim = this.animStates[idx];
         const puyoContainer = this.boardPuyoContainers[idx];
-        const board = engine.board;
+        const grid = board.grid;
 
         // Clear prior sprites
         const children = puyoContainer.removeChildren();
         for (const child of children) child.destroy();
 
+        // --- Detect state transitions for animations ---
+        if (anim.prevState !== board.state) {
+            // Pop animation trigger
+            if (board.state === GameState.POP_ANIM && board.matchedPuyos.length > 0) {
+                SoundManager.play('pop');
+                this.spawnParticlesFromSnapshot(idx, board);
+                anim.popAnimProgress = 0;
+            }
+
+            // Garbage fall shake
+            if (board.state === GameState.GARBAGE_FALL) {
+                SoundManager.play('drop');
+            }
+
+            anim.prevState = board.state;
+        }
+
+        // Detect piece spawn (had no piece → now has piece)
+        if (board.activePiece && !anim.hadActivePiece) {
+            anim.spawnAnim = 0;
+        }
+        anim.hadActivePiece = !!board.activePiece;
+
         // --- Build falling lookup ---
         const fallingLookup = new Map<number, number>();
         let fallingProgress = 0;
-        if (engine.state === GameState.FALLING && engine.fallingDestinations.length > 0) {
-            const scaledDelay = engine.getChainScaledDuration(engine.FALL_STEP_DELAY);
-            fallingProgress = Math.min(1, engine.stateTimer / scaledDelay);
+        if (board.state === GameState.FALLING && board.fallingDestinations.length > 0) {
+            // Approximate chain-scaled delay using chainCount
+            const baseDuration = 10; // FALL_STEP_DELAY
+            const chainCount = board.chainCount;
+            const scaledDelay = chainCount <= 1
+                ? baseDuration * 2
+                : Math.floor(baseDuration * (1 + 0.3 * Math.pow(1.3, chainCount - 1)));
+            fallingProgress = Math.min(1, board.stateTimer / scaledDelay);
             fallingProgress = fallingProgress * fallingProgress; // ease-in
-            for (const f of engine.fallingDestinations) {
+            for (const f of board.fallingDestinations) {
                 fallingLookup.set(f.c * 100 + f.r, f.destR);
             }
         }
 
         // --- Build popping set ---
         const poppingSet = new Set<number>();
-        if (engine.state === GameState.POP_ANIM && engine.matchedPuyos.length > 0) {
-            for (const group of engine.matchedPuyos) {
+        if (board.state === GameState.POP_ANIM && board.matchedPuyos.length > 0) {
+            for (const group of board.matchedPuyos) {
                 for (const p of group) {
                     poppingSet.add(p.c * 100 + p.r);
                 }
@@ -458,23 +455,27 @@ export class ReplayScene implements IScene {
         }
 
         // Pop animation progress
-        if (engine.state === GameState.POP_ANIM) {
-            const scaledDuration = engine.getChainScaledDuration(engine.POP_ANIM_DURATION);
-            anim.popAnimProgress = Math.min(1, engine.stateTimer / scaledDuration);
+        if (board.state === GameState.POP_ANIM) {
+            const baseDuration = 18; // POP_ANIM_DURATION
+            const chainCount = board.chainCount;
+            const scaledDuration = chainCount <= 1
+                ? baseDuration * 2
+                : Math.floor(baseDuration * (1 + 0.3 * Math.pow(1.3, chainCount - 1)));
+            anim.popAnimProgress = Math.min(1, board.stateTimer / scaledDuration);
         }
 
         // --- Draw board puyos ---
         for (let c = 0; c < COLS; c++) {
             for (let r = 0; r < TOTAL_ROWS; r++) {
-                const color = board.grid[c][r];
+                const color = grid[c][r] as PuyoColor;
                 if (color === PuyoColor.None) continue;
 
                 let connections = 0;
                 if (color !== PuyoColor.Garbage) {
-                    if (this.checkColor(engine, c, r - 1, color)) connections |= 1;
-                    if (this.checkColor(engine, c + 1, r, color)) connections |= 2;
-                    if (this.checkColor(engine, c, r + 1, color)) connections |= 4;
-                    if (this.checkColor(engine, c - 1, r, color)) connections |= 8;
+                    if (this.checkGrid(grid, c, r - 1, color)) connections |= 1;
+                    if (this.checkGrid(grid, c + 1, r, color)) connections |= 2;
+                    if (this.checkGrid(grid, c, r + 1, color)) connections |= 4;
+                    if (this.checkGrid(grid, c - 1, r, color)) connections |= 8;
                 }
 
                 const key = c * 100 + r;
@@ -501,8 +502,8 @@ export class ReplayScene implements IScene {
         }
 
         // --- Falling garbage animation ---
-        if (engine.fallingGarbage && engine.fallingGarbage.length > 0) {
-            for (const garb of engine.fallingGarbage) {
+        if (board.fallingGarbage && board.fallingGarbage.length > 0) {
+            for (const garb of board.fallingGarbage) {
                 if (garb.delay <= 10) {
                     this.addPuyoSprite(puyoContainer, anim, garb.c, garb.r, PuyoColor.Garbage, 0);
                 }
@@ -510,7 +511,7 @@ export class ReplayScene implements IScene {
         }
 
         // --- Active piece ---
-        const piece = engine.activePiece;
+        const piece = board.activePiece;
         if (piece) {
             const { x, y, rot, mainColor, subColor } = piece;
 
@@ -537,11 +538,11 @@ export class ReplayScene implements IScene {
             let gY = y;
             const canPlace = (cx: number, cy: number, cr: number): boolean => {
                 if (cy >= TOTAL_ROWS || cx < 0 || cx >= COLS) return false;
-                if (cy >= 0 && board.grid[cx][cy] !== PuyoColor.None) return false;
+                if (cy >= 0 && grid[cx][cy] !== PuyoColor.None) return false;
                 const subX = cx + offsets[cr].x;
                 const subY = cy + offsets[cr].y;
                 if (subY >= TOTAL_ROWS || subX < 0 || subX >= COLS) return false;
-                if (subY >= 0 && board.grid[subX][subY] !== PuyoColor.None) return false;
+                if (subY >= 0 && grid[subX][subY] !== PuyoColor.None) return false;
                 return true;
             };
             while (canPlace(x, gY + 1, rot)) gY++;
@@ -552,14 +553,13 @@ export class ReplayScene implements IScene {
             }
         }
 
-        // --- Next piece preview (two pieces) ---
+        // --- Next piece preview ---
         const previewX = this.boardWidth + 20;
-        for (let i = 0; i < Math.min(engine.nextPieces.length, 2); i++) {
-            const next = engine.nextPieces[i];
+        for (let i = 0; i < Math.min(board.nextPieces.length, 2); i++) {
+            const next = board.nextPieces[i];
             const previewY = i === 0 ? 20 : 90;
             const previewScale = i === 0 ? 0.7 : 0.55;
 
-            // Sub (top)
             this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.sub, 0);
             const subSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
             subSpr.x = previewX + CELL_SIZE / 2;
@@ -567,7 +567,6 @@ export class ReplayScene implements IScene {
             subSpr.width = CELL_SIZE * previewScale;
             subSpr.height = CELL_SIZE * previewScale;
 
-            // Main (bottom)
             this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.main, 0);
             const mainSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
             mainSpr.x = previewX + CELL_SIZE / 2;
@@ -578,7 +577,7 @@ export class ReplayScene implements IScene {
 
         // --- Score & chain text ---
         const scoreText = new Text({
-            text: `${engine.stats.score}`,
+            text: `${board.score}`,
             style: new TextStyle({
                 fontFamily: 'Orbitron, sans-serif',
                 fontSize: 18,
@@ -591,9 +590,9 @@ export class ReplayScene implements IScene {
         scoreText.y = this.boardHeight + 4;
         puyoContainer.addChild(scoreText);
 
-        if (engine.stats.maxChain > 1) {
+        if (board.maxChain > 1) {
             const chainText = new Text({
-                text: `${engine.stats.maxChain} chain`,
+                text: `${board.maxChain} chain`,
                 style: new TextStyle({
                     fontFamily: 'Orbitron, sans-serif',
                     fontSize: 13,
@@ -606,11 +605,10 @@ export class ReplayScene implements IScene {
             puyoContainer.addChild(chainText);
         }
 
-        // --- Damage meter (garbage queue) ---
-        this.drawDamageMeter(idx, engine);
+        // --- Damage meter ---
+        this.drawDamageMeter(idx, board);
 
         // --- Tick animations ---
-        // Landing jiggle
         const speed = delta / 12;
         for (const [key, a] of anim.landingAnims) {
             const next = a.t + speed;
@@ -618,36 +616,16 @@ export class ReplayScene implements IScene {
             else a.t = next;
         }
 
-        // Spawn animation
         if (anim.spawnAnim >= 0 && anim.spawnAnim < 1) {
             anim.spawnAnim += delta / 8;
             if (anim.spawnAnim >= 1) anim.spawnAnim = -1;
         }
-
-        // Detect state transitions
-        if (anim.prevState !== engine.state) {
-            anim.prevState = engine.state;
-        }
     }
 
     // ─── Effects ───
-    private startLandingJiggle(anim: BoardAnimState, cells: { c: number; r: number }[]): void {
-        let gcx = 0, gcy = 0;
-        for (const cell of cells) {
-            gcx += cell.c * CELL_SIZE + CELL_SIZE / 2;
-            gcy += (cell.r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
-        }
-        gcx /= cells.length;
-        gcy /= cells.length;
-        for (const cell of cells) {
-            const key = cell.c * 100 + cell.r;
-            anim.landingAnims.set(key, { t: 0, gcx, gcy });
-        }
-    }
-
-    private spawnParticles(idx: 0 | 1, engine: GameEngine): void {
+    private spawnParticlesFromSnapshot(idx: 0 | 1, board: BoardSnapshot): void {
         const anim = this.animStates[idx];
-        for (const group of engine.matchedPuyos) {
+        for (const group of board.matchedPuyos) {
             if (group.length === 0) continue;
             let tx = 0, ty = 0;
             for (const p of group) {
@@ -657,7 +635,7 @@ export class ReplayScene implements IScene {
             const cx = tx / group.length;
             const cy = ty / group.length;
 
-            const firstColor = engine.board.grid[group[0].c][group[0].r];
+            const firstColor = board.grid[group[0].c][group[0].r];
             const colorVal = firstColor >= 0 && firstColor < PUYO_COLORS.length ? PUYO_COLORS[firstColor] : 0xFFFFFF;
 
             for (let i = 0; i < group.length * 4; i++) {
@@ -673,71 +651,39 @@ export class ReplayScene implements IScene {
         }
     }
 
-    private spawnChainText(idx: 0 | 1, engine: GameEngine, chain: number): void {
-        if (chain < 2 || engine.matchedPuyos.length === 0) return;
-        const anim = this.animStates[idx];
-        const group = engine.matchedPuyos[0];
-        let tx = 0, ty = 0;
-        for (const p of group) {
-            tx += p.c * CELL_SIZE + CELL_SIZE / 2;
-            ty += (p.r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
-        }
-        const cx = tx / group.length;
-        const cy = ty / group.length;
-
-        const style = new TextStyle({
-            fontFamily: 'Rajdhani',
-            fontSize: 40,
-            fontWeight: 'bold',
-            fill: 0xFFFF00,
-            stroke: { color: 'white', width: 4 },
-            dropShadow: { color: '#000000', blur: 4, angle: Math.PI / 6, distance: 6 },
-        });
-        const txt = new Text({ text: `${chain} Chain`, style, resolution: 2 });
-        txt.anchor.set(0.5);
-        txt.x = cx;
-        txt.y = cy;
-        this.boardEffectContainers[idx].addChild(txt);
-        anim.trackedTexts.push({ pixiText: txt, elapsed: 0, duration: 0.75 + chain * 0.15, vy: -80 });
-    }
-
     private updateEffects(delta: number): void {
         const dtSec = delta / 60;
+
         for (let idx = 0; idx < 2; idx++) {
             const anim = this.animStates[idx as 0 | 1];
-            const pg = this.boardParticleGraphics[idx as 0 | 1];
+            const gfx = this.boardParticleGraphics[idx as 0 | 1];
+            gfx.clear();
 
             // Particles
             for (let i = anim.particles.length - 1; i >= 0; i--) {
                 const p = anim.particles[i];
-                p.x += p.vx * delta;
-                p.y += p.vy * delta;
-                p.vy += 0.2 * delta;
-                p.life -= 0.03 * delta;
-                if (p.life <= 0) anim.particles.splice(i, 1);
+                p.x += p.vx * dtSec * 60;
+                p.y += p.vy * dtSec * 60;
+                p.vy += 400 * dtSec;
+                p.life -= dtSec * 2;
+                if (p.life <= 0) {
+                    anim.particles.splice(i, 1);
+                    continue;
+                }
+                const alpha = Math.max(0, p.life / p.maxLife);
+                const size = 3 + alpha * 3;
+                gfx.circle(p.x, p.y, size);
+                gfx.fill({ color: p.color, alpha });
             }
 
-            pg.clear();
-            for (const p of anim.particles) {
-                pg.rect(p.x - 3, p.y - 3, 6, 6);
-                pg.fill({ color: p.color, alpha: p.life / p.maxLife });
-            }
-
-            // Tracked floating texts
+            // Tracked texts
             for (let i = anim.trackedTexts.length - 1; i >= 0; i--) {
                 const tt = anim.trackedTexts[i];
                 tt.elapsed += dtSec;
-                const progress = Math.min(1, tt.elapsed / tt.duration);
                 tt.pixiText.y += tt.vy * dtSec;
-                if (progress > 0.6) tt.pixiText.alpha = 1 - ((progress - 0.6) / 0.4);
-                if (progress < 0.1) {
-                    const s = 0.5 + (progress / 0.1) * 0.5;
-                    tt.pixiText.scale.set(s);
-                } else {
-                    tt.pixiText.scale.set(1);
-                }
+                tt.pixiText.alpha = Math.max(0, 1 - tt.elapsed / tt.duration);
                 if (tt.elapsed >= tt.duration) {
-                    tt.pixiText.destroy();
+                    if (!tt.pixiText.destroyed) tt.pixiText.destroy();
                     anim.trackedTexts.splice(i, 1);
                 }
             }
@@ -746,7 +692,7 @@ export class ReplayScene implements IScene {
 
     // ─── Game Over ───
     private showGameOverOverlay(winnerIndex: 0 | 1 | null): void {
-        if (this.winnerOverlay) return; // already shown
+        if (this.winnerOverlay) return;
         const winnerName = winnerIndex !== null
             ? this.replayEngine.players[winnerIndex]?.username || `Player ${winnerIndex + 1}`
             : 'Draw';
@@ -768,7 +714,7 @@ export class ReplayScene implements IScene {
 
     // ─── Main loop ───
     update(dt: number): void {
-        // Background fallback (dark solid color when no image loaded)
+        // Background fallback
         if (!this.staticBg.texture || this.staticBg.texture === Texture.EMPTY) {
             this.staticBg.texture = Texture.WHITE;
             this.staticBg.tint = 0x0a0a12;
@@ -777,10 +723,15 @@ export class ReplayScene implements IScene {
             this.staticBg.alpha = 1;
         }
 
+        // Advance playback (just increments frame counter)
         this.replayEngine.update(dt);
 
-        this.renderBoard(0, this.replayEngine.player1Engine, dt);
-        this.renderBoard(1, this.replayEngine.player2Engine, dt);
+        // Get current snapshots and render
+        const snap = this.replayEngine.getSnapshot();
+        if (snap) {
+            this.renderBoard(0, snap.boards[0], dt);
+            this.renderBoard(1, snap.boards[1], dt);
+        }
 
         this.updateEffects(dt);
     }
@@ -796,27 +747,22 @@ export class ReplayScene implements IScene {
         this.board2X = this.board1X + this.boardWidth + spacing;
         this.boardY = 60;
 
-        // Reposition board containers
         this.boardContainers[0].x = this.board1X;
         this.boardContainers[0].y = this.boardY;
         this.boardContainers[1].x = this.board2X;
         this.boardContainers[1].y = this.boardY;
 
-        // Labels
         this.player1Label.x = this.board1X + this.boardWidth / 2;
         this.player1Label.y = this.boardY - 45;
         this.player2Label.x = this.board2X + this.boardWidth / 2;
         this.player2Label.y = this.boardY - 45;
 
-        // Time
         this.timeLabel.x = screenW / 2;
         this.timeLabel.y = this.boardY + this.boardHeight + 20;
 
-        // Pause indicator
         this.pauseIndicator.x = screenW / 2;
         this.pauseIndicator.y = screenH / 2;
 
-        // Winner overlay
         if (this.winnerOverlay) {
             this.winnerOverlay.x = screenW / 2;
             this.winnerOverlay.y = this.boardY + this.boardHeight / 2;
@@ -833,8 +779,26 @@ export class ReplayScene implements IScene {
         return this.container;
     }
 
+    /**
+     * CRITICAL: Dispose all replay data on exit.
+     * This frees the snapshot memory (~3-12 MB) and unhooks all events.
+     * Called by SceneManager when switching scenes.
+     */
     destroy(): void {
+        // Unhook events
         GameEvents.off('replay_control', this.handleReplayControl);
+
+        // Clean up tracked text sprites
+        for (const anim of this.animStates) {
+            for (const tt of anim.trackedTexts) {
+                if (!tt.pixiText.destroyed) tt.pixiText.destroy();
+            }
+        }
+
+        // Free all snapshot memory
+        this.replayEngine.dispose();
+
+        // Destroy Pixi containers
         this.container.destroy({ children: true });
     }
 }

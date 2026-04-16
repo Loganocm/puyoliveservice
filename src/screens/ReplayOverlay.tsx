@@ -12,6 +12,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
   const [totalFrames, setTotalFrames] = useState(1);
   const [speed, setSpeed] = useState(1);
   const [uiVisible, setUiVisible] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Refs for stable closures in keyboard/mouse handlers
@@ -36,10 +37,16 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
       isPlayingRef.current = !data.isPaused;
     };
 
+    const handleLoaded = () => {
+      setIsLoaded(true);
+    };
+
     GameEvents.on("replay_update", handleUpdate);
+    GameEvents.on("replay_loaded", handleLoaded);
 
     return () => {
       GameEvents.off("replay_update", handleUpdate);
+      GameEvents.off("replay_loaded", handleLoaded);
     };
   }, []);
 
@@ -48,9 +55,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
     const resetHideTimer = () => {
       setUiVisible(true);
       if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = setTimeout(() => {
-        if (isPlayingRef.current) setUiVisible(false);
-      }, 3000);
+      hideTimeoutRef.current = setTimeout(() => setUiVisible(false), 3000);
     };
 
     window.addEventListener("mousemove", resetHideTimer);
@@ -72,31 +77,32 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
         } else {
           GameEvents.emit("replay_control", { action: "play" });
         }
-      } else if (e.code === "ArrowRight") {
-        e.preventDefault();
+      }
+      if (e.code === "ArrowRight") {
         GameEvents.emit("replay_control", {
           action: "seek",
-          value: Math.min(
-            totalFramesRef.current,
-            currentFrameRef.current + 180,
-          ),
+          value: Math.min(totalFramesRef.current, currentFrameRef.current + 300),
         });
-      } else if (e.code === "ArrowLeft") {
-        e.preventDefault();
+      }
+      if (e.code === "ArrowLeft") {
         GameEvents.emit("replay_control", {
           action: "seek",
-          value: Math.max(0, currentFrameRef.current - 180),
+          value: Math.max(0, currentFrameRef.current - 300),
         });
-      } else if (e.code === "Escape") {
-        e.preventDefault();
-        GameEvents.emit("replay_control", { action: "exit" });
-        onExit();
+      }
+      if (e.code === "Escape") {
+        handleExit();
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onExit]);
+
+  const handleExit = useCallback(() => {
+    // All exit paths use the same handler
+    GameEvents.emit("replay_control", { action: "exit" });
+    onExit();
   }, [onExit]);
 
   const sendControl = useCallback(
@@ -107,6 +113,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
     [onExit],
   );
 
+  // Seeking is instant (snapshot-based) — no debounce needed
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const frame = parseInt(e.target.value);
     setCurrentFrame(frame);
@@ -118,12 +125,28 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
     else sendControl("play");
   };
 
-  const formatFrameTime = (f: number) => {
-    const totalSeconds = Math.floor(f / 60);
+  const formatFrameTime = (frame: number): string => {
+    const totalSeconds = Math.floor(frame / 60);
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
+
+  // Loading state
+  if (!isLoaded) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-black/80 z-50">
+        <div className="text-center">
+          <div className="text-white text-2xl font-bold tracking-wider font-mono mb-4">
+            LOADING REPLAY
+          </div>
+          <div className="w-64 h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-orange-500 rounded-full animate-pulse" style={{ width: '100%' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -138,7 +161,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
           <div className="text-white/60 text-sm">Competitive Mode</div>
         </div>
         <button
-          onClick={() => sendControl("exit")}
+          onClick={handleExit}
           className="bg-white/10 hover:bg-white/20 p-2 rounded-full text-white transition-colors"
         >
           <X size={32} />
@@ -162,7 +185,6 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
                 onChange={handleSeek}
                 className="w-full h-2 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-orange-500 [&::-webkit-slider-thumb]:transition-transform group-hover:[&::-webkit-slider-thumb]:scale-125"
               />
-              {/* Buffer/Segments could go here */}
             </div>
             <span className="text-white/60 font-mono w-16">
               {formatFrameTime(totalFrames)}
