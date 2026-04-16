@@ -235,14 +235,47 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
       <div className="w-full max-w-6xl px-6 py-20 overflow-y-auto max-h-full">
         {/* Header */}
         <motion.div
-          className="flex items-center justify-center gap-3 mb-8"
+          className="flex items-center justify-between mb-8"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Shield className="w-8 h-8 text-red-400" />
-          <h1 className="text-4xl font-black text-white tracking-tighter italic drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
-            ADMIN PANEL
-          </h1>
+          <div className="flex items-center gap-3">
+            <Shield className="w-8 h-8 text-red-400" />
+            <h1 className="text-4xl font-black text-white tracking-tighter italic drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+              ADMIN PANEL
+            </h1>
+          </div>
+          <button
+            onClick={async () => {
+              const { SceneManager } = await import("@/core/SceneManager");
+              const { ReplayScene } = await import("@/scenes/ReplayScene");
+              const mockReplayData = {
+                version: 2 as const,
+                seed: 1337,
+                players: [
+                  { id: "1", username: "Admin Tester 1" },
+                  { id: "2", username: "Target Dummy" }
+                ],
+                winner: 0 as const,
+                duration: 60 * 60 * 2,
+                fps: 60,
+                inputs: [
+                  { f: 10, p: 0 as const, i: "HD" as const },
+                  { f: 20, p: 0 as const, i: "HD" as const },
+                  { f: 30, p: 0 as const, i: "CW" as const },
+                  { f: 32, p: 0 as const, i: "HD" as const },
+                  { f: 45, p: 1 as const, i: "R" as const },
+                  { f: 50, p: 1 as const, i: "HD" as const },
+                  { f: 60, p: 0 as const, i: "L" as const },
+                  { f: 62, p: 0 as const, i: "HD" as const }
+                ]
+              };
+              SceneManager.changeScene(new ReplayScene(mockReplayData));
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 border border-purple-500/30 rounded-xl hover:bg-purple-500/30 font-bold text-sm transition"
+          >
+            Mock Replay
+          </button>
         </motion.div>
 
         {/* Stats Cards */}
