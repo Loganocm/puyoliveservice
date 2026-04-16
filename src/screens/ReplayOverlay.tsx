@@ -184,7 +184,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
       className={`fixed inset-0 pointer-events-none transition-opacity duration-300 ${uiVisible ? "opacity-100" : "opacity-0"}`}
     >
       {/* Header / Top Bar */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start pointer-events-auto bg-gradient-to-b from-black/80 to-transparent">
+      <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start pointer-events-auto z-50 bg-gradient-to-b from-black/80 to-transparent">
         <div>
           <h2 className="text-white text-2xl font-bold tracking-wider font-mono">
             REPLAY VIEWER
@@ -201,11 +201,11 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
 
       {/* Match Result Overlay */}
       {matchResult && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-auto z-40">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 animate-in fade-in zoom-in duration-500" style={{ background: 'radial-gradient(circle, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.8) 100%)' }}>
           <div
-            className="rounded-3xl p-12 backdrop-blur-xl text-center transform scale-110"
+            className="rounded-3xl p-12 backdrop-blur-xl text-center transform scale-110 pointer-events-auto shadow-2xl"
             style={{
-              background: 'linear-gradient(135deg, rgba(20,20,30,1), rgba(10,10,20,1))',
+              background: 'linear-gradient(135deg, rgba(20,20,30,0.8), rgba(10,10,20,0.9))',
               border: '2px solid rgba(78, 255, 78, 0.4)',
               boxShadow: '0 0 80px rgba(78, 255, 78, 0.2), 0 25px 50px rgba(0,0,0,0.8)',
             }}
@@ -227,7 +227,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
       )}
 
       {/* Bottom Controls */}
-      <div className="absolute bottom-0 left-0 w-full p-8 pb-12 pointer-events-auto bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+      <div className="absolute bottom-0 left-0 w-full p-8 pb-12 pointer-events-auto z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
           {/* Timeline */}
           <div className="flex items-center gap-4">

@@ -196,7 +196,7 @@ export const ReplayViewer: React.FC<ReplayViewerProps> = ({ matchId, onClose }) 
         const cellSize = 24; // Smaller for replay
 
         // Draw Board Background
-        ctx.fillStyle = '#0008';
+        ctx.fillStyle = '#000000';
         ctx.fillRect(startX, startY, COLS * cellSize, (TOTAL_ROWS - HIDDEN_ROWS) * cellSize);
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 1;

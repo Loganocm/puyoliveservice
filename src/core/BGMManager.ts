@@ -45,9 +45,15 @@ export class BGMManager {
       return;
     }
 
+    // If we are switching contexts, pick a random track for the new context instead of starting from 0
+    if (context !== this.currentContext) {
+      const randomIndex = Math.floor(Math.random() * urls.length);
+      this.currentIndices.set(context, randomIndex);
+    }
+    
     let index = this.currentIndices.get(context) || 0;
+
     // If we are already playing this context, don't restart play unless it's genuinely the start.
-    // Wait, play() is called to switch context. If it's the same context but paused, we resume.
     if (context === this.currentContext && this.currentAudio && this.currentAudio.paused) {
         this.resume();
         return;
