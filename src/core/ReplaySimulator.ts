@@ -122,11 +122,12 @@ export class ReplaySimulator {
             boards: [captureBoard(engine1), captureBoard(engine2)],
         });
 
-        const totalFrames = Math.max(duration, 1);
+        // Allow the simulation to run until Game Over settles visually, or up to 600 frames past the recorded duration to catch the death animations.
+        const maxFrames = Math.max(duration + 600, 36000); // hard cap at 10 minutes
 
         try {
             // Simulate frame by frame
-            while (currentFrame < totalFrames) {
+            while (currentFrame < maxFrames) {
                 // 1. Advance both engines by exactly 1 logical frame
                 engine1.update(1.0);
                 engine2.update(1.0);
@@ -150,7 +151,7 @@ export class ReplaySimulator {
 
                 // 4. Report progress (every 100 frames to avoid callback overhead)
                 if (onProgress && currentFrame % 100 === 0) {
-                    onProgress(currentFrame / totalFrames);
+                    onProgress(Math.min(currentFrame / duration, 1.0));
                 }
 
                 // 5. Check for Game Over Truncation

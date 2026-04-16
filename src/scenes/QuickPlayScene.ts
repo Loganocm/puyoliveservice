@@ -673,7 +673,7 @@ export class QuickPlayScene implements IScene {
         const boardH = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
         const boardW = COLS * CELL_SIZE;
         this.graphics.rect(0, 0, boardW, boardH);
-        this.graphics.fill({ color: 0x000000, alpha: 0.75 });
+        this.graphics.fill({ color: 0x0a0a12, alpha: 1.0 });
         this.graphics.stroke({ color: 0x334466, width: 2, alpha: 0.4 });
 
         // Grid lines
