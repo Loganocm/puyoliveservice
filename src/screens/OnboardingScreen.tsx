@@ -148,7 +148,16 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
         </div>
 
         {/* Form Container */}
-        <div className="space-y-4">
+        <form 
+          className="space-y-4" 
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (isLoading) return;
+            if (phase === "identity") handleIdentitySubmit();
+            if (phase === "login") handleLogin();
+            if (phase === "register") handleRegister();
+          }}
+        >
           {/* Identity Phase */}
           {phase === "identity" && (
             <div className="space-y-2">
@@ -238,12 +247,8 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
           {/* Action Buttons */}
           <button
+            type="submit"
             disabled={isLoading}
-            onClick={() => {
-              if (phase === "identity") handleIdentitySubmit();
-              if (phase === "login") handleLogin();
-              if (phase === "register") handleRegister();
-            }}
             className={`w-full py-4 rounded-xl font-black text-white text-base tracking-wider uppercase relative overflow-hidden transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
               phase === "identity" && !username.trim()
                 ? "bg-white/5 hover:bg-white/10"
@@ -261,7 +266,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
               </span>
             )}
           </button>
-        </div>
+        </form>
       </motion.div>
     </div>
   );
