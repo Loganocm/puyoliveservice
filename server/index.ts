@@ -1398,6 +1398,7 @@ io.on('connection', (socket: Socket) => {
   // ── Board state heartbeat — auto-abort players who stall / background ──
   // If a player doesn't send a board state for 7 seconds during an active match (e.g. background tab),
   // the game is safely aborted. This prevents ELO inflation or deflation from network desyncs.
+  const HEARTBEAT_INTERVAL = 3_000; // Check every 3 seconds
   const HEARTBEAT_TIMEOUT = 7_000; // 7 seconds without board update = disconnected
   const HEARTBEAT_GRACE = 7_000;   // Don't check until 7s after match start (loading grace)
 
