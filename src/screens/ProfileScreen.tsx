@@ -43,6 +43,7 @@ export const ProfileScreen: React.FC<{
   const [newUsername, setNewUsername] = useState("");
   const [nameError, setNameError] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
