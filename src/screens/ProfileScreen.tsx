@@ -39,6 +39,14 @@ export const ProfileScreen: React.FC<{
     games_percentile: number;
   } | null>(null);
 
+  // Username editing
+  const [editingName, setEditingName] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
   useMenuInput({ onBack: () => {
       // If editing name, close the edit input
       if (editingName) {
@@ -47,14 +55,6 @@ export const ProfileScreen: React.FC<{
         onClose();
       }
   } }, [editingName, onClose]);
-
-  // Username editing
-  const [editingName, setEditingName] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [nameError, setNameError] = useState("");
-  const [nameSaving, setNameSaving] = useState(false);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();

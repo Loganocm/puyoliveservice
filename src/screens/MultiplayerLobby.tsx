@@ -59,6 +59,14 @@ export function MultiplayerLobby({
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
 
+  // VS Screen State
+  const [showVSScreen, setShowVSScreen] = useState(false);
+  const [vsPlayers, setVsPlayers] = useState<VSPlayerData[]>([]);
+  const [vsRanked, setVsRanked] = useState(false);
+  const pendingRoomId = useRef<string | null>(null);
+  const pendingSeed = useRef<number | undefined>(undefined);
+  const pendingOpponentId = useRef<string | undefined>(undefined);
+
   useMenuInput({
     onBack: () => {
       // If a modal is open, back should close the modal first
@@ -69,24 +77,15 @@ export function MultiplayerLobby({
       } else if (showPrivateOptions) {
         setShowPrivateOptions(false);
       } else if (activeRoomId) {
-        NetworkManager.leaveRoom();
-      } else if (isSearchingState || isSearchingRef.current) {
-        // Handled directly via existing queue logic inside onBack? Just let it be.
+        NetworkManager.leaveRoom(activeRoomId);
+      } else if (isSearching || isSearchingRef.current) {
         NetworkManager.leaveQueue();
         setIsSearching(false);
       } else {
         onBack();
       }
     }
-  }, [showCreateModal, showPrivateOptions, activeRoomId, isSearchingState, showVSScreen, onBack]);
-
-  // VS Screen State
-  const [showVSScreen, setShowVSScreen] = useState(false);
-  const [vsPlayers, setVsPlayers] = useState<VSPlayerData[]>([]);
-  const [vsRanked, setVsRanked] = useState(false);
-  const pendingRoomId = useRef<string | null>(null);
-  const pendingSeed = useRef<number | undefined>(undefined);
-  const pendingOpponentId = useRef<string | undefined>(undefined);
+  }, [showCreateModal, showPrivateOptions, activeRoomId, isSearching, showVSScreen, onBack]);
 
   useEffect(() => {
     // Ensure we are connected
