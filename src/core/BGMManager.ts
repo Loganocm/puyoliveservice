@@ -88,6 +88,8 @@ export class BGMManager {
 
   static resume() {
     if (this.currentAudio && this.currentAudio.paused && this.currentContext !== 'none') {
+      const targetVol = Math.max(0, Math.min(1, this.getEffectiveVolume()));
+      this.currentAudio.volume = targetVol;
       this.currentAudio.play().catch(() => {});
       this.emitState();
     }
