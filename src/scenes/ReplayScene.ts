@@ -58,7 +58,6 @@ export class ReplayScene implements IScene {
     private boardDamageGraphics: [Graphics, Graphics];
     private boardScoreTexts: [Text, Text];
     private boardChainTexts: [Text, Text];
-    private _boardNextLabels: [Text, Text];
     private boardNextGraphics: [Graphics, Graphics];
 
     // Per-board animation state
@@ -187,7 +186,6 @@ export class ReplayScene implements IScene {
         this.boardDamageGraphics = [b1.damage, b2.damage];
         this.boardScoreTexts = [b1.scoreText, b2.scoreText];
         this.boardChainTexts = [b1.chainText, b2.chainText];
-        this._boardNextLabels = [b1.nextLabel, b2.nextLabel];
         this.boardNextGraphics = [b1.nextGfx, b2.nextGfx];
 
         // Draw static backgrounds
