@@ -60,9 +60,8 @@ export const BGMPlayer: React.FC = () => {
           <motion.div
             key="expanded"
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: { type: "spring", damping: 20, stiffness: 300 } }}
+            exit={{ opacity: 0, y: 20, scale: 0.9, transition: { duration: 0.15, ease: "easeOut" } }}
             className="bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl flex items-center gap-4 border-b-2 border-b-indigo-500"
             onMouseEnter={clearHideTimer}
             onMouseLeave={resetHideTimer}
