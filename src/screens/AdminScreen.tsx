@@ -64,7 +64,7 @@ interface AdminRoom {
   };
 }
 
-export function AdminScreen({ onBack }: { onBack: () => void }) {
+export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onWatchReplay?: () => void }) {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -271,6 +271,7 @@ export function AdminScreen({ onBack }: { onBack: () => void }) {
                 ]
               };
               SceneManager.changeScene(new ReplayScene(mockReplayData));
+              onWatchReplay?.();
             }}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-purple-300 border border-purple-500/30 rounded-xl hover:bg-purple-500/30 font-bold text-sm transition"
           >

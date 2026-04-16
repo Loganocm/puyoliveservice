@@ -720,8 +720,13 @@ export default function App() {
       )}
 
       {showAdmin && (
-        <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm pointer-events-auto">
-          <AdminScreen onBack={() => setShowAdmin(false)} />
+        <div className={`fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm pointer-events-auto ${screen === "replay" ? "hidden" : ""}`}>
+          <AdminScreen 
+            onBack={() => setShowAdmin(false)} 
+            onWatchReplay={() => {
+              setScreen("replay");
+            }}
+          />
         </div>
       )}
 
