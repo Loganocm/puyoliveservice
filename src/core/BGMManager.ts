@@ -68,11 +68,19 @@ export class BGMManager {
     const urls = this.tracks.get(this.currentContext);
     if (!urls || urls.length === 0) return;
 
-    let index = this.currentIndices.get(this.currentContext) || 0;
-    index = (index + 1) % urls.length;
-    this.currentIndices.set(this.currentContext, index);
+    let currentIndex = this.currentIndices.get(this.currentContext) || 0;
+    let nextIndex = Math.floor(Math.random() * urls.length);
+    
+    // Prevent the same song from playing twice in a row if there are multiple songs
+    if (urls.length > 1) {
+        while (nextIndex === currentIndex) {
+            nextIndex = Math.floor(Math.random() * urls.length);
+        }
+    }
+    
+    this.currentIndices.set(this.currentContext, nextIndex);
 
-    const url = urls[index];
+    const url = urls[nextIndex];
     this.crossfadeTo(url, this.currentContext, 200); // Faster crossfade for manual skip
   }
 

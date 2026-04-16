@@ -3,7 +3,7 @@ import { GameEngine } from '../core/GameEngine';
 import { APIClient } from '../api/client';
 import { PuyoColor, COLS, TOTAL_ROWS, HIDDEN_ROWS } from '../core/Constants';
 import { X, Play, Pause } from 'lucide-react';
-// Button import removed // Ensure this exists or use HTML button
+import { useMenuInput } from '../hooks/useMenuInput';
 
 // Duplicate types since we can't import from server easily
 type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
@@ -45,6 +45,8 @@ export const ReplayViewer: React.FC<ReplayViewerProps> = ({ matchId, onClose }) 
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const requestRef = useRef<number>();
+
+    useMenuInput({ onBack: onClose }, [onClose]);
     
     // Engine Refs
     const engine1Ref = useRef<GameEngine | null>(null);

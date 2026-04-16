@@ -87,7 +87,7 @@ export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onW
   );
   const LIMIT = 20;
 
-  useMenuInput({ onBack });
+  useMenuInput({ onBack }, [onBack]);
 
   const loadStats = useCallback(async () => {
     try {
