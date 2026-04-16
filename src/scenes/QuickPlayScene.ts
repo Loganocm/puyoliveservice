@@ -116,7 +116,6 @@ export class QuickPlayScene implements IScene {
     private alive: boolean = true;
     private depth: number = 0;
     private kos: number = 0;
-    private targetUsername: string = '';
     private currentLevel: number = 1;
 
     // Input handling (DAS/ARR)
@@ -382,11 +381,6 @@ export class QuickPlayScene implements IScene {
         NetworkManager.on('mines_target_board', onTargetBoard);
         this.networkListeners.push({ event: 'mines_target_board', cb: onTargetBoard });
 
-        const onTargetUpdated = (data: { mode: string, targetSocketId: string, targetUsername: string }) => {
-            this.targetUsername = data.targetUsername || '';
-        };
-        NetworkManager.on('mines_target_updated', onTargetUpdated);
-        this.networkListeners.push({ event: 'mines_target_updated', cb: onTargetUpdated });
 
         const onRespawned = (data: { seed: number }) => {
             if (this.container.destroyed) return;
@@ -676,16 +670,7 @@ export class QuickPlayScene implements IScene {
         this.graphics.fill({ color: 0x000000, alpha: 0.75 });
         this.graphics.stroke({ color: 0x334466, width: 2, alpha: 0.4 });
 
-        // Grid lines
-        for (let c = 1; c < COLS; c++) {
-            this.graphics.moveTo(c * CELL_SIZE, 0);
-            this.graphics.lineTo(c * CELL_SIZE, boardH);
-        }
-        for (let r = 1; r < TOTAL_ROWS - HIDDEN_ROWS; r++) {
-            this.graphics.moveTo(0, r * CELL_SIZE);
-            this.graphics.lineTo(boardW, r * CELL_SIZE);
-        }
-        this.graphics.stroke({ color: 0x222244, width: 1, alpha: 0.3 });
+        // No grid lines needed
 
         // Render puyos
         this.renderPuyos();
@@ -695,9 +680,6 @@ export class QuickPlayScene implements IScene {
 
         // Render particles
         this.renderParticles();
-
-        // Render target board
-        this.renderTargetBoard();
     }
 
     private renderPuyos() {
@@ -901,152 +883,171 @@ export class QuickPlayScene implements IScene {
         this.garbageTrayGraphics.clear();
 
         const boardW = COLS * CELL_SIZE;
-
-        // Depth display (right side, top)
         const rightX = boardW + 80;
-        if (!this.depthText) {
-            this.depthText = new Text({
-                text: '0m',
-                style: new TextStyle({
-                    fontFamily: 'monospace',
-                    fontSize: 36,
-                    fontWeight: 'bold',
-                    fill: 0x00ddff,
-                }),
-            });
-            this.depthText.anchor.set(0, 0);
-            this.depthText.position.set(rightX, 10);
-            this.uiContainer.addChild(this.depthText);
 
-            // "DEPTH" label
-            const label = new Text({
-                text: 'DEPTH',
-                style: new TextStyle({
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    fontWeight: 'bold',
-                    fill: 0x88aacc,
-                }),
-            });
-            label.position.set(rightX, 50);
-            this.uiContainer.addChild(label);
-        }
-        this.depthText.text = `${this.depth}m`;
+        // --- DRAW STATS (GameScene Style) ---
+        let cY = 70;
 
-        // Target name (right side, below depth)
-        if (!this.targetNameText) {
-            this.targetNameText = new Text({
-                text: '',
-                style: new TextStyle({
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    fill: 0xff4444,
-                }),
-            });
-            this.targetNameText.anchor.set(0, 0);
-            this.targetNameText.position.set(rightX, 80);
-            this.uiContainer.addChild(this.targetNameText);
-        }
-        this.targetNameText.text = this.targetUsername ? `⎯▶ ${this.targetUsername}` : '';
+        const labelStyle = {
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontSize: 14,
+            fontWeight: 'bold' as const,
+            fill: 0xaaaaaa,
+            letterSpacing: 2,
+            dropShadow: { color: 0x000000, blur: 2, distance: 1, angle: Math.PI / 4, alpha: 0.6 }
+        };
+        const valueStyle = {
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontSize: 32,
+            fontWeight: 'bold' as const,
+            fill: 0xffffff,
+            dropShadow: { color: 0x000000, blur: 3, distance: 1, angle: Math.PI / 4, alpha: 0.8 }
+        };
 
-        // Stats (right side)
         const stats = [
-            { label: 'KOs', value: `${this.kos}` },
-            { label: 'CHAIN', value: `${this.engine.stats.maxChain}` },
-            { label: 'SCORE', value: `${this.engine.stats.score}` },
+            { label: 'DEPTH', value: `${this.depth}m`, color: 0x00ddff },
+            { label: 'KOs', value: `${this.kos}`, color: 0xffffff },
+            { label: 'CHAIN', value: `${this.engine.stats.maxChain}`, color: 0xffffff },
+            { label: 'SCORE', value: `${this.engine.stats.score}`, color: 0xffffff },
         ];
 
         for (let i = 0; i < stats.length; i++) {
-            const y = 120 + i * 50;
             if (!this.statLabels[i]) {
-                this.statLabels[i] = new Text({
-                    text: stats[i].label,
-                    style: new TextStyle({
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        fontWeight: 'bold',
-                        fill: 0x667788,
-                    }),
-                });
-                this.statLabels[i].position.set(rightX, y);
+                this.statLabels[i] = new Text({ text: stats[i].label, resolution: 2, style: labelStyle });
+                this.statLabels[i].anchor.set(0.5);
                 this.uiContainer.addChild(this.statLabels[i]);
             }
             if (!this.statValues[i]) {
-                this.statValues[i] = new Text({
-                    text: stats[i].value,
-                    style: new TextStyle({
-                        fontFamily: 'monospace',
-                        fontSize: 22,
-                        fontWeight: 'bold',
-                        fill: 0xffffff,
-                    }),
-                });
-                this.statValues[i].position.set(rightX, y + 14);
+                this.statValues[i] = new Text({ text: stats[i].value, resolution: 2, style: valueStyle });
+                this.statValues[i].anchor.set(0.5);
                 this.uiContainer.addChild(this.statValues[i]);
             }
-            this.statValues[i].text = stats[i].value;
+
+            const lbl = this.statLabels[i];
+            const val = this.statValues[i];
+
+            lbl.text = stats[i].label;
+            lbl.style.fill = 0xaaaaaa;
+            lbl.x = rightX;
+            lbl.y = cY;
+            lbl.visible = true;
+
+            const cardW = 140;
+            const cardH = 50;
+            this.uiGraphics.rect(rightX - cardW / 2, cY + 20, cardW, cardH);
+            this.uiGraphics.fill({ color: 0x0a0a12, alpha: 0.7 });
+            this.uiGraphics.stroke({ color: 0xffffff, width: 1, alpha: 0.15 });
+
+            val.text = stats[i].value;
+            val.style.fill = stats[i].color;
+            val.x = rightX;
+            val.y = cY + 45;
+            val.visible = true;
+
+            cY += 110;
         }
 
-        // Next pieces (right side)
-        const nextY = 300;
+        // --- DRAW NEXT QUEUE (GameScene Style) ---
+        const queueY = cY + 20;
+
         if (!this.nextLabel) {
             this.nextLabel = new Text({
                 text: 'NEXT',
-                style: new TextStyle({
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    fontWeight: 'bold',
-                    fill: 0x667788,
-                }),
+                resolution: 2,
+                style: { fontFamily: 'Arial', fontSize: 16, fontWeight: '900' as const, fill: 0xFF5733, letterSpacing: 2 }
             });
-            this.nextLabel.position.set(rightX, nextY);
+            this.nextLabel.anchor.set(0.5);
             this.uiContainer.addChild(this.nextLabel);
         }
+        
+        this.nextLabel.x = rightX;
+        this.nextLabel.y = queueY - 40;
+        this.nextLabel.visible = true;
 
-        // Render next pieces
+        // Primary Slot Frame
+        const boxW = 100;
+        const boxH = 80;
+        const pX = rightX - (boxW / 2);
+        const pY = queueY;
+        this.uiGraphics.rect(pX, pY, boxW, boxH);
+        this.uiGraphics.fill({ color: 0x000000, alpha: 0.3 });
+        this.uiGraphics.stroke({ color: 0xFF5733, width: 2 });
+
         for (const s of this.nextSprites) {
             if (!s.destroyed) s.destroy();
         }
         this.nextSprites = [];
 
-        const pieceSize = 28;
-        for (let i = 0; i < Math.min(3, this.engine.nextPieces.length); i++) {
-            const pair = this.engine.nextPieces[i];
-            const py = nextY + 20 + i * (pieceSize * 2 + 10);
+        const limit = Math.min(this.engine.nextPieces.length, 2);
+        const ICON_BASE = 32;
 
-            const subTex = ResourceManager.getPuyoTexture(pair.sub);
-            const mainTex = ResourceManager.getPuyoTexture(pair.main);
+        for (let i = 0; i < limit; i++) {
+            const p = this.engine.nextPieces[i];
+            let tx: number, ty: number, spacing: number, displaySize: number;
+
+            if (i === 0) {
+                tx = rightX; ty = queueY + 40;
+                displaySize = ICON_BASE * 1.35; spacing = 45;
+            } else {
+                tx = rightX + 100; ty = queueY + 40;
+                displaySize = ICON_BASE * 0.9; spacing = 30;
+            }
+
+            const subTex = ResourceManager.getPuyoTexture(p.sub, 0);
+            const mainTex = ResourceManager.getPuyoTexture(p.main, 0);
 
             if (subTex) {
-                const s = new Sprite(subTex);
-                s.x = rightX;
-                s.y = py;
-                s.width = pieceSize;
-                s.height = pieceSize;
-                this.uiContainer.addChild(s);
-                this.nextSprites.push(s);
+                const subSprite = new Sprite(subTex);
+                subSprite.anchor.set(0.5);
+                subSprite.x = tx - (spacing / 2);
+                subSprite.y = ty;
+                subSprite.width = displaySize;
+                subSprite.height = displaySize;
+                this.uiContainer.addChild(subSprite);
+                this.nextSprites.push(subSprite);
             }
+
             if (mainTex) {
-                const s = new Sprite(mainTex);
-                s.x = rightX;
-                s.y = py + pieceSize;
-                s.width = pieceSize;
-                s.height = pieceSize;
-                this.uiContainer.addChild(s);
-                this.nextSprites.push(s);
+                const mainSprite = new Sprite(mainTex);
+                mainSprite.anchor.set(0.5);
+                mainSprite.x = tx + (spacing / 2);
+                mainSprite.y = ty;
+                mainSprite.width = displaySize;
+                mainSprite.height = displaySize;
+                this.uiContainer.addChild(mainSprite);
+                this.nextSprites.push(mainSprite);
             }
         }
 
-        // Garbage tray (left side of board)
+        // --- DRAW BOARD BORDER ---
+        const visibleHeight = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
+        const borderX = this.graphics.x;
+        const borderY = this.graphics.y;
+        this.uiGraphics.rect(borderX, borderY, boardW, visibleHeight);
+        this.uiGraphics.stroke({ color: 0xffffff, width: 4, alpha: 1.0, alignment: 1 });
+
+        // --- GARBAGE TRAY (Left side) ---
         const totalGarbage = this.engine.garbageQueue + this.engine.nuisanceTray;
         if (totalGarbage > 0) {
             const maxHeight = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
             const fillRatio = Math.min(1, totalGarbage / 30);
             const barHeight = fillRatio * maxHeight;
 
-            this.garbageTrayGraphics.rect(-20, maxHeight - barHeight, 12, barHeight);
-            this.garbageTrayGraphics.fill({ color: totalGarbage > 12 ? 0xff0000 : 0xff6600, alpha: 0.8 });
+            const fillH = barHeight;
+            const h = maxHeight;
+            const barW = 16;
+            const bX = borderX - 25;
+
+            this.garbageTrayGraphics.rect(bX, 0, barW, h);
+            this.garbageTrayGraphics.fill({ color: 0x220000, alpha: 0.6 });
+            this.garbageTrayGraphics.stroke({ color: 0x550000, width: 2 });
+
+            this.garbageTrayGraphics.rect(bX, h - fillH, barW, fillH);
+            this.garbageTrayGraphics.fill({ color: totalGarbage > 12 ? 0xff0000 : 0xff4400, alpha: 0.9 });
+            
+            if (totalGarbage > 12) {
+                this.garbageTrayGraphics.stroke({ color: 0xffff00, width: 2 });
+            }
         }
     }
 
@@ -1060,63 +1061,7 @@ export class QuickPlayScene implements IScene {
         }
     }
 
-    private renderTargetBoard() {
-        // Clear previous, but preserve persistent border
-        const children = this.targetBoardContainer.removeChildren();
-        for (const child of children) {
-            if (child !== this.targetBoardBorder) {
-                child.destroy();
-            }
-        }
 
-        // Background
-        const bg = new Graphics();
-        bg.rect(0, 0, COLS * CELL_SIZE, (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE);
-        bg.fill({ color: 0x111122, alpha: 0.6 });
-        this.targetBoardContainer.addChild(bg);
-        this.targetBoardContainer.addChild(this.targetBoardBorder);
-
-        // Render target board puyos
-        for (let c = 0; c < COLS; c++) {
-            for (let r = HIDDEN_ROWS; r < TOTAL_ROWS; r++) {
-                const color = this.targetBoard.grid[c][r];
-                if (color === PuyoColor.None) continue;
-
-                // Calculate target board connections
-                let conn = 0;
-                if (this.targetBoard.isValid(c, r - 1) && this.targetBoard.grid[c][r - 1] === color) conn |= 1;
-                if (this.targetBoard.isValid(c + 1, r) && this.targetBoard.grid[c + 1][r] === color) conn |= 2;
-                if (this.targetBoard.isValid(c, r + 1) && this.targetBoard.grid[c][r + 1] === color) conn |= 4;
-                if (this.targetBoard.isValid(c - 1, r) && this.targetBoard.grid[c - 1][r] === color) conn |= 8;
-
-                const texture = ResourceManager.getPuyoTexture(color, conn);
-                if (!texture) continue;
-                const sprite = new Sprite(texture);
-                const overlap = conn > 0 ? 4 : 0;
-                sprite.anchor.set(0.5);
-                sprite.x = c * CELL_SIZE + CELL_SIZE / 2;
-                sprite.y = (r - HIDDEN_ROWS) * CELL_SIZE + CELL_SIZE / 2;
-                sprite.width = CELL_SIZE + overlap;
-                sprite.height = CELL_SIZE + overlap;
-                this.targetBoardContainer.addChild(sprite);
-            }
-        }
-
-        // Target name label above
-        if (this.targetUsername) {
-            const nameText = new Text({
-                text: `⎯▶ ${this.targetUsername}`,
-                style: new TextStyle({
-                    fontFamily: 'monospace',
-                    fontSize: 24,
-                    fontWeight: 'bold',
-                    fill: 0xff4444,
-                }),
-            });
-            nameText.position.set(0, -30);
-            this.targetBoardContainer.addChild(nameText);
-        }
-    }
 
     // ── Effects ──
 

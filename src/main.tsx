@@ -17,6 +17,12 @@ import gameBgm1 from './resources/bgm/gameplay/abc123.mp3';
 import gameBgm2 from './resources/bgm/gameplay/dnbfart.mp3';
 import gameBgm3 from './resources/bgm/gameplay/flemnco.mp3';
 
+// Disable console methods to prevent easy exploitation in the browser
+const noop = () => {};
+['log', 'warn', 'error', 'info', 'debug', 'dir', 'trace'].forEach(method => {
+  (console as any)[method] = noop;
+});
+
 const initGame = async () => {
   const appDiv = document.getElementById('app');
   if (!appDiv) {

@@ -69,7 +69,9 @@ interface QuickPlayScreenProps {
 }
 
 export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
-  const [players, setPlayers] = useState<MinesPlayerEntry[]>([]);
+  const [players, setPlayers] = useState<MinesPlayerEntry[]>(() => {
+    return NetworkManager.getMinesPlayerList() || [];
+  });
   const [mySocketId, setMySocketId] = useState<string>("");
   const [targetingMode, setTargetingMode] = useState<TargetingMode>("random");
   const [isDead, setIsDead] = useState(false);

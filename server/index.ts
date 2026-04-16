@@ -1217,6 +1217,11 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('mines_record_input', (data: { input: string }) => {
     if (!data || typeof data.input !== 'string') return;
+    // CRITICAL SECURITY FIX: Explicitly block 'G' and allow only valid gameplay inputs
+    // Otherwise malicious clients can bypass anti-cheat and freeze the server with NaNs
+    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD'];
+    if (!validInputs.includes(data.input)) return;
+    
     const player = minesRoom.players.get(socket.id);
     if (!player || !player.alive) return;
     

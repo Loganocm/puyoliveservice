@@ -4,7 +4,7 @@ export class APIClient {
             ? 'http://localhost:8080/api'
             : 'https://api.puyo.live/api');
 
-    private static async request(endpoint: string, options: RequestInit = {}) {
+    private static async request(endpoint: string, options: RequestInit = {}, retries: number = 3) {
         const token = localStorage.getItem('puyolive_token');
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -15,18 +15,39 @@ export class APIClient {
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${this.baseUrl}${endpoint}`, {
-            ...options,
-            headers,
-        });
+        for (let attempt = 0; attempt < retries; attempt++) {
+            try {
+                const response = await fetch(`${this.baseUrl}${endpoint}`, {
+                    ...options,
+                    headers,
+                });
 
-        const data = await response.json().catch(() => ({}));
+                const data = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-            throw new Error(data.error || data.message || 'Request failed');
+                if (!response.ok) {
+                    // Don't retry auth/client errors — only server/network issues
+                    const err = new Error(data.error || data.message || 'Request failed') as any;
+                    err.status = response.status;
+                    throw err;
+                }
+
+                return data;
+            } catch (err: any) {
+                // If it's a client error (4xx), don't retry
+                if (err.status && err.status >= 400 && err.status < 500) {
+                    throw err;
+                }
+
+                // Network error or 5xx — retry with backoff
+                if (attempt < retries - 1) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+                    console.warn(`[APIClient] Request to ${endpoint} failed (attempt ${attempt + 1}/${retries}), retrying in ${delay}ms...`);
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    throw err;
+                }
+            }
         }
-
-        return data;
     }
 
     static async login(username: string, password: string) {

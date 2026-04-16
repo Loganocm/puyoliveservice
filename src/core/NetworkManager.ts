@@ -6,6 +6,7 @@ export class NetworkManager {
     private static socket: Socket | null = null;
     public static isConnected: boolean = false;
     private static listeners: Map<string, NetworkCallback[]> = new Map();
+    private static lastMinesPlayerList: any[] = [];
 
     public static serverUrl: string = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:3000' : 'https://game.puyo.live');
 
@@ -173,6 +174,7 @@ export class NetworkManager {
         });
 
         this.socket.on('mines_player_list', (data: any) => {
+            this.lastMinesPlayerList = data;
             this.emit('mines_player_list', data);
         });
 
@@ -434,6 +436,10 @@ export class NetworkManager {
     public static minesTickFrame() {
         if (!this.socket) return;
         this.socket.emit('mines_tick_frame');
+    }
+
+    public static getMinesPlayerList() {
+        return this.lastMinesPlayerList;
     }
 }
 

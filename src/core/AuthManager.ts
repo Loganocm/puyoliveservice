@@ -47,10 +47,17 @@ export class AuthManager {
                         NetworkManager.authenticate(this.token);
                     }
                 }
-            } catch {
-                // Token is truly invalid — clear session
-                console.warn('Auth: Token expired, logging out');
-                this.logout();
+            } catch (err: any) {
+                // Only logout if the server explicitly rejected the token (401/403)
+                // Network errors (CORS, timeout, server down) should NOT trigger logout
+                if (err?.status === 401 || err?.status === 403) {
+                    console.warn('Auth: Token rejected by server, logging out');
+                    this.logout();
+                } else {
+                    console.warn('Auth: Server unreachable during auth refresh, will retry on next connect');
+                    // Don't logout — token in localStorage may still be valid
+                    // The 'connect' handler will re-authenticate on next reconnect
+                }
             }
         });
 
@@ -91,9 +98,15 @@ export class AuthManager {
                 });
 
                 return true;
-            } catch (e) {
-                console.warn('Auth: Session invalid', e);
-                this.logout();
+            } catch (e: any) {
+                // Only clear session if server explicitly rejected the token
+                if (e?.status === 401 || e?.status === 403) {
+                    console.warn('Auth: Token rejected, logging out');
+                    this.logout();
+                } else {
+                    // Server is unreachable — keep token, user can retry
+                    console.warn('Auth: Server unreachable at startup, keeping session for retry');
+                }
                 return false;
             }
         }
