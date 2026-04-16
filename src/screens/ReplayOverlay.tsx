@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Play, Pause, FastForward, Rewind, X } from "lucide-react";
 import { GameEvents } from "../core/GameEvents";
+import { useMenuInput } from "../hooks/useMenuInput";
 
 interface ReplayOverlayProps {
   onExit: () => void;
@@ -96,9 +97,6 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
           value: Math.max(0, currentFrameRef.current - 300),
         });
       }
-      if (e.code === "Escape") {
-        handleExit();
-      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -110,6 +108,10 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
     GameEvents.emit("replay_control", { action: "exit" });
     onExit();
   }, [onExit]);
+
+  useMenuInput({
+    onBack: handleExit
+  }, [handleExit]);
 
   const sendControl = useCallback(
     (action: "play" | "pause" | "seek" | "speed" | "exit", value?: number) => {

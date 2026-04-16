@@ -16,6 +16,7 @@ import {
 import { BackButton } from "@/components/BackButton";
 import { APIClient } from "@/api/client";
 import { NetworkManager } from "@/core/NetworkManager";
+import { useMenuInput } from "@/hooks/useMenuInput";
 
 interface AdminUser {
   id: number;
@@ -85,6 +86,8 @@ export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onW
     null,
   );
   const LIMIT = 20;
+
+  useMenuInput({ onBack });
 
   const loadStats = useCallback(async () => {
     try {

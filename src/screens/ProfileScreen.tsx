@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { APIClient } from "../api/client";
+import { useMenuInput } from "@/hooks/useMenuInput";
 import { AuthManager } from "../core/AuthManager";
 import { GameEvents } from "../core/GameEvents";
 import {
@@ -37,6 +38,15 @@ export const ProfileScreen: React.FC<{
     garbage_percentile: number;
     games_percentile: number;
   } | null>(null);
+
+  useMenuInput({ onBack: () => {
+      // If editing name, close the edit input
+      if (editingName) {
+        setEditingName(false);
+      } else {
+        onClose();
+      }
+  } }, [editingName, onClose]);
 
   // Username editing
   const [editingName, setEditingName] = useState(false);

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useMenuInput } from "@/hooks/useMenuInput";
 import {
   X,
   Trophy,
@@ -102,6 +103,8 @@ export const CommunityScreen: React.FC<{
   onWatchReplay: () => void;
 }> = ({ onClose, onWatchReplay }) => {
   const [tab, setTab] = useState<Tab>("activity");
+
+  useMenuInput({ onBack: onClose }, [onClose]);
 
   // Activity tab
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);

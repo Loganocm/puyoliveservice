@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import * as PIXI from 'pixi.js';
 import { motion } from 'motion/react';
 import { SoundManager } from '@/core/SoundManager';
 
@@ -54,8 +53,8 @@ export function WaterFillButton({
 }: WaterFillButtonProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLDivElement>(null); // NEW: Direct reference to button container
-  const appRef = useRef<PIXI.Application | null>(null);
-  const waterGraphicsRef = useRef<PIXI.Graphics | null>(null);
+  const canvasElementRef = useRef<HTMLCanvasElement | null>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const particlesRef = useRef<WaterParticle[]>([]);
   const [mounted, setMounted] = useState(false);
   const [isFilled, setIsFilled] = useState(false); // Track if button is filled
@@ -86,9 +85,9 @@ export function WaterFillButton({
     };
 
     /**
-     * STEP 2: Initialize PixiJS with EXACT button dimensions
+     * STEP 2: Initialize Canvas 2D with EXACT button dimensions
      */
-    const initPixi = async () => {
+    const initCanvas = async () => {
       // Wait for DOM to fully render
       await new Promise(resolve => requestAnimationFrame(resolve));
       
@@ -103,64 +102,29 @@ export function WaterFillButton({
       const width = Math.floor(rect.width);
       const height = Math.floor(rect.height);
       
-      console.log('🎨 Creating PixiJS canvas:', width, 'x', height);
+      console.log('🎨 Creating Canvas 2D:', width, 'x', height);
       
-      const app = new PIXI.Application();
-      
-      await app.init({
-        width: width,
-        height: height,
-        backgroundColor: 0x000000,
-        backgroundAlpha: 0,
-        antialias: false,
-        resolution: 1, // Optimize: Low res for pixel look & performance
-        autoDensity: true,
-      });
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
 
       if (!canvasRef.current) return;
       
-      canvasRef.current.appendChild(app.canvas);
-      appRef.current = app;
+      canvasRef.current.appendChild(canvas);
+      canvasElementRef.current = canvas;
 
       // Make canvas EXACTLY fill the container (which is inset-0 of button)
-      app.canvas.style.width = '100%';
-      app.canvas.style.height = '100%';
-      app.canvas.style.display = 'block';
-      app.canvas.style.position = 'absolute';
-      app.canvas.style.top = '0';
-      app.canvas.style.left = '0';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.display = 'block';
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
       
-      /**
-       * CRITICAL: PixiJS v8 Graphics API
-       * 
-       * ❌ WRONG (v7 API - SILENTLY FAILS):
-       *   graphics.beginFill(color, alpha);
-       *   graphics.drawCircle(x, y, radius);
-       *   graphics.endFill();
-       * 
-       * ✅ CORRECT (v8 API):
-       *   graphics.circle(x, y, radius);
-       *   graphics.fill({ color: 0xRRGGBB, alpha: 0.0-1.0 });
-       * 
-       *   graphics.rect(x, y, width, height);
-       *   graphics.fill({ color: 0xRRGGBB, alpha: 0.0-1.0 });
-       * 
-       *   graphics.moveTo(x1, y1);
-       *   graphics.lineTo(x2, y2);
-       *   graphics.stroke({ width: number, color: 0xRRGGBB, alpha: 0.0-1.0 });
-       */
-      const waterGraphics = new PIXI.Graphics();
-      waterGraphicsRef.current = waterGraphics;
+      const ctx = canvas.getContext('2d');
+      ctxRef.current = ctx;
       
-      app.stage.addChild(waterGraphics);
-      
-      // Initialize graphics context
-      waterGraphics.rect(0, 0, 1, 1);
-      waterGraphics.fill({ color: 0x000000, alpha: 0 });
-      waterGraphics.clear();
-
       setMounted(true);
-
       /**
        * Define physics functions HERE so they have access to width/height
        */
@@ -298,20 +262,24 @@ export function WaterFillButton({
       };
 
       const drawWater = () => {
-        if (!waterGraphicsRef.current) return;
+        if (!ctxRef.current || !canvasElementRef.current) return;
         
-        const graphics = waterGraphicsRef.current;
+        const ctx = ctxRef.current;
+        const canvas = canvasElementRef.current;
         const particles = particlesRef.current;
         
         try {
-          graphics.clear();
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
         } catch (e) {
           return;
         }
 
         if (particles.length === 0) return;
 
-        const colorNum = parseInt(color.replace('#', ''), 16);
+        const hex = color.replace('#', '');
+        const rColor = parseInt(hex.substring(0, 2), 16);
+        const gColor = parseInt(hex.substring(2, 4), 16);
+        const bColor = parseInt(hex.substring(4, 6), 16);
 
         // METABALL RENDERING: Create smooth liquid surface
         // Sample the field on a grid and draw the liquid shape
@@ -365,12 +333,12 @@ export function WaterFillButton({
             
             // Draw filled square for liquid
             if (caseIndex === 15) {
-              graphics.rect(x0, y0, gridSize, gridSize);
-              graphics.fill({ color: colorNum, alpha: 0.95 });
+              ctx.fillStyle = `rgba(${rColor}, ${gColor}, ${bColor}, 0.95)`;
+              ctx.fillRect(x0, y0, gridSize, gridSize);
             } else {
               // Approximate with triangles for smooth edges
-              graphics.rect(x0, y0, gridSize, gridSize);
-              graphics.fill({ color: colorNum, alpha: 0.9 });
+              ctx.fillStyle = `rgba(${rColor}, ${gColor}, ${bColor}, 0.9)`;
+              ctx.fillRect(x0, y0, gridSize, gridSize);
             }
           }
         }
@@ -385,8 +353,10 @@ export function WaterFillButton({
 
           surfaceParticles.forEach(p => {
             const shimmer = Math.sin(Date.now() * 0.003 + p.x * 0.1) * 0.3 + 0.5;
-            graphics.circle(p.x, p.y - p.radius * 0.6, 2);
-            graphics.fill({ color: 0xffffff, alpha: shimmer * 0.8 });
+            ctx.beginPath();
+            ctx.arc(p.x, p.y - p.radius * 0.6, 2, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${shimmer * 0.8})`;
+            ctx.fill();
           });
         }
       };
@@ -394,7 +364,7 @@ export function WaterFillButton({
       // Animation loop
       let animationFrameId: number = 0;
       const animate = () => {
-        if (waterGraphicsRef.current && appRef.current) {
+        if (ctxRef.current) {
           updateParticles();
           drawWater();
         }
@@ -411,36 +381,31 @@ export function WaterFillButton({
      */
     const handleResize = () => {
       const rect = measureButton();
-      if (rect && appRef.current) {
+      if (rect && canvasElementRef.current) {
         const width = Math.floor(rect.width);
         const height = Math.floor(rect.height);
         console.log('🔄 Resizing canvas to:', width, 'x', height);
-        appRef.current.renderer.resize(width, height);
+        canvasElementRef.current.width = width;
+        canvasElementRef.current.height = height;
       }
     };
 
     window.addEventListener('resize', handleResize);
 
     let frameId: number | undefined;
-    initPixi().then(id => {
-      frameId = id;
+    initCanvas().then(id => {
+      if (id) frameId = id;
     });
 
     return () => {
-      console.log('🧹 Cleaning up PixiJS');
+      console.log('🧹 Cleaning up Canvas 2D');
       
       if (frameId) {
         cancelAnimationFrame(frameId);
       }
       
-      if (appRef.current) {
-        appRef.current.destroy(true);
-        appRef.current = null;
-      }
-      
-      if (waterGraphicsRef.current) {
-        waterGraphicsRef.current = null;
-      }
+      ctxRef.current = null;
+      canvasElementRef.current = null;
       
       // Clear canvas container
       if (canvasRef.current) {

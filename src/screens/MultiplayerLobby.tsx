@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, useRef } from "react";
+import { useMenuInput } from "@/hooks/useMenuInput";
 import {
   Users,
   Loader2,
@@ -57,6 +58,27 @@ export function MultiplayerLobby({
   // Lobby State (for Custom Games)
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
+
+  useMenuInput({
+    onBack: () => {
+      // If a modal is open, back should close the modal first
+      if (showVSScreen) return; // Ignore back while VS screen transitions
+      
+      if (showCreateModal) {
+        setShowCreateModal(false);
+      } else if (showPrivateOptions) {
+        setShowPrivateOptions(false);
+      } else if (activeRoomId) {
+        NetworkManager.leaveRoom();
+      } else if (isSearchingState || isSearchingRef.current) {
+        // Handled directly via existing queue logic inside onBack? Just let it be.
+        NetworkManager.leaveQueue();
+        setIsSearching(false);
+      } else {
+        onBack();
+      }
+    }
+  }, [showCreateModal, showPrivateOptions, activeRoomId, isSearchingState, showVSScreen, onBack]);
 
   // VS Screen State
   const [showVSScreen, setShowVSScreen] = useState(false);
