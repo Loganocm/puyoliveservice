@@ -123,33 +123,42 @@ export class ReplaySimulator {
 
         const totalFrames = Math.max(duration, 1);
 
-        // Simulate frame by frame
-        while (currentFrame < totalFrames) {
-            // 1. Advance both engines by exactly 1 logical frame
-            engine1.update(1.0);
-            engine2.update(1.0);
-            currentFrame++;
+        try {
+            // Simulate frame by frame
+            while (currentFrame < totalFrames) {
+                // 1. Advance both engines by exactly 1 logical frame
+                engine1.update(1.0);
+                engine2.update(1.0);
+                currentFrame++;
 
-            // 2. Process inputs for this frame (AFTER engine update, matching live game)
-            while (inputCursor < sortedInputs.length) {
-                const input = sortedInputs[inputCursor];
-                if (input.f <= currentFrame) {
-                    this.executeInput(input, engine1, engine2);
-                    inputCursor++;
-                } else {
-                    break;
+                // 2. Process inputs for this frame (AFTER engine update, matching live game)
+                while (inputCursor < sortedInputs.length) {
+                    const input = sortedInputs[inputCursor];
+                    if (input.f <= currentFrame) {
+                        this.executeInput(input, engine1, engine2);
+                        inputCursor++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // 3. Capture snapshot
+                snapshots.push({
+                    boards: [captureBoard(engine1), captureBoard(engine2)],
+                });
+
+                // 4. Report progress (every 100 frames to avoid callback overhead)
+                if (onProgress && currentFrame % 100 === 0) {
+                    onProgress(currentFrame / totalFrames);
                 }
             }
-
-            // 3. Capture snapshot
-            snapshots.push({
-                boards: [captureBoard(engine1), captureBoard(engine2)],
-            });
-
-            // 4. Report progress (every 100 frames to avoid callback overhead)
-            if (onProgress && currentFrame % 100 === 0) {
-                onProgress(currentFrame / totalFrames);
-            }
+        } catch (error) {
+            console.error(`[ReplaySimulator] CRITICAL SIMULATION CRASH at frame ${currentFrame}/${totalFrames}`);
+            console.error(`[ReplaySimulator] Error Context:`, error);
+            console.error(`[ReplaySimulator] Pending Inputs Queue cursor at ${inputCursor}. Next 5 inputs:`, sortedInputs.slice(inputCursor, inputCursor + 5));
+            console.error(`[ReplaySimulator] Engine 1 State: ${engine1.state}, Board Active Piece: ${engine1.activePiece ? 'Yes' : 'No'}`);
+            console.error(`[ReplaySimulator] Engine 2 State: ${engine2.state}, Board Active Piece: ${engine2.activePiece ? 'Yes' : 'No'}`);
+            throw new Error(`Replay parsing failed at frame ${currentFrame}: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         onProgress?.(1.0);

@@ -239,8 +239,15 @@ export class ReplayScene implements IScene {
         };
 
         // --- Pre-simulate the replay ---
-        // This runs synchronously (~50-200ms) and produces all frame snapshots
-        this.replayEngine.load();
+        // This runs synchronously (~50-200ms) and produces all frame snapshots.
+        // It's wrapped in a try/catch because corrupted replays can crash the simulator.
+        try {
+            this.replayEngine.load();
+        } catch (error) {
+            console.error("[ReplayScene] FATAL REPLAY LOAD ERROR:", error);
+            // Re-throw so the UI component can potentially catch it, or just let it halt safely.
+            throw error;
+        }
 
         // React UI controls
         GameEvents.on('replay_control', this.handleReplayControl);
