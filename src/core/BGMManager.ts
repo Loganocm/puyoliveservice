@@ -113,7 +113,12 @@ export class BGMManager {
     // Extract filename without extension
     const parts = this.currentUrl.split('/');
     const filename = parts[parts.length - 1];
-    const songName = filename.split('.')[0] || 'Unknown Track';
+    let songName = filename.split('.')[0] || 'Unknown Track';
+
+    // Remove Vite hash (e.g. songname-ABC12345.mp3 -> songname)
+    if (songName.includes('-')) {
+        songName = songName.substring(0, songName.lastIndexOf('-'));
+    }
 
     // Format for display
     const formattedName = songName.charAt(0).toUpperCase() + songName.slice(1).replace(/_/g, ' ');

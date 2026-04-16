@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Music, Play, Pause, SkipForward } from 'lucide-react';
+import { Music, Play, Pause, SkipForward, ChevronDown } from 'lucide-react';
 import { GameEvents } from '../core/GameEvents';
 import { BGMManager } from '../core/BGMManager';
 
@@ -107,6 +107,16 @@ export const BGMPlayer: React.FC = () => {
                 className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors"
               >
                 <SkipForward size={16} fill="currentColor" />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(false);
+                }}
+                title="Minimize Player"
+                className="w-6 h-6 ml-1 rounded-full hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors"
+              >
+                <ChevronDown size={16} />
               </button>
             </div>
           </motion.div>
