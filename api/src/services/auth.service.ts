@@ -199,7 +199,7 @@ export class AuthService {
   /**
    * Login with username and password
    */
-  static async login(input: LoginInput): Promise<AuthResponse> {
+  static async login(input: LoginInput & { ipAddress?: string }): Promise<AuthResponse> {
     if (!input.username || !input.password) {
       throw new Error('Username and password are required');
     }
@@ -227,8 +227,33 @@ export class AuthService {
       throw new Error('Invalid username or password');
     }
 
+    // Check if user is banned
+    try {
+        const activeBan = await (prisma as any).ban.findFirst({
+          where: {
+            user_id: user.id,
+            OR: [
+              { expires_at: null },
+              { expires_at: { gt: new Date() } }
+            ]
+          }
+        });
+        
+        if (activeBan) {
+          throw new Error(`Account suspended: ${activeBan.reason}`);
+        }
+    } catch(e) {} // Catch if ban model not migrated yet
+
     // Verify password
     const isValid = await bcrypt.compare(input.password, user.password_hash);
+    
+    // Log attempt if ip is tracked
+    if (input.ipAddress) {
+        (prisma as any).loginLog.create({
+            data: { user_id: user.id, ip_address: input.ipAddress, success: isValid }
+        }).catch(() => {});
+    }
+
     if (!isValid) {
       recordLoginFailure(input.username);
       throw new Error('Invalid username or password');
@@ -313,7 +338,25 @@ export class AuthService {
       const payload = jwt.verify(token, config.jwt.secret, {
         algorithms: ['HS512', 'HS256'],
       }) as { userId: number };
-      return this.getUserById(payload.userId);
+      
+      const user = await this.getUserById(payload.userId);
+      if (!user) return null;
+
+      // Check if user is banned, effectively invalidating existing tokens
+      try {
+          const activeBan = await (prisma as any).ban.findFirst({
+            where: {
+              user_id: user.id,
+              OR: [
+                { expires_at: null },
+                { expires_at: { gt: new Date() } }
+              ]
+            }
+          });
+          if (activeBan) return null;
+      } catch(e) {} // Catch if ban model not migrated yet
+
+      return user;
     } catch {
       return null;
     }

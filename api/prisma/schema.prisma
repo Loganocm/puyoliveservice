@@ -32,6 +32,10 @@ model User {
   matches_as_p2    Match[]  @relation("Player2Matches")
   matches_won      Match[]  @relation("WinnerMatches")
   matches_lost     Match[]  @relation("LoserMatches")
+  
+  bans             Ban[]
+  auditLogs        AuditLog[]
+  loginLogs        LoginLog[]
 
   @@map("users")
 }
@@ -73,4 +77,46 @@ model Match {
   loser            User     @relation("LoserMatches", fields: [loser_id], references: [id])
 
   @@map("matches")
+}
+
+model Ban {
+  id               Int      @id @default(autoincrement())
+  user_id          Int?
+  ip_address       String?
+  reason           String
+  banned_by        Int?
+  expires_at       DateTime?
+  created_at       DateTime @default(now())
+
+  user             User?    @relation(fields: [user_id], references: [id])
+  
+  @@index([ip_address])
+  @@map("bans")
+}
+
+model AuditLog {
+  id               Int      @id @default(autoincrement())
+  admin_id         Int
+  action           String
+  target_id        Int?
+  target_ip        String?
+  details          Json?
+  created_at       DateTime @default(now())
+
+  admin            User     @relation(fields: [admin_id], references: [id])
+  
+  @@map("audit_logs")
+}
+
+model LoginLog {
+  id               Int      @id @default(autoincrement())
+  user_id          Int
+  ip_address       String
+  success          Boolean
+  created_at       DateTime @default(now())
+
+  user             User     @relation(fields: [user_id], references: [id])
+  
+  @@index([ip_address])
+  @@map("login_logs")
 }

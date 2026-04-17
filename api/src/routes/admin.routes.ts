@@ -170,6 +170,140 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
 }));
 
 /**
+ * GET /admin/audit-logs
+ * List all audit logs
+ */
+router.get('/audit-logs', asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 25));
+  const skip = (page - 1) * limit;
+
+  try {
+    const [logs, total] = await Promise.all([
+        (prisma as any).auditLog.findMany({
+        orderBy: { id: 'desc' },
+        skip,
+        take: limit,
+        include: { admin: { select: { username: true } } }
+        }),
+        (prisma as any).auditLog.count(),
+    ]);
+    res.json({ logs, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch(e) { res.json({ logs: [], total: 0, page, limit, totalPages: 0 }); }
+}));
+
+/**
+ * GET /admin/bans
+ * List all bans
+ */
+router.get('/bans', asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 25));
+  const skip = (page - 1) * limit;
+
+  try {
+    const [bans, total] = await Promise.all([
+        (prisma as any).ban.findMany({
+        orderBy: { id: 'desc' },
+        skip,
+        take: limit,
+        include: { user: { select: { username: true } } }
+        }),
+        (prisma as any).ban.count(),
+    ]);
+
+    res.json({ bans, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch(e) { res.json({ bans: [], total: 0, page, limit, totalPages: 0 }); }
+}));
+
+/**
+ * POST /admin/bans
+ * Create a new ban
+ */
+router.post('/bans', asyncHandler(async (req: Request, res: Response) => {
+  const { user_id, ip_address, reason, duration_hours } = req.body;
+  if (!reason) { res.status(400).json({ error: 'Reason is required' }); return; }
+  
+  const expires_at = duration_hours ? new Date(Date.now() + duration_hours * 60 * 60 * 1000) : null;
+
+  try {
+    const newBan = await (prisma as any).ban.create({
+        data: {
+        user_id: user_id ? parseInt(user_id) : null,
+        ip_address: ip_address || null,
+        reason,
+        banned_by: req.user!.id,
+        expires_at
+        }
+    });
+
+    await (prisma as any).auditLog.create({
+        data: {
+        admin_id: req.user!.id,
+        action: 'CREATE_BAN',
+        target_id: user_id ? parseInt(user_id) : null,
+        target_ip: ip_address || null,
+        details: { reason, duration_hours }
+        }
+    });
+
+    res.json({ success: true, ban: newBan });
+  } catch(e) { res.status(500).json({ error: 'Database error. Migration missing?' }); }
+}));
+
+/**
+ * DELETE /admin/bans/:id
+ * Remove a ban
+ */
+router.delete('/bans/:id', asyncHandler(async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ban ID' }); return; }
+
+  try {
+    const ban = await (prisma as any).ban.findUnique({ where: { id } });
+    if (!ban) { res.status(404).json({ error: 'Ban not found' }); return; }
+
+    await (prisma as any).ban.delete({ where: { id } });
+
+    await (prisma as any).auditLog.create({
+        data: {
+        admin_id: req.user!.id,
+        action: 'REMOVE_BAN',
+        target_id: ban.user_id,
+        target_ip: ban.ip_address,
+        details: { original_reason: ban.reason }
+        }
+    });
+
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: 'Database error. Migration missing?' }); }
+}));
+
+/**
+ * GET /admin/login-logs
+ * List all login logs
+ */
+router.get('/login-logs', asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 25));
+  const skip = (page - 1) * limit;
+
+  try {
+    const [logs, total] = await Promise.all([
+        (prisma as any).loginLog.findMany({
+        orderBy: { id: 'desc' },
+        skip,
+        take: limit,
+        include: { user: { select: { username: true } } }
+        }),
+        (prisma as any).loginLog.count(),
+    ]);
+
+    res.json({ logs, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch(e) { res.json({ logs: [], total: 0, page, limit, totalPages: 0 }); }
+}));
+
+/**
  * GET /admin/stats
  * Dashboard statistics
  */

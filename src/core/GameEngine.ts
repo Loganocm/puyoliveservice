@@ -123,6 +123,11 @@ export class GameEngine {
     public isReplaying: boolean = false;
     private replayCursor: number = 0;
 
+    // Replay-locked settings (set by ReplaySimulator for determinism)
+    // These override SettingsManager values during replay to match the original game
+    public replaySDF: number = 10;
+    public replaySoftDropProtection: boolean = true;
+
     constructor(seed?: number) {
         // If no seed provided, generate one
         this.seed = seed ?? Math.floor(Math.random() * 2147483647);
@@ -498,8 +503,8 @@ export class GameEngine {
             this.changeState(GameState.ACTIVE);
 
             // Soft Drop Protection
-            // During replay, use fixed default (true) for determinism
-            const softDropProtection = this.isReplaying ? true : SettingsManager.softDropProtection;
+            // During replay, use recorded setting for determinism
+            const softDropProtection = this.isReplaying ? this.replaySoftDropProtection : SettingsManager.softDropProtection;
             if (softDropProtection && this.softDrop) {
                 this.softDropLocked = true;
             } else {
@@ -547,8 +552,8 @@ export class GameEngine {
         if (this.softDrop && !this.softDropLocked) {
             // SDF Logic: Drop speed = Base Speed * SDF
             // Delay = Base Delay / SDF
-            // During replay, use fixed SDF=10 (default) for determinism
-            const sdf = this.isReplaying ? 10 : SettingsManager.sdf;
+            // During replay, use recorded SDF for determinism
+            const sdf = this.isReplaying ? this.replaySDF : SettingsManager.sdf;
             delay = Math.max(1, Math.floor(this.currentDropDelay / sdf));
 
             // If SDF is huge (infinity/40), we might want immediate ground.

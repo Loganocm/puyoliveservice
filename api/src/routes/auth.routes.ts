@@ -16,7 +16,7 @@ const authLimiter = rateLimit({
 
 const registerLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  max: 2, // 2 registrations per day per IP
+  max: 5, // 5 registrations per day per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many accounts created, please try again later' },
@@ -44,9 +44,10 @@ router.post('/register', registerLimiter, asyncHandler(async (req: Request, res:
  */
 router.post('/login', authLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { username, password } = req.body;
+  const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
 
   try {
-    const result = await AuthService.login({ username, password });
+    const result = await AuthService.login({ username, password, ipAddress });
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Login failed';

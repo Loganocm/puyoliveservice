@@ -57,6 +57,10 @@ export interface ReplayFile {
     duration: number;        // Total frames
     fps: number;             // Frames per second (for timing)
     inputs: ReplayInput[];
+    settings?: {
+        sdf: number;
+        softDropProtection: boolean;
+    };
 }
 
 // Legacy format for backwards compatibility
@@ -92,6 +96,9 @@ export class GameRoom {
     frameCount: number = 0;
     replayFPS: number = 60;
     seed: number = 0;
+
+    // Player settings recorded at match start (for replay determinism)
+    playerSettings: { sdf: number; softDropProtection: boolean } | null = null;
 
     // Anti-cheat: tracks last time player 0 sent a tick_frame
     // If this goes stale during an active match, player 0 is forfeited
@@ -227,7 +234,8 @@ export class GameRoom {
             winner: winnerIndex,
             duration: this.frameCount,
             fps: this.replayFPS,
-            inputs: this.replayInputs
+            inputs: this.replayInputs,
+            settings: this.playerSettings ?? undefined,
         };
     }
 

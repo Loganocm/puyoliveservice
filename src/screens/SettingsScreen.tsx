@@ -25,6 +25,8 @@ export function SettingsScreen({
   const [arr, setArr] = useState(SettingsManager.arr);
   const [softDrop, setSoftDrop] = useState(SettingsManager.sdf);
   const [masterVol, setMasterVol] = useState(SettingsManager.masterVolume);
+  const [bgmVol, setBgmVol] = useState(SettingsManager.bgmVolume);
+  const [sfxVol, setSfxVol] = useState(SettingsManager.sfxVolume);
   const [screenShake, setScreenShake] = useState(SettingsManager.screenShake);
   const [activeTab, setActiveTab] = useState<"handling" | "effects">(
     "handling",
@@ -39,7 +41,7 @@ export function SettingsScreen({
     // @ts-ignore - Dynamic access to static properties
     SettingsManager[key] = value;
 
-    if (key === "masterVolume") {
+    if (key === "masterVolume" || key === "sfxVolume") {
       SoundManager.updateActiveVolumes();
     }
   };
@@ -84,10 +86,30 @@ export function SettingsScreen({
   const effectsSettings = [
     {
       id: "masterVol",
-      label: "MASTER VOL.",
-      description: "AUDIO VOLUME",
+      label: "GENERAL",
+      description: "MASTER VOLUME",
       value: masterVol,
       setValue: (v: number) => updateSetting(setMasterVol, "masterVolume", v),
+      min: 0,
+      max: 100,
+      color: "#FF5733",
+    },
+    {
+      id: "bgmVol",
+      label: "MUSIC",
+      description: "BGM VOLUME",
+      value: bgmVol,
+      setValue: (v: number) => updateSetting(setBgmVol, "bgmVolume", v),
+      min: 0,
+      max: 100,
+      color: "#FF5733",
+    },
+    {
+      id: "sfxVol",
+      label: "EFFECTS",
+      description: "SFX VOLUME",
+      value: sfxVol,
+      setValue: (v: number) => updateSetting(setSfxVol, "sfxVolume", v),
       min: 0,
       max: 100,
       color: "#FF5733",

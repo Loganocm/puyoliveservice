@@ -321,6 +321,12 @@ export class NetworkManager {
         this.socket.emit('record_input', { roomId, input });
     }
 
+    // V2 Replay: Record player settings for determinism
+    public static recordSettings(roomId: string, sdf: number, softDropProtection: boolean) {
+        if (!this.socket) return;
+        this.socket.emit('record_settings', { roomId, sdf, softDropProtection });
+    }
+
     // V2 Replay: Advance frame counter on server
     public static tickFrame(roomId: string) {
         if (!this.socket) return;
@@ -428,9 +434,14 @@ export class NetworkManager {
         this.socket.emit('mines_set_target', { mode });
     }
 
-    public static minesRecordInput(input: string) {
+    public static minesPlayerLost() {
         if (!this.socket) return;
-        this.socket.emit('mines_record_input', { input });
+        this.socket.emit('mines_player_lost');
+    }
+
+    public static minesSendGarbage(amount: number) {
+        if (!this.socket) return;
+        this.socket.emit('mines_send_garbage', { amount });
     }
 
     public static minesTickFrame() {

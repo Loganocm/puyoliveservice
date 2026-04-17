@@ -109,6 +109,20 @@ export class ReplaySimulator {
         engine1.isReplaying = true;
         engine2.isReplaying = true;
 
+        // Apply recorded settings for deterministic replay
+        // Falls back to defaults for replays recorded before settings were saved
+        if ((this.replayData as any).settings) {
+            const s = (this.replayData as any).settings;
+            if (typeof s.sdf === 'number') {
+                engine1.replaySDF = s.sdf;
+                engine2.replaySDF = s.sdf;
+            }
+            if (typeof s.softDropProtection === 'boolean') {
+                engine1.replaySoftDropProtection = s.softDropProtection;
+                engine2.replaySoftDropProtection = s.softDropProtection;
+            }
+        }
+
         // Sort inputs by frame (safety)
         const sortedInputs = [...inputs].sort((a, b) => a.f - b.f);
 

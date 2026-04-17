@@ -236,44 +236,8 @@ minesRoom.onPlayerGarbage = (targetSocketId: string, amount: number, senderName:
 };
 
 minesRoom.onPlayerDiedServer = (deadSocketId: string) => {
-  const player = minesRoom.players.get(deadSocketId);
-  if (!player || !player.alive) return;
-
-  for (const [id, p] of minesRoom.players) {
-    if (p.alive && p.currentTarget === deadSocketId && id !== deadSocketId) {
-      minesRoom.recordKO(id);
-      const killerSocket = io.sockets.sockets.get(id);
-      if (killerSocket) {
-        killerSocket.emit('mines_ko', {
-          targetUsername: player.username,
-          totalKOs: p.kos,
-        });
-      }
-      break;
-    }
-  }
-
-  const deadPlayer = minesRoom.killPlayer(deadSocketId);
-  if (deadPlayer) {
-    console.log(`[Mines] ${deadPlayer.username} died at depth ${deadPlayer.depth} (SERVER DETECTED)`);
-
-    // Notify the dead player directly so their client can force GAMEOVER
-    const deadSocket = io.sockets.sockets.get(deadSocketId);
-    if (deadSocket) {
-      deadSocket.emit('mines_server_death', {
-        depth: deadPlayer.depth,
-        score: deadPlayer.score,
-        kos: deadPlayer.kos,
-      });
-    }
-
-    io.to('MINES_LOBBY').emit('mines_player_died_broadcast', {
-      socketId: deadSocketId,
-      username: deadPlayer.username,
-      depth: deadPlayer.depth,
-    });
-    io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
-  }
+  // DISABLED: PuyoSimulator on the server desyncs due to network latency and user settings (SDF).
+  // The server simulator will no longer force GAMEOVER. Client explicit death packets are required.
 };
 
 // Server-authoritative state sync — periodically sends score/depth/garbage to each client
@@ -730,6 +694,23 @@ io.on('connection', (socket: Socket) => {
       maxPlayers: room.settings.maxPlayers,
       settings: room.settings
     });
+  });
+
+  // V2 Replay: Record player settings at match start (for deterministic replays)
+  socket.on('record_settings', (data: { roomId: string, sdf: number, softDropProtection: boolean }) => {
+    if (!data || typeof data.roomId !== 'string') return;
+    if (typeof data.sdf !== 'number' || typeof data.softDropProtection !== 'boolean') return;
+    if (!checkSocketRate(socket.id, 'record_settings', 3)) return;
+    const room = roomManager.getRoom(data.roomId);
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
+    // Only record once (first player to send wins)
+    if (!room.playerSettings) {
+      room.playerSettings = {
+        sdf: Math.max(1, Math.min(40, Math.round(data.sdf))),
+        softDropProtection: data.softDropProtection,
+      };
+    }
   });
 
   // V2 Replay: Record player inputs
@@ -1237,19 +1218,66 @@ io.on('connection', (socket: Socket) => {
     // Tracking this could be useful for AFK disconnects.
   });
 
-  // Client events below are deprecated. The server's PuyoSimulator handles them natively.
-  // Log warnings for exploit detection — if clients are sending these, they're using old/hacked clients.
-  socket.on('mines_send_garbage', () => {
-    console.warn(`[Mines Anti-Cheat] ${socket.id} sent deprecated 'mines_send_garbage' — ignoring`);
+  // Client-authoritative garbage (Re-enabled due to PuyoSimulator TCP Latency Desyncs)
+  socket.on('mines_send_garbage', (data: { amount: number }) => {
+    if (!data || typeof data.amount !== 'number') return;
+    const player = minesRoom.players.get(socket.id);
+    if (!player || !player.alive) return;
+
+    // Rate Limiting / Anti-Cheat
+    // 30 garbage per second cap is typically the max chain output someone can reasonably 
+    // emit in back-to-back fast bursts.
+    if (!checkSocketRate(socket.id, 'mines_send_garbage_cap', 30)) {
+       console.warn(`[Mines Anti-Cheat] ${socket.id} (Username: ${player.username}) rejected for spamming send_garbage`);
+       return;
+    }
+
+    if (data.amount > 0 && data.amount <= 100) {
+      const targetId = player.currentTarget;
+      if (targetId) minesRoom.handleGarbage(socket.id, targetId, data.amount);
+    }
   });
+
   socket.on('mines_board_state', () => {
     // Silently ignore — high frequency, don't spam logs
   });
+  
   socket.on('mines_score_update', () => {
     // Silently ignore — high frequency
   });
-  socket.on('mines_player_died', () => {
-    console.warn(`[Mines Anti-Cheat] ${socket.id} sent deprecated 'mines_player_died' — ignoring (server detects death)`);
+
+  // Client-authoritative death packet
+  socket.on('mines_player_lost', () => {
+    const player = minesRoom.players.get(socket.id);
+    if (!player || !player.alive) return;
+
+    // Award KO to targeting player
+    for (const [id, p] of minesRoom.players) {
+      if (p.alive && p.currentTarget === socket.id && id !== socket.id) {
+        minesRoom.recordKO(id);
+        const killerSocket = io.sockets.sockets.get(id);
+        if (killerSocket) {
+          killerSocket.emit('mines_ko', {
+            targetUsername: player.username,
+            totalKOs: p.kos,
+          });
+        }
+        break;
+      }
+    }
+
+    const deadPlayer = minesRoom.killPlayer(socket.id);
+    if (deadPlayer) {
+      console.log(`[Mines] ${deadPlayer.username} died at depth ${deadPlayer.depth} (CLIENT DETECTED)`);
+
+      // Client already knows it died, but we broadcast to room
+      io.to('MINES_LOBBY').emit('mines_player_died_broadcast', {
+        socketId: socket.id,
+        username: deadPlayer.username,
+        depth: deadPlayer.depth,
+      });
+      io.to('MINES_LOBBY').emit('mines_player_list', minesRoom.getPlayerList());
+    }
   });
 
   // ═══════════════════════════════════════════════════════

@@ -10,6 +10,7 @@ import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/index.js';
 
 export const app = express();
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 
 // Security middleware

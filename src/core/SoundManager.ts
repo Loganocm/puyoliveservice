@@ -46,17 +46,18 @@ export class SoundManager {
   public static play(soundName: string) {
     const sound = this.sounds.get(soundName);
     if (sound) {
-      sound.currentTime = 0;
-      // Scale 0-100 to 0.0-0.1
-      let volume = (SettingsManager.masterVolume / 100) * 0.1;
+      // Scale 0-100 to 0.0-0.1, applying both master and sfx volume
+      let volume = (SettingsManager.masterVolume / 100) * (SettingsManager.sfxVolume / 100) * 0.1;
 
       // Specific adjustments (Relative mixing)
       if (soundName === 'move' || soundName === 'click') {
         volume *= 0.1; // Keep these relatively quieter
       }
 
-      sound.volume = Math.max(0, Math.min(1, volume));
-      sound.play().catch(e => console.warn("Sound play failed:", e));
+      // Fix audio lag by cloning the Audio node. This allows rapid-fire overlaps without resetting the buffer
+      const clone = sound.cloneNode() as HTMLAudioElement;
+      clone.volume = Math.max(0, Math.min(1, volume));
+      clone.play().catch(e => { /* Ignore auto-play errors */ });
     }
   }
 

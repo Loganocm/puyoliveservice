@@ -553,6 +553,66 @@ export class MinesRoom {
     /** Callback for server to route garbage from players */
     public onPlayerGarbage: ((targetSocketId: string, amount: number, senderName: string, senderSocketId: string) => void) | null = null;
 
+    /** Callback for server to log anti-cheat violations */
+    public onAntiCheatViolation: ((socketId: string, type: string, details: any) => void) | null = null;
+
+    /** Per-player garbage velocity tracking for anti-cheat */
+    private garbageHistory: Map<string, number[]> = new Map();
+
+    /**
+     * Handle client-reported garbage (called from socket handler in index.ts).
+     * Validates amount, checks for impossible garbage velocity, and routes to target.
+     * This is the primary garbage path since the server simulator can desync
+     * from the client due to TCP latency.
+     */
+    handleGarbage(senderSocketId: string, targetSocketId: string, amount: number): void {
+        const sender = this.players.get(senderSocketId);
+        const target = this.players.get(targetSocketId);
+        if (!sender || !sender.alive || !target || !target.alive) return;
+
+        // Anti-cheat: Clamp to maximum single-event garbage (theoretical 19-chain cap ≈ 34 rocks)
+        const clampedAmount = Math.min(Math.max(0, Math.floor(amount)), 30);
+        if (clampedAmount <= 0) return;
+
+        // Anti-cheat: Track garbage velocity (max 60 rocks per 5-second window)
+        const now = Date.now();
+        if (!this.garbageHistory.has(senderSocketId)) {
+            this.garbageHistory.set(senderSocketId, []);
+        }
+        const history = this.garbageHistory.get(senderSocketId)!;
+        // Prune entries older than 5 seconds
+        while (history.length > 0 && history[0] < now - 5000) {
+            history.shift();
+        }
+        // Count total garbage in window
+        const windowTotal = history.length; // Each entry represents 1 rock sent
+        if (windowTotal + clampedAmount > 60) {
+            // Exceeds 60 rocks in 5 seconds — flag as suspicious
+            console.warn(`[Mines Anti-Cheat] ${sender.username} (${senderSocketId}) garbage velocity exceeded: ${windowTotal + clampedAmount} rocks/5s`);
+            if (this.onAntiCheatViolation) {
+                this.onAntiCheatViolation(senderSocketId, 'garbage_velocity_exceeded', {
+                    username: sender.username,
+                    userId: sender.userId,
+                    windowTotal: windowTotal + clampedAmount,
+                    threshold: 60,
+                });
+            }
+            return; // Reject the garbage
+        }
+        // Record this garbage event
+        for (let i = 0; i < clampedAmount; i++) {
+            history.push(now);
+        }
+
+        // Route garbage
+        sender.garbageSent += clampedAmount;
+        target.simulator.addGarbage(clampedAmount);
+
+        if (this.onPlayerGarbage) {
+            this.onPlayerGarbage(targetSocketId, clampedAmount, sender.username, senderSocketId);
+        }
+    }
+
     /**
      * Record a KO (when targeted player dies from your garbage).
      */

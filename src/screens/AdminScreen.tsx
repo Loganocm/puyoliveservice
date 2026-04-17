@@ -9,14 +9,15 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  X,
   Check,
   Loader2,
+  ShieldAlert,
 } from "lucide-react";
 import { BackButton } from "@/components/BackButton";
 import { APIClient } from "@/api/client";
 import { NetworkManager } from "@/core/NetworkManager";
 import { useMenuInput } from "@/hooks/useMenuInput";
+import { AdminSecurityPanel } from "@/components/AdminSecurityPanel";
 
 interface AdminUser {
   id: number;
@@ -79,7 +80,7 @@ export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onW
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [activeTab, setActiveTab] = useState<"users" | "rooms">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "rooms" | "security">("users");
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [deleteRoomConfirm, setDeleteRoomConfirm] = useState<string | null>(
@@ -405,7 +406,17 @@ export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onW
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab("security")}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "security" ? "bg-red-500/20 border border-red-500/30 text-red-300" : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10"}`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 inline mr-1.5" />
+            Security
+          </button>
         </div>
+
+        {/* Security Tab */}
+        {activeTab === "security" && <AdminSecurityPanel />}
 
         {/* Users Table */}
         {

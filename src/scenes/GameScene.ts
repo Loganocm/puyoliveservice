@@ -491,8 +491,9 @@ export class GameScene implements IScene {
         } else {
             this.engine = new GameEngine(this.seed);
 
-            // Only hook up recording if NOT replaying (GameEngine handles this via isReplaying flag check, but redundancy is safe)
-            // Actually recordAction checks isReplaying.
+            if (this.roomId) {
+                NetworkManager.recordSettings(this.roomId, SettingsManager.sdf, SettingsManager.softDropProtection);
+            }
         }
 
         this.gameMessage = "";

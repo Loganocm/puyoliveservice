@@ -235,11 +235,11 @@ export class QuickPlayScene implements IScene {
                 this.popAnimProgress = 0;
             }
 
-            // Client-side GAMEOVER is only used as a visual hint.
-            // The authoritative death comes from 'mines_server_death' event.
             if (state === GameState.GAMEOVER) {
+                // Authoritative death — client tells server it died
                 if (this.alive) {
                     this.alive = false;
+                    NetworkManager.minesPlayerLost();
                     GameEvents.emit('mines_died', {
                         depth: this.depth,
                         kos: this.kos,
@@ -249,9 +249,8 @@ export class QuickPlayScene implements IScene {
             }
         };
 
-        // Garbage generated is handled entirely by the server simulator.
-        // Client only shows the visual feedback.
         this.engine.onGarbageGenerated = (amount) => {
+            NetworkManager.minesSendGarbage(amount);
             if (amount > 0) {
                 this.spawnFloatingText(300, 200, `ATTACK! +${amount}`, 0xff6600);
             }
@@ -450,7 +449,7 @@ export class QuickPlayScene implements IScene {
 
         try {
             this.currentFrame++;
-            NetworkManager.minesTickFrame();
+            // NetworkManager.minesTickFrame(); // Disabled: Server no longer depends on tick frames
 
             // Escape to leave
             if (Input.isPressed('Escape')) {
@@ -518,7 +517,8 @@ export class QuickPlayScene implements IScene {
     }
 
     private recordInputForServer(inputType: string): void {
-        NetworkManager.minesRecordInput(inputType);
+        // Forward inputs to server simulator for anti-cheat validation
+        NetworkManager.emitToServer('mines_record_input', { input: inputType });
     }
 
     private handleInput() {
@@ -1020,13 +1020,13 @@ export class QuickPlayScene implements IScene {
         }
 
         // --- DRAW BOARD BORDER ---
+        // uiContainer is already positioned at the board origin (contentX, topMargin)
+        // so we draw at (0,0) relative to it — NOT at this.graphics.x/y which would double-offset
         const visibleHeight = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
-        const borderX = this.graphics.x;
-        const borderY = this.graphics.y;
-        this.uiGraphics.rect(borderX, borderY, boardW, visibleHeight);
+        this.uiGraphics.rect(0, 0, boardW, visibleHeight);
         this.uiGraphics.stroke({ color: 0xffffff, width: 4, alpha: 1.0, alignment: 1 });
 
-        // --- GARBAGE TRAY (Left side) ---
+        // --- GARBAGE TRAY (Left side of board) ---
         const totalGarbage = this.engine.garbageQueue + this.engine.nuisanceTray;
         if (totalGarbage > 0) {
             const maxHeight = (TOTAL_ROWS - HIDDEN_ROWS) * CELL_SIZE;
@@ -1034,15 +1034,14 @@ export class QuickPlayScene implements IScene {
             const barHeight = fillRatio * maxHeight;
 
             const fillH = barHeight;
-            const h = maxHeight;
             const barW = 16;
-            const bX = borderX - 25;
+            const bX = -25; // Left of board origin (uiContainer is already at board position)
 
-            this.garbageTrayGraphics.rect(bX, 0, barW, h);
+            this.garbageTrayGraphics.rect(bX, 0, barW, maxHeight);
             this.garbageTrayGraphics.fill({ color: 0x220000, alpha: 0.6 });
             this.garbageTrayGraphics.stroke({ color: 0x550000, width: 2 });
 
-            this.garbageTrayGraphics.rect(bX, h - fillH, barW, fillH);
+            this.garbageTrayGraphics.rect(bX, maxHeight - fillH, barW, fillH);
             this.garbageTrayGraphics.fill({ color: totalGarbage > 12 ? 0xff0000 : 0xff4400, alpha: 0.9 });
             
             if (totalGarbage > 12) {

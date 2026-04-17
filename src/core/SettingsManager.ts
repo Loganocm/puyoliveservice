@@ -32,6 +32,9 @@ export class SettingsManager {
   // BGM Volume (0 to 100) - controls background music independently
   public static bgmVolume = 50;
 
+  // SFX Volume (0 to 100) - controls sound effects independently
+  public static sfxVolume = 100;
+
   // Soft Drop Protection (Require fresh press on spawn)
   // Defaulting to true is safer for preventing accidental drops on spawn
   public static softDropProtection = true;
@@ -49,6 +52,7 @@ export class SettingsManager {
       lineClearDelay: this.lineClearDelay,
       masterVolume: this.masterVolume,
       bgmVolume: this.bgmVolume,
+      sfxVolume: this.sfxVolume,
       softDropProtection: this.softDropProtection,
       screenShake: this.screenShake
     }));
@@ -78,6 +82,7 @@ export class SettingsManager {
         if (parsed.softDropProtection !== undefined) this.softDropProtection = parsed.softDropProtection;
         if (parsed.screenShake !== undefined) this.screenShake = parsed.screenShake;
         if (parsed.bgmVolume !== undefined) this.bgmVolume = parsed.bgmVolume;
+        if (parsed.sfxVolume !== undefined) this.sfxVolume = parsed.sfxVolume;
       } catch (e) {
         console.warn('[SettingsManager] Corrupt settings data, resetting:', e);
         localStorage.removeItem('puyolive_settings');

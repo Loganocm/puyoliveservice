@@ -155,4 +155,27 @@ export class APIClient {
     static async adminDeleteUser(id: number) {
         return this.request(`/admin/users/${id}`, { method: 'DELETE' });
     }
+
+    static async adminGetBans(page: number = 1, limit: number = 25) {
+        return this.request(`/admin/bans?page=${page}&limit=${limit}`);
+    }
+
+    static async adminCreateBan(data: { user_id?: number, ip_address?: string, reason: string, duration_hours?: number }) {
+        return this.request('/admin/bans', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    static async adminDeleteBan(id: number) {
+        return this.request(`/admin/bans/${id}`, { method: 'DELETE' });
+    }
+
+    static async adminGetAuditLogs(page: number = 1, limit: number = 25) {
+        return this.request(`/admin/audit-logs?page=${page}&limit=${limit}`);
+    }
+
+    static async adminGetLoginLogs(page: number = 1, limit: number = 25) {
+        return this.request(`/admin/login-logs?page=${page}&limit=${limit}`);
+    }
 }
