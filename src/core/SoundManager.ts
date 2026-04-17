@@ -57,7 +57,7 @@ export class SoundManager {
       // Fix audio lag by cloning the Audio node. This allows rapid-fire overlaps without resetting the buffer
       const clone = sound.cloneNode() as HTMLAudioElement;
       clone.volume = Math.max(0, Math.min(1, volume));
-      clone.play().catch(e => { /* Ignore auto-play errors */ });
+      clone.play().catch(() => { /* Ignore auto-play errors */ });
     }
   }
 

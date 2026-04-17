@@ -12,6 +12,7 @@ import {
   Check,
   Loader2,
   ShieldAlert,
+  X,
 } from "lucide-react";
 import { BackButton } from "@/components/BackButton";
 import { APIClient } from "@/api/client";
