@@ -1,5 +1,5 @@
 import { Board } from '../game/Board';
-import { COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor } from './Constants';
+import { COLS, TOTAL_ROWS, PuyoColor } from './Constants';
 import { SettingsManager } from './SettingsManager';
 
 import { SoundManager } from './SoundManager';
@@ -127,6 +127,10 @@ export class GameEngine {
     // These override SettingsManager values during replay to match the original game
     public replaySDF: number = 10;
     public replaySoftDropProtection: boolean = true;
+
+    // When true, engine.update() will NOT call processReplayFrame() internally.
+    // Used by ReplaySimulator which drives input application externally.
+    public externalReplayControl: boolean = false;
 
     constructor(seed?: number) {
         // If no seed provided, generate one
@@ -326,8 +330,8 @@ export class GameEngine {
         this.dt = dt;
         this.frameCount++;
 
-        // Process Replay Inputs if active
-        if (this.isReplaying) {
+        // Process Replay Inputs if active (skip when externally driven by ReplaySimulator)
+        if (this.isReplaying && !this.externalReplayControl) {
             this.processReplayFrame();
         }
 
@@ -479,9 +483,11 @@ export class GameEngine {
 
             // Check Death Condition (blocked spawn point)
             // We check this BEFORE placing the new piece.
-            // If the X marker (Col 2, Row HIDDEN_ROWS) is occupied, Game Over.
+            // Death triggers when the topmost hidden row at the spawn column is occupied.
+            // This allows players to stack into both hidden rows (0 and 1) as buffer,
+            // and only die when there's absolutely no room left.
             const DEATH_COL = 2;
-            const DEATH_ROW = HIDDEN_ROWS;
+            const DEATH_ROW = 0; // Topmost row — 2 hidden rows of buffer above visible board
             if (this.board.grid[DEATH_COL][DEATH_ROW] !== PuyoColor.None) {
                 this.changeState(GameState.GAMEOVER);
                 return;

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Gamepad2 } from "lucide-react";
 import { SettingsManager } from "@/core/SettingsManager";
 import { SoundManager } from "@/core/SoundManager";
+import { BGMManager } from "@/core/BGMManager";
 
 interface SettingsScreenProps {
   onOpenControls: () => void;
@@ -43,6 +44,9 @@ export function SettingsScreen({
 
     if (key === "masterVolume" || key === "sfxVolume") {
       SoundManager.updateActiveVolumes();
+    }
+    if (key === "masterVolume" || key === "bgmVolume") {
+      BGMManager.updateVolume();
     }
   };
 

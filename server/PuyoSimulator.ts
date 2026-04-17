@@ -481,9 +481,9 @@ export class PuyoSimulator {
       const next = this.nextPieces.shift()!;
       this.fillNextQueue();
 
-      // Death check: grid[2][HIDDEN_ROWS] blocked
+      // Death check: grid[2][0] blocked (topmost row — allows 2 hidden buffer rows)
       const DEATH_COL = 2;
-      const DEATH_ROW = HIDDEN_ROWS;
+      const DEATH_ROW = 0;
       if (this.board.grid[DEATH_COL][DEATH_ROW] !== PuyoColor.None) {
         this.changeState(SimState.GAMEOVER);
         return;

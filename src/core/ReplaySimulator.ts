@@ -108,6 +108,10 @@ export class ReplaySimulator {
         const engine2 = new GameEngine(seed);
         engine1.isReplaying = true;
         engine2.isReplaying = true;
+        // Prevent engine.update() from calling processReplayFrame() internally;
+        // this simulator drives input application externally via executeInput().
+        engine1.externalReplayControl = true;
+        engine2.externalReplayControl = true;
 
         // Apply recorded settings for deterministic replay
         // Falls back to defaults for replays recorded before settings were saved
@@ -142,21 +146,28 @@ export class ReplaySimulator {
         try {
             // Simulate frame by frame
             while (currentFrame < maxFrames) {
-                // 1. Advance both engines by exactly 1 logical frame
-                engine1.update(1.0);
-                engine2.update(1.0);
                 currentFrame++;
 
-                // 2. Process inputs for this frame (AFTER engine update, matching live game)
+                // 1. Process inputs BEFORE engine update.
+                // In the live game: engine.update() runs → handleInput() runs → inputs are recorded.
+                // The server records the input at the current room.frameCount (post-tick).
+                // So an input at frame N was executed by the player AFTER engine frame N ran.
+                // When the next engine.update() (frame N+1) runs, the input's effect is already
+                // applied (movePiece/rotate/etc. mutated the engine state directly).
+                // Therefore: apply inputs for frame N BEFORE running engine.update() for frame N+1.
                 while (inputCursor < sortedInputs.length) {
                     const input = sortedInputs[inputCursor];
-                    if (input.f <= currentFrame) {
+                    if (input.f < currentFrame) {
                         this.executeInput(input, engine1, engine2);
                         inputCursor++;
                     } else {
                         break;
                     }
                 }
+
+                // 2. Advance both engines by exactly 1 logical frame
+                engine1.update(1.0);
+                engine2.update(1.0);
 
                 // 3. Capture snapshot
                 snapshots.push({

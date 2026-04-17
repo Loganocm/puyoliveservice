@@ -160,12 +160,23 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
-  // Delete matches referencing this user first (foreign key constraints)
-  await prisma.match.deleteMany({
-    where: { OR: [{ player1_id: id }, { player2_id: id }, { winner_id: id }, { loser_id: id }] }
-  });
+  // Delete all dependent records before deleting the user (foreign key constraints)
+  // Order matters: clear all tables that reference users.id
+  await prisma.$transaction([
+    // Login logs
+    (prisma as any).loginLog.deleteMany({ where: { user_id: id } }),
+    // Bans
+    (prisma as any).ban.deleteMany({ where: { user_id: id } }),
+    // Audit logs (admin_id references users)
+    (prisma as any).auditLog.deleteMany({ where: { admin_id: id } }),
+    // Matches (all four FK columns)
+    prisma.match.deleteMany({
+      where: { OR: [{ player1_id: id }, { player2_id: id }, { winner_id: id }, { loser_id: id }] }
+    }),
+    // Finally delete the user
+    prisma.user.delete({ where: { id } }),
+  ]);
 
-  await prisma.user.delete({ where: { id } });
   res.json({ success: true, deleted: user.username });
 }));
 

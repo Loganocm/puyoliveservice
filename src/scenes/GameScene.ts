@@ -855,7 +855,7 @@ export class GameScene implements IScene {
                     state === GameState.CHECK_MATCH || state === GameState.SPAWN) {
 
                     if (this.engine.isReplaying) {
-                        this.engine.processReplayFrame();
+                        // Engine handles processReplayFrame() internally in update()
                     } else {
                         // Only handle input if NOT paused (Menu closed)
                         if (!this.isPaused) {
