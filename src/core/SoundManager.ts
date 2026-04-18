@@ -15,6 +15,7 @@ import combo6Url from '../resources/soundeffects/combo6.wav';
 import combo7Url from '../resources/soundeffects/combo7.wav'; // Use for 7+
 
 import { SettingsManager } from './SettingsManager';
+import { connectToContext } from './AudioContext';
 
 export class SoundManager {
   private static sounds: Map<string, HTMLAudioElement> = new Map();
@@ -57,6 +58,8 @@ export class SoundManager {
       // Fix audio lag by cloning the Audio node. This allows rapid-fire overlaps without resetting the buffer
       const clone = sound.cloneNode() as HTMLAudioElement;
       clone.volume = Math.max(0, Math.min(1, volume));
+      // Route through shared AudioContext for Discord/OBS screen share capture
+      connectToContext(clone);
       clone.play().catch(() => { /* Ignore auto-play errors */ });
     }
   }

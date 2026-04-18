@@ -1,5 +1,6 @@
 import { SettingsManager } from './SettingsManager';
 import { GameEvents } from './GameEvents';
+import { connectToContext } from './AudioContext';
 
 export type BGMContext = 'menu' | 'game' | 'none';
 
@@ -156,6 +157,8 @@ export class BGMManager {
     audio.loop = false;
     audio.volume = 0;
     audio.preload = 'auto';
+    // Route through shared AudioContext for Discord/OBS screen share capture
+    connectToContext(audio);
 
     audio.onended = () => {
       this.next();
