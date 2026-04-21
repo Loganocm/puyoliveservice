@@ -33,7 +33,16 @@ export interface MatchStats {
     player1GarbageSent: number;
     player2GarbageSent: number;
 }
-// V2 Replay System - Frame-based input recording for deterministic playback
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V3 Replay Types — Frame-based, fully deterministic replay recording.
+// Records ALL randomness sources, ALL game-affecting settings, ALL state
+// transitions, and periodic state hashes for 1:1 ultra-accurate replays.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Current engine version — bump when game logic changes affect determinism */
+export const ENGINE_VERSION = '1.0.0';
+
 export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
 // L=Left, R=Right, CW=RotateCW, CC=RotateCCW, SD=SoftDropStart, SU=SoftDropStop, HD=HardDrop, G=GarbageRecv
 
@@ -44,7 +53,63 @@ export interface ReplayInput {
     a?: number;     // Amount (for Garbage 'G')
 }
 
-export interface ReplayFile {
+// Per-player game-affecting settings
+export interface ReplayPlayerSettings {
+    sdf: number;
+    softDropProtection: boolean;
+}
+
+// Deterministic event — every state-changing moment recorded
+export type DeterministicEventType =
+    | 'spawn'           // Piece spawned (colors)
+    | 'lock'            // Piece locked (position + colors)
+    | 'match'           // Match/pop found (chain step, groups)
+    | 'garbage_drop'    // Garbage fell (column order, amount)
+    | 'chain_end'       // Chain sequence ended (stats)
+    | 'gameover'        // Game over triggered
+    | 'bag_gen';        // New piece bag generated
+
+export interface DeterministicEvent {
+    f: number;                      // Frame number
+    p: 0 | 1;                      // Player index
+    t: DeterministicEventType;     // Event type
+    d?: any;                        // Event-specific data
+}
+
+// Periodic state hash for desync detection
+export interface StateHash {
+    f: number;              // Frame number
+    h: [string, string];    // Board hash per player [p0, p1]
+}
+
+// V3 Replay File — the definitive format
+export interface ReplayFileV3 {
+    version: 3;
+    engineVersion: string;
+    seed: number;
+    players: {
+        id: string;
+        username: string;
+        userId?: number;
+        elo?: number;
+    }[];
+    winner: 0 | 1 | null;
+    duration: number;
+    fps: number;
+    inputs: ReplayInput[];
+    playerSettings: [ReplayPlayerSettings, ReplayPlayerSettings];
+    roomSettings: {
+        garbageMultiplier: number;
+        marginTime: number;
+    };
+    pieceSequences: [number[], number[]];
+    garbageColumns: [number[][], number[][]];
+    events: DeterministicEvent[];
+    stateHashes: StateHash[];
+}
+
+// Legacy V2 format (kept for type reference — NOT generated anymore)
+export interface ReplayFileV2 {
     version: 2;
     seed: number;
     players: {
@@ -53,9 +118,9 @@ export interface ReplayFile {
         userId?: number;
         elo?: number;
     }[];
-    winner: 0 | 1 | null;   // Player index or null
-    duration: number;        // Total frames
-    fps: number;             // Frames per second (for timing)
+    winner: 0 | 1 | null;
+    duration: number;
+    fps: number;
     inputs: ReplayInput[];
     settings?: {
         sdf: number;
@@ -91,14 +156,31 @@ export class GameRoom {
     // Server-authoritative game simulators (one per player)
     simulators: Map<string, any> = new Map();
 
-    // V2 Replay Data
+    // V3 Replay Data
     replayInputs: ReplayInput[] = [];
     frameCount: number = 0;
     replayFPS: number = 60;
     seed: number = 0;
 
-    // Player settings recorded at match start (for replay determinism)
+    // V3: Per-player settings (keyed by socket ID, stored individually)
+    playerSettingsMap: Map<string, ReplayPlayerSettings> = new Map();
+
+    // Legacy compat: single playerSettings reference (deprecated, kept for V2 fallback)
     playerSettings: { sdf: number; softDropProtection: boolean } | null = null;
+
+    // V3: Deterministic event log — every state-changing event recorded
+    deterministicEvents: DeterministicEvent[] = [];
+
+    // V3: Periodic state hashes — for desync detection during replay playback
+    stateHashes: StateHash[] = [];
+
+    // V3: Piece sequences per player — explicit record of every piece spawned
+    // Flattened: [main, sub, main, sub, ...] per player
+    pieceSequences: [number[], number[]] = [[], []];
+
+    // V3: Garbage column order log per player
+    // Each inner array is the column order used for one garbage drop
+    garbageColumns: [number[][], number[][]] = [[], []];
 
     // Anti-cheat: tracks last time player 0 sent a tick_frame
     // If this goes stale during an active match, player 0 is forfeited
@@ -186,6 +268,14 @@ export class GameRoom {
         this.simulators.clear();
         this.stopTickLoop(); // Clear any leftover loop from previous game
         this.lastTickFrame = Date.now(); // Initialize tick heartbeat
+
+        // V3: Reset all tracking arrays
+        this.deterministicEvents = [];
+        this.stateHashes = [];
+        this.pieceSequences = [[], []];
+        this.garbageColumns = [[], []];
+        this.playerSettingsMap.clear();
+
         // Initialize heartbeat + game state tracking for all players
         const now = Date.now();
         for (const player of this.players.values()) {
@@ -198,7 +288,7 @@ export class GameRoom {
         this.recordReplayEvent('game_start', undefined, { seed: this.seed });
     }
 
-    // V2: Record frame-based input
+    // Record frame-based input
     recordInput(playerIndex: 0 | 1, inputType: InputType, amount?: number) {
         this.replayInputs.push({
             f: this.frameCount,
@@ -206,6 +296,29 @@ export class GameRoom {
             i: inputType,
             a: amount
         });
+    }
+
+    // V3: Record a deterministic event
+    recordDeterministicEvent(playerIndex: 0 | 1, type: DeterministicEventType, data?: any) {
+        this.deterministicEvents.push({
+            f: this.frameCount,
+            p: playerIndex,
+            t: type,
+            d: data,
+        });
+    }
+
+    // V3: Record periodic state hash (called from server tick loop)
+    recordStateHash(hash0: string, hash1: string) {
+        this.stateHashes.push({
+            f: this.frameCount,
+            h: [hash0, hash1],
+        });
+    }
+
+    // V3: Record player settings (per-player, keyed by socket ID)
+    recordPlayerSettings(socketId: string, sdf: number, softDropProtection: boolean) {
+        this.playerSettingsMap.set(socketId, { sdf, softDropProtection });
     }
 
     // Get player index from socket ID (supports >2 players)
@@ -219,23 +332,39 @@ export class GameRoom {
         this.frameCount++;
     }
 
-    // Build V2 replay file
-    buildReplayFile(winnerIndex: 0 | 1 | null): ReplayFile {
+    // Build V3 replay file — records everything for 1:1 deterministic playback
+    buildReplayFile(winnerIndex: 0 | 1 | null): ReplayFileV3 {
         const playersArr = Array.from(this.players.values());
+        const playerIds = Array.from(this.players.keys());
+
+        // Resolve per-player settings (fallback to defaults if not recorded)
+        const defaultSettings: ReplayPlayerSettings = { sdf: 10, softDropProtection: true };
+        const p0Settings = this.playerSettingsMap.get(playerIds[0]) ?? defaultSettings;
+        const p1Settings = this.playerSettingsMap.get(playerIds[1]) ?? defaultSettings;
+
         return {
-            version: 2,
+            version: 3,
+            engineVersion: ENGINE_VERSION,
             seed: this.seed,
             players: playersArr.map(p => ({
                 id: p.id,
                 username: p.name,
                 userId: p.userId,
-                elo: undefined // Could be added if tracked
+                elo: undefined
             })),
             winner: winnerIndex,
             duration: this.frameCount,
             fps: this.replayFPS,
             inputs: this.replayInputs,
-            settings: this.playerSettings ?? undefined,
+            playerSettings: [p0Settings, p1Settings],
+            roomSettings: {
+                garbageMultiplier: this.settings.garbageMultiplier,
+                marginTime: this.settings.marginTime,
+            },
+            pieceSequences: this.pieceSequences,
+            garbageColumns: this.garbageColumns,
+            events: this.deterministicEvents,
+            stateHashes: this.stateHashes,
         };
     }
 
@@ -332,6 +461,14 @@ export class GameRoom {
         this.replayLog = [];
         this.simulators.clear();
         this.currentGame++;
+
+        // V3: Reset all tracking arrays
+        this.deterministicEvents = [];
+        this.stateHashes = [];
+        this.pieceSequences = [[], []];
+        this.garbageColumns = [[], []];
+        this.playerSettingsMap.clear();
+
         // Reset all player ready states
         for (const player of this.players.values()) {
             player.ready = false;

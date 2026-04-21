@@ -157,9 +157,44 @@ function setupSimulators(
   room.simulators.clear();
   room.stopTickLoop();
 
+  // V3: Hash interval — compute state hashes every N frames (~5 seconds)
+  const HASH_INTERVAL = 300;
+
   for (const pid of playerIds) {
     const sim = new PuyoSimulator(room.seed);
+    const playerIndex = room.getPlayerIndex(pid) as 0 | 1;
     room.simulators.set(pid, sim);
+
+    // V3: Wire deterministic event hooks to room recording
+    sim.onPieceSpawn = (mainColor: number, subColor: number) => {
+      room.recordDeterministicEvent(playerIndex, 'spawn', { main: mainColor, sub: subColor });
+      // Piece sequence is tracked directly on the simulator (sim.spawnedPieces)
+    };
+
+    sim.onPieceLock = (x: number, y: number, rot: number, mainColor: number, subColor: number) => {
+      room.recordDeterministicEvent(playerIndex, 'lock', { x, y, rot, main: mainColor, sub: subColor });
+    };
+
+    sim.onMatchFound = (groups: { c: number; r: number }[][], chainStep: number) => {
+      room.recordDeterministicEvent(playerIndex, 'match', { chainStep, groupCount: groups.length });
+    };
+
+    sim.onGarbageDrop = (columnOrder: number[], amount: number) => {
+      room.recordDeterministicEvent(playerIndex, 'garbage_drop', { cols: columnOrder, amount });
+      // Garbage column log is tracked directly on the simulator (sim.garbageColumnLog)
+    };
+
+    sim.onChainEnd = (maxChain: number, score: number, puyosCleared: number) => {
+      room.recordDeterministicEvent(playerIndex, 'chain_end', { maxChain, score, puyosCleared });
+    };
+
+    sim.onSimGameOver = () => {
+      room.recordDeterministicEvent(playerIndex, 'gameover', {});
+    };
+
+    sim.onBagGenerated = (_bag: { main: number; sub: number }[]) => {
+      room.recordDeterministicEvent(playerIndex, 'bag_gen', { count: _bag.length });
+    };
 
     // When this player's sim generates garbage...
     sim.onGarbageGenerated = (amount: number) => {
@@ -186,6 +221,12 @@ function setupSimulators(
   // Advances simulators at ~60fps entirely on the server.
   room.tickInterval = setInterval(() => {
     if (room.matchConcluded) {
+      // V3: Capture final piece sequences and garbage column logs before stopping
+      for (const [pid, sim] of room.simulators) {
+        const pIdx = room.getPlayerIndex(pid) as 0 | 1;
+        room.pieceSequences[pIdx] = [...(sim as PuyoSimulator).spawnedPieces];
+        room.garbageColumns[pIdx] = [...(sim as PuyoSimulator).garbageColumnLog];
+      }
       room.stopTickLoop();
       return;
     }
@@ -200,6 +241,17 @@ function setupSimulators(
         // room.stopTickLoop();
         // onPlayerDeath(pid);
         // break;
+      }
+    }
+
+    // V3: Compute periodic state hashes for desync detection
+    if (room.frameCount > 0 && room.frameCount % HASH_INTERVAL === 0) {
+      const sims = Array.from(room.simulators.values()) as PuyoSimulator[];
+      if (sims.length >= 2) {
+        room.recordStateHash(
+          sims[0].computeBoardHash(),
+          sims[1].computeBoardHash()
+        );
       }
     }
   }, 16); 
@@ -696,7 +748,8 @@ io.on('connection', (socket: Socket) => {
     });
   });
 
-  // V2 Replay: Record player settings at match start (for deterministic replays)
+  // V3 Replay: Record player settings at match start (for deterministic replays)
+  // Each player's settings are recorded individually — different players can have different SDF.
   socket.on('record_settings', (data: { roomId: string, sdf: number, softDropProtection: boolean }) => {
     if (!data || typeof data.roomId !== 'string') return;
     if (typeof data.sdf !== 'number' || typeof data.softDropProtection !== 'boolean') return;
@@ -704,12 +757,15 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
-    // Only record once (first player to send wins)
-    if (!room.playerSettings) {
-      room.playerSettings = {
-        sdf: Math.max(1, Math.min(40, Math.round(data.sdf))),
-        softDropProtection: data.softDropProtection,
-      };
+    // V3: Store per-player (each player records their own settings)
+    const sanitizedSdf = Math.max(1, Math.min(40, Math.round(data.sdf)));
+    room.recordPlayerSettings(socket.id, sanitizedSdf, data.softDropProtection);
+
+    // Also apply to the player's server-side simulator for accurate simulation
+    const sim = room.simulators.get(socket.id) as PuyoSimulator | undefined;
+    if (sim) {
+      sim.sdf = sanitizedSdf;
+      sim.softDropProtection = data.softDropProtection;
     }
   });
 
@@ -870,21 +926,13 @@ io.on('connection', (socket: Socket) => {
             // Save replay for all match conclusions that have recorded inputs
             const winnerIndex = room.getPlayerIndex(winnerSocketId) as 0 | 1;
             if (room.replayInputs.length > 0) {
+              // V3: Capture final piece sequences and garbage column logs before building
+              for (const [pid, sim] of room.simulators) {
+                const pIdx = room.getPlayerIndex(pid) as 0 | 1;
+                room.pieceSequences[pIdx] = [...(sim as PuyoSimulator).spawnedPieces];
+                room.garbageColumns[pIdx] = [...(sim as PuyoSimulator).garbageColumnLog];
+              }
               replayData = room.buildReplayFile(winnerIndex);
-            } else if (reason === 'lost') {
-              // Legacy fallback (only for clean losses without V2 inputs)
-              replayData = {
-                version: 1,
-                seed: room.matchStats?.startedAt.getTime() || Date.now(),
-                duration: room.getMatchDuration() || 0,
-                winnerId: winner.userId,
-                players: Array.from(room.players.values()).map(p => ({
-                  id: p.id,
-                  userId: p.userId,
-                  name: p.name
-                })),
-                events: room.replayLog
-              };
             } else {
               replayData = undefined;
             }

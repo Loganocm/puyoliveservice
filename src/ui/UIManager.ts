@@ -5,7 +5,7 @@ import { SceneManager } from '../core/SceneManager';
 import { GameScene } from '../scenes/GameScene';
 import { MenuScene } from '../scenes/MenuScene';
 import { ReplayScene } from '../scenes/ReplayScene';
-import { isReplayFileV2 } from '../core/ReplayEngine';
+import { isReplayFileV3 } from '../core/ReplayEngine';
 import { ControlsManager } from '../core/ControlsManager';
 import type { GameAction } from '../core/ControlsManager';
 import { SoundManager } from '../core/SoundManager';
@@ -479,16 +479,15 @@ export class UIManager {
                 return;
             }
 
-            // V2 Format: Use new ReplayScene with dual-board view
-            if (isReplayFileV2(replayData)) {
+            // V3 Format: Use ReplayScene with dual-board view and full validation
+            if (isReplayFileV3(replayData)) {
                 this.hideAll();
                 SceneManager.changeScene(new ReplayScene(replayData));
                 return;
             }
 
-            // V1/Legacy replays are no longer supported with the new replay viewer
-            // They used time-based events which can't be deterministically replayed
-            alert("This replay was recorded with an older format and cannot be viewed.\n\nNew replays will use the improved replay system!");
+            // All non-V3 replays (V1, V2, legacy) are blocked — they are known to be broken/inaccurate
+            alert("This replay was recorded with an older format that has known accuracy issues and cannot be viewed.\n\nNew matches will use the improved V3 replay system with 1:1 accurate playback!");
 
         } catch (e) {
             console.error(e);

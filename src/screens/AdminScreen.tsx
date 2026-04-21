@@ -255,7 +255,8 @@ export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onW
               const { SceneManager } = await import("@/core/SceneManager");
               const { ReplayScene } = await import("@/scenes/ReplayScene");
               const mockReplayData = {
-                version: 2 as const,
+                version: 3 as const,
+                engineVersion: '1.0.0',
                 seed: 1337,
                 players: [
                   { id: "1", username: "Admin Tester 1" },
@@ -273,7 +274,16 @@ export function AdminScreen({ onBack, onWatchReplay }: { onBack: () => void, onW
                   { f: 50, p: 1 as const, i: "HD" as const },
                   { f: 60, p: 0 as const, i: "L" as const },
                   { f: 62, p: 0 as const, i: "HD" as const }
-                ]
+                ],
+                playerSettings: [
+                  { sdf: 10, softDropProtection: true },
+                  { sdf: 10, softDropProtection: true }
+                ] as [{ sdf: number; softDropProtection: boolean }, { sdf: number; softDropProtection: boolean }],
+                roomSettings: { garbageMultiplier: 1, marginTime: 96 },
+                pieceSequences: [[], []] as [number[], number[]],
+                garbageColumns: [[], []] as [number[][], number[][]],
+                events: [],
+                stateHashes: [],
               };
               SceneManager.changeScene(new ReplayScene(mockReplayData));
               onWatchReplay?.();

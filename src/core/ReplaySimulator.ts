@@ -1,5 +1,5 @@
 import { GameEngine, GameState } from './GameEngine';
-import type { ReplayFile, ReplayInput } from './ReplayEngine';
+import type { ReplayFileV3, ReplayInput, StateHash } from './ReplayEngine';
 import { PuyoColor, COLS } from './Constants';
 
 /**
@@ -82,6 +82,11 @@ function captureBoard(engine: GameEngine): BoardSnapshot {
 /**
  * ReplaySimulator — Pre-runs an entire replay to produce frame snapshots.
  *
+ * V3: Accepts ReplayFileV3 format with:
+ * - Per-player settings (each player's SDF/softDropProtection applied individually)
+ * - State hash validation (periodic board hashes compared to recorded values)
+ * - Desync detection and diagnostics logging
+ *
  * This is the core of the pre-rendered replay system. By running the simulation
  * upfront, we eliminate ALL forms of desync during playback. The snapshots ARE
  * the ground truth. Playback simply reads from the array.
@@ -89,9 +94,9 @@ function captureBoard(engine: GameEngine): BoardSnapshot {
  * Memory budget: ~350 bytes per frame × 2 players × ~18K frames (5 min) ≈ 6 MB
  */
 export class ReplaySimulator {
-    private replayData: ReplayFile;
+    private replayData: ReplayFileV3;
 
-    constructor(replayData: ReplayFile) {
+    constructor(replayData: ReplayFileV3) {
         this.replayData = replayData;
     }
 
@@ -113,22 +118,40 @@ export class ReplaySimulator {
         engine1.externalReplayControl = true;
         engine2.externalReplayControl = true;
 
-        // Apply recorded settings for deterministic replay
-        // Falls back to defaults for replays recorded before settings were saved
-        if ((this.replayData as any).settings) {
-            const s = (this.replayData as any).settings;
-            if (typeof s.sdf === 'number') {
-                engine1.replaySDF = s.sdf;
-                engine2.replaySDF = s.sdf;
+        // V3: Apply per-player settings for deterministic replay
+        // Each player can have different SDF/softDropProtection values.
+        const playerSettings = this.replayData.playerSettings;
+        if (playerSettings) {
+            // Player 0 settings
+            if (playerSettings[0]) {
+                if (typeof playerSettings[0].sdf === 'number') {
+                    engine1.replaySDF = playerSettings[0].sdf;
+                }
+                if (typeof playerSettings[0].softDropProtection === 'boolean') {
+                    engine1.replaySoftDropProtection = playerSettings[0].softDropProtection;
+                }
             }
-            if (typeof s.softDropProtection === 'boolean') {
-                engine1.replaySoftDropProtection = s.softDropProtection;
-                engine2.replaySoftDropProtection = s.softDropProtection;
+            // Player 1 settings (may differ from player 0)
+            if (playerSettings[1]) {
+                if (typeof playerSettings[1].sdf === 'number') {
+                    engine2.replaySDF = playerSettings[1].sdf;
+                }
+                if (typeof playerSettings[1].softDropProtection === 'boolean') {
+                    engine2.replaySoftDropProtection = playerSettings[1].softDropProtection;
+                }
             }
         }
 
         // Sort inputs by frame (safety)
         const sortedInputs = [...inputs].sort((a, b) => a.f - b.f);
+
+        // V3: Build state hash lookup for validation
+        const stateHashes = this.replayData.stateHashes || [];
+        const hashMap = new Map<number, StateHash>();
+        for (const sh of stateHashes) {
+            hashMap.set(sh.f, sh);
+        }
+        let desyncCount = 0;
 
         const snapshots: FrameSnapshot[] = [];
         let inputCursor = 0;
@@ -169,17 +192,46 @@ export class ReplaySimulator {
                 engine1.update(1.0);
                 engine2.update(1.0);
 
-                // 3. Capture snapshot
+                // 3. V3: State hash validation at checkpoints
+                const expectedHash = hashMap.get(currentFrame);
+                if (expectedHash) {
+                    const actualHash0 = engine1.computeBoardHash();
+                    const actualHash1 = engine2.computeBoardHash();
+
+                    if (actualHash0 !== expectedHash.h[0]) {
+                        desyncCount++;
+                        console.warn(
+                            `[ReplaySimulator] DESYNC DETECTED — Player 0 at frame ${currentFrame}`,
+                            `\n  Expected: ${expectedHash.h[0]}`,
+                            `\n  Actual:   ${actualHash0}`,
+                            `\n  Score: ${engine1.stats.score}, GarbageQ: ${engine1.garbageQueue}, Tray: ${engine1.nuisanceTray}`,
+                            `\n  State: ${engine1.state}, Seed: ${engine1.getSeed()}`
+                        );
+                    }
+
+                    if (actualHash1 !== expectedHash.h[1]) {
+                        desyncCount++;
+                        console.warn(
+                            `[ReplaySimulator] DESYNC DETECTED — Player 1 at frame ${currentFrame}`,
+                            `\n  Expected: ${expectedHash.h[1]}`,
+                            `\n  Actual:   ${actualHash1}`,
+                            `\n  Score: ${engine2.stats.score}, GarbageQ: ${engine2.garbageQueue}, Tray: ${engine2.nuisanceTray}`,
+                            `\n  State: ${engine2.state}, Seed: ${engine2.getSeed()}`
+                        );
+                    }
+                }
+
+                // 4. Capture snapshot
                 snapshots.push({
                     boards: [captureBoard(engine1), captureBoard(engine2)],
                 });
 
-                // 4. Report progress (every 100 frames to avoid callback overhead)
+                // 5. Report progress (every 100 frames to avoid callback overhead)
                 if (onProgress && currentFrame % 100 === 0) {
                     onProgress(Math.min(currentFrame / duration, 1.0));
                 }
 
-                // 5. Check for Game Over Truncation
+                // 6. Check for Game Over Truncation
                 if (gameEndedFrame === -1 && (engine1.state === GameState.GAMEOVER || engine2.state === GameState.GAMEOVER)) {
                     gameEndedFrame = currentFrame;
                 }
@@ -194,6 +246,17 @@ export class ReplaySimulator {
             console.error(`[ReplaySimulator] Engine 1 State: ${engine1.state}, Board Active Piece: ${engine1.activePiece ? 'Yes' : 'No'}`);
             console.error(`[ReplaySimulator] Engine 2 State: ${engine2.state}, Board Active Piece: ${engine2.activePiece ? 'Yes' : 'No'}`);
             throw new Error(`Replay parsing failed at frame ${currentFrame}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // V3: Report validation results
+        if (stateHashes.length > 0) {
+            if (desyncCount === 0) {
+                console.log(`[ReplaySimulator] ✓ All ${stateHashes.length} state hashes validated — replay is 1:1 accurate`);
+            } else {
+                console.error(`[ReplaySimulator] ✗ ${desyncCount} desync(s) detected across ${stateHashes.length} checkpoints`);
+            }
+        } else {
+            console.log(`[ReplaySimulator] No state hashes in replay data — validation skipped`);
         }
 
         onProgress?.(1.0);

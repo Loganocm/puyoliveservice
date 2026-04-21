@@ -215,8 +215,9 @@ export class PuyoSimulator {
   private readonly lockDelay = 30;
   private readonly POP_ANIM_DURATION = 18;
   private readonly FALL_STEP_DELAY = 10;
-  private readonly sdf = 10; // Soft Drop Factor (matches SettingsManager default)
-  private readonly softDropProtection = true;
+  // V3: Per-player configurable settings (set by server from recorded player prefs)
+  sdf = 10; // Soft Drop Factor (matches SettingsManager default)
+  softDropProtection = true;
 
   // Input state
   private _softDrop = false;
@@ -240,6 +241,22 @@ export class PuyoSimulator {
   onGarbageGenerated?: (amount: number) => void;
   onGarbageOffset?: (amount: number) => void;
 
+  // ── V3 Replay Events — deterministic event hooks ──
+  // These fire at every state-changing moment so the server can record them.
+  onPieceSpawn?: (mainColor: number, subColor: number) => void;
+  onPieceLock?: (x: number, y: number, rot: number, mainColor: number, subColor: number) => void;
+  onMatchFound?: (groups: { c: number; r: number }[][], chainStep: number) => void;
+  onGarbageDrop?: (columnOrder: number[], amount: number) => void;
+  onChainEnd?: (maxChain: number, score: number, puyosCleared: number) => void;
+  onSimGameOver?: () => void;
+  onBagGenerated?: (bag: { main: number; sub: number }[]) => void;
+
+  // V3: Piece sequence tracking (explicit log of every piece spawned)
+  spawnedPieces: number[] = []; // Flattened: [main, sub, main, sub, ...]
+
+  // V3: Garbage column order log (each entry is the column order for one garbage drop)
+  garbageColumnLog: number[][] = [];
+
   constructor(seed: number) {
     this.seed = seed;
     this.board = new SimBoard();
@@ -252,6 +269,7 @@ export class PuyoSimulator {
 
     // Generate initial bag
     this.currentBag = this.generateBag(true);
+    this.onBagGenerated?.(this.currentBag);
     this.fillNextQueue();
   }
 
@@ -331,6 +349,9 @@ export class PuyoSimulator {
       const j = Math.floor(this.random() * (i + 1));
       [deck[i], deck[j]] = [deck[j], deck[i]];
     }
+
+    // V3: Notify bag generation
+    this.onBagGenerated?.(deck);
     return deck;
   }
 
@@ -486,6 +507,7 @@ export class PuyoSimulator {
       const DEATH_ROW = 0;
       if (this.board.grid[DEATH_COL][DEATH_ROW] !== PuyoColor.None) {
         this.changeState(SimState.GAMEOVER);
+        this.onSimGameOver?.();
         return;
       }
 
@@ -496,6 +518,10 @@ export class PuyoSimulator {
         mainColor: next.main,
         subColor: next.sub,
       };
+
+      // V3: Record piece spawn
+      this.spawnedPieces.push(next.main, next.sub);
+      this.onPieceSpawn?.(next.main, next.sub);
 
       this.stats.chainCount = 0;
       this.lockTimer = 0;
@@ -587,11 +613,15 @@ export class PuyoSimulator {
     // Validate bounds — out-of-bounds lock = death
     if (!this.board.isValid(x, y) || !this.board.isValid(sub.x, sub.y)) {
       this.changeState(SimState.GAMEOVER);
+      this.onSimGameOver?.();
       return;
     }
 
     this.board.grid[x][y] = mainColor;
     this.board.grid[sub.x][sub.y] = subColor;
+
+    // V3: Record piece lock
+    this.onPieceLock?.(x, y, rot, mainColor, subColor);
 
     this.activePiece = null;
     this._softDrop = false;
@@ -644,6 +674,9 @@ export class PuyoSimulator {
       const garbage = this.board.findNeighborGarbage(matches);
       this.calculateScore(matches);
 
+      // V3: Record match event before garbage is added to list
+      this.onMatchFound?.(matches, this.stats.chainCount + 1);
+
       // Include garbage puyos in removal list
       if (garbage.length > 0) {
         matches.push(garbage);
@@ -656,6 +689,9 @@ export class PuyoSimulator {
     } else {
       // Chain ended — all clear check
       if (this.stats.chainCount > 0) {
+        // V3: Record chain end event
+        this.onChainEnd?.(this.stats.maxChain, this.stats.score, this.stats.puyosCleared);
+
         let boardEmpty = true;
         outer: for (let c = 0; c < COLS; c++) {
           for (let r = 0; r < TOTAL_ROWS; r++) {
@@ -713,6 +749,10 @@ export class PuyoSimulator {
     for (let i = 0; i < remainder; i++) {
       dropsPerCol[cols[i]]++;
     }
+
+    // V3: Record garbage column order and log it
+    this.garbageColumnLog.push([...cols]);
+    this.onGarbageDrop?.([...cols], amount);
 
     this.garbageQueue -= amount;
 
@@ -878,5 +918,30 @@ export class PuyoSimulator {
 
   get isGameOver(): boolean {
     return this.state === SimState.GAMEOVER;
+  }
+
+  // ═══ V3: Board Hash (FNV-1a) for periodic state validation ═══
+  // Must produce identical output to client GameEngine.computeBoardHash()
+  computeBoardHash(): string {
+    let hash = 0x811c9dc5; // FNV offset basis
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < TOTAL_ROWS; r++) {
+        hash ^= this.board.grid[c][r];
+        hash = Math.imul(hash, 0x01000193); // FNV prime
+      }
+    }
+    // Include score and garbage state for full validation
+    hash ^= this.stats.score;
+    hash = Math.imul(hash, 0x01000193);
+    hash ^= this.garbageQueue;
+    hash = Math.imul(hash, 0x01000193);
+    hash ^= this.nuisanceTray;
+    hash = Math.imul(hash, 0x01000193);
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  }
+
+  /** Expose current PRNG state for debugging */
+  getSeed(): number {
+    return this.seed;
   }
 }

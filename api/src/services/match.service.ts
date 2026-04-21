@@ -212,11 +212,13 @@ export class MatchService {
 
       const isWinner = m.winner_id === userId;
 
-      // Check if replay_data exists and is a valid V2 replay
+      // Check if replay_data exists and is a valid V3 replay
+      // V2 and older replays are rejected — they have known accuracy issues
       const rd = m.replay_data;
       const has_valid_replay = !!(
         rd &&
-        rd.version === 2 &&
+        rd.version === 3 &&
+        typeof rd.engineVersion === 'string' &&
         Array.isArray(rd.inputs) &&
         rd.inputs.length > 0 &&
         Number.isFinite(rd.seed) &&
@@ -280,7 +282,8 @@ export class MatchService {
       const rd = m.replay_data;
       const has_valid_replay = !!(
         rd &&
-        rd.version === 2 &&
+        rd.version === 3 &&
+        typeof rd.engineVersion === 'string' &&
         Array.isArray(rd.inputs) &&
         rd.inputs.length > 0 &&
         Number.isFinite(rd.seed) &&

@@ -1,7 +1,18 @@
 import type { BoardSnapshot, FrameSnapshot } from './ReplaySimulator';
 import { ReplaySimulator } from './ReplaySimulator';
 
-// Replay input types (must match server)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Replay V3 Data Model
+// Records ALL sources of randomness, ALL game-affecting settings,
+// ALL state-changing events, frame-accurate player inputs, periodic state
+// hashes, and engine version for 1:1 ultra-accurate deterministic replays.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Current engine version. Bump this whenever game logic changes that affect determinism. */
+export const ENGINE_VERSION = '1.0.0';
+
+// --- Input Types (must match server) ---
+
 export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
 
 export interface ReplayInput {
@@ -11,6 +22,8 @@ export interface ReplayInput {
     a?: number;     // Amount (for Garbage 'G')
 }
 
+// --- Player Info ---
+
 export interface ReplayPlayer {
     id: string;
     username: string;
@@ -18,7 +31,84 @@ export interface ReplayPlayer {
     elo?: number;
 }
 
-export interface ReplayFile {
+// --- Per-Player Settings (game-affecting, recorded at match start) ---
+
+export interface ReplayPlayerSettings {
+    sdf: number;                    // Soft Drop Factor
+    softDropProtection: boolean;    // Require fresh press on spawn
+}
+
+// --- Room Settings (game-affecting) ---
+
+export interface ReplayRoomSettings {
+    garbageMultiplier: number;
+    marginTime: number;
+}
+
+// --- Deterministic Event Log ---
+// Every state-changing event is recorded so replays can be audited
+// and debugged without relying solely on PRNG determinism.
+
+export type DeterministicEventType =
+    | 'spawn'           // Piece spawned (records colors)
+    | 'lock'            // Piece locked (records position)
+    | 'match'           // Match found (records groups)
+    | 'garbage_drop'    // Garbage fell (records column order)
+    | 'chain_end'       // Chain sequence ended (records stats)
+    | 'gameover'        // Game over triggered
+    | 'bag_gen';        // New piece bag generated
+
+export interface DeterministicEvent {
+    f: number;                      // Frame number
+    p: 0 | 1;                      // Player index
+    t: DeterministicEventType;     // Event type
+    d?: any;                        // Event-specific data
+}
+
+// --- State Hash (for periodic validation & desync detection) ---
+
+export interface StateHash {
+    f: number;              // Frame number
+    h: [string, string];    // Board hash per player [p0, p1]
+}
+
+// --- V3 Replay File Format ---
+// The definitive format for 1:1 accurate replays.
+
+export interface ReplayFileV3 {
+    version: 3;
+    engineVersion: string;                              // Logic fingerprint (e.g. "1.0.0")
+    seed: number;                                       // Initial PRNG seed
+    players: ReplayPlayer[];
+    winner: 0 | 1 | null;
+    duration: number;                                   // Total frames
+    fps: number;                                        // Frames per second (60)
+    inputs: ReplayInput[];                              // Frame-accurate player inputs
+
+    // Per-player game-affecting settings (each player may have different SDF)
+    playerSettings: [ReplayPlayerSettings, ReplayPlayerSettings];
+
+    // Room-level game-affecting settings
+    roomSettings: ReplayRoomSettings;
+
+    // Explicit piece sequences — immune to PRNG changes
+    // Flattened: [main0, sub0, main1, sub1, ...] per player
+    pieceSequences: [number[], number[]];
+
+    // Garbage column shuffle results per garbage drop event per player
+    // Each inner array is the column order used for that garbage drop
+    garbageColumns: [number[][], number[][]];
+
+    // All state-changing events for auditing and debugging
+    events: DeterministicEvent[];
+
+    // Periodic board state hashes for validation
+    stateHashes: StateHash[];
+}
+
+// --- Legacy V2 Format (kept for type reference only — NOT playable) ---
+
+export interface ReplayFileV2 {
     version: 2;
     seed: number;
     players: ReplayPlayer[];
@@ -26,11 +116,30 @@ export interface ReplayFile {
     duration: number;
     fps: number;
     inputs: ReplayInput[];
+    settings?: {
+        sdf: number;
+        softDropProtection: boolean;
+    };
 }
 
-// Check if data is V2 format
-export function isReplayFileV2(data: any): data is ReplayFile {
+// --- Type alias: the engine only accepts V3 for playback ---
+export type ReplayFile = ReplayFileV3;
+
+// --- Type Guards ---
+
+/** Check if data is legacy V2 format (broken, not playable) */
+export function isReplayFileV2(data: any): data is ReplayFileV2 {
     return data && data.version === 2 && Array.isArray(data.inputs);
+}
+
+/** Check if data is V3 format (current, playable) */
+export function isReplayFileV3(data: any): data is ReplayFileV3 {
+    return data && data.version === 3 && Array.isArray(data.inputs) && typeof data.engineVersion === 'string';
+}
+
+/** Check if data is any valid replay format (for UI detection) */
+export function isValidReplayFile(data: any): boolean {
+    return isReplayFileV2(data) || isReplayFileV3(data);
 }
 
 /**
@@ -42,9 +151,11 @@ export function isReplayFileV2(data: any): data is ReplayFile {
  *
  * Playback just advances a frame counter. Seeking is instant (array index).
  * Memory is freed when dispose() is called on exit.
+ *
+ * V3: Only accepts ReplayFileV3. Old V2 replays are blocked at the UI layer.
  */
 export class ReplayEngine {
-    private replayData: ReplayFile;
+    private replayData: ReplayFileV3;
     private snapshots: FrameSnapshot[] | null = null;
     private currentFrame: number = 0;
     private accumulator: number = 0;
@@ -61,7 +172,7 @@ export class ReplayEngine {
     public onLoadProgress?: (progress: number) => void;
     public onLoaded?: () => void;
 
-    constructor(replayData: ReplayFile) {
+    constructor(replayData: ReplayFileV3) {
         this.replayData = replayData;
 
         // Safety: ensure duration is valid

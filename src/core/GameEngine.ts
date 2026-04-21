@@ -1119,4 +1119,29 @@ export class GameEngine {
         this.stateTimer = 0;
         this.onStateChange?.(newState);
     }
+
+    // ═══ V3 Replay: Board Hash (FNV-1a) for periodic state validation ═══
+    // Must produce identical output to server PuyoSimulator.computeBoardHash()
+    computeBoardHash(): string {
+        let hash = 0x811c9dc5; // FNV offset basis
+        for (let c = 0; c < COLS; c++) {
+            for (let r = 0; r < TOTAL_ROWS; r++) {
+                hash ^= this.board.grid[c][r];
+                hash = Math.imul(hash, 0x01000193); // FNV prime
+            }
+        }
+        // Include score and garbage state for full validation
+        hash ^= this.stats.score;
+        hash = Math.imul(hash, 0x01000193);
+        hash ^= this.garbageQueue;
+        hash = Math.imul(hash, 0x01000193);
+        hash ^= this.nuisanceTray;
+        hash = Math.imul(hash, 0x01000193);
+        return (hash >>> 0).toString(16).padStart(8, '0');
+    }
+
+    /** Expose current PRNG state for debugging */
+    getSeed(): number {
+        return this.seed;
+    }
 }
