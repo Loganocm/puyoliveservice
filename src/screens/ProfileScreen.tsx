@@ -344,14 +344,16 @@ export const ProfileScreen: React.FC<{
                             match.id,
                           );
 
-                          // Validate replay data before creating scene
+                          // Validate replay data before creating scene (V3 only)
                           if (
                             !replayData ||
-                            replayData.version !== 2 ||
+                            replayData.version !== 3 ||
+                            typeof replayData.engineVersion !== 'string' ||
                             !Array.isArray(replayData.inputs) ||
                             replayData.inputs.length === 0
                           ) {
                             console.error("Invalid replay data:", replayData);
+                            alert("This replay cannot be viewed. Only V3 replays are supported.");
                             setLoading(false);
                             return;
                           }

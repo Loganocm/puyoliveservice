@@ -573,10 +573,11 @@ const ActivityTab: React.FC<{
                           const { APIClient } = await import("../api/client");
                           const replayData = await APIClient.getReplay(m.id);
 
-                          // Validate replay data before creating scene
+                          // Validate replay data before creating scene (V3 only)
                           if (
                             !replayData ||
-                            replayData.version !== 2 ||
+                            replayData.version !== 3 ||
+                            typeof replayData.engineVersion !== 'string' ||
                             !Array.isArray(replayData.inputs) ||
                             replayData.inputs.length === 0
                           ) {
@@ -1096,6 +1097,10 @@ const ProfileView: React.FC<{
                   try {
                     const { APIClient } = await import("../api/client");
                     const replayData = await APIClient.getReplay(m.id);
+                    if (!replayData || replayData.version !== 3 || typeof replayData.engineVersion !== 'string') {
+                      console.error("Invalid replay data:", replayData);
+                      return;
+                    }
                     const { SceneManager } =
                       await import("../core/SceneManager");
                     const { ReplayScene } =
