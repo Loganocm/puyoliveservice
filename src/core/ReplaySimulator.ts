@@ -143,7 +143,7 @@ export class ReplaySimulator {
         }
 
         // Sort inputs by frame (safety)
-        const sortedInputs = [...inputs].sort((a, b) => a.f - b.f);
+        const sortedInputs = [...(inputs || [])].sort((a, b) => a.f - b.f);
 
         // V3.1: Build state hash lookups for validation (now per-player and independent)
         const stateHashes = this.replayData.stateHashes || [];
@@ -166,7 +166,7 @@ export class ReplaySimulator {
         });
 
         // Allow the simulation to run until Game Over settles visually, or up to 600 frames past the recorded duration to catch the death animations.
-        const maxFrames = Math.max(duration + 600, 36000); // hard cap at 10 minutes
+        const maxFrames = Math.min(duration + 600, 360000); // hard cap at 100 minutes
 
         try {
             // Simulate frame by frame

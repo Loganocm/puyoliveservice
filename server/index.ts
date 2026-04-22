@@ -761,6 +761,8 @@ io.on('connection', (socket: Socket) => {
   // V3.1 Replay: Input recording uses the exact client-provided deterministic frame
   socket.on('record_input', (data: { roomId: string, input: string, f: number, a?: number }) => {
     if (!data || typeof data.roomId !== 'string' || typeof data.input !== 'string' || typeof data.f !== 'number') return;
+    if (!Number.isFinite(data.f) || data.f < 0 || data.f > 360000) return; // Cap at ~100 minutes of gameplay
+    if (data.a !== undefined && (!Number.isFinite(data.a) || data.a < 0 || data.a > 100)) return;
     // 'G' (garbage) is server-only — clients cannot inject garbage via inputs (handled by send_garbage natively, except in V3.1 the receiver reports it)
     const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD', 'G'];
     if (!validInputs.includes(data.input)) return;
@@ -769,7 +771,7 @@ io.on('connection', (socket: Socket) => {
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
-    room.recordInput(playerIndex, data.input as any, data.f, data.a);
+    room.recordInput(playerIndex, data.input as any, Math.floor(data.f), data.a ? Math.floor(data.a) : undefined);
 
     // Execute input on server-side simulator (authoritative game state)
     // Server sim is delayed by ping, so it applies it "late" relative to client, but preserves game flow
@@ -782,12 +784,14 @@ io.on('connection', (socket: Socket) => {
   // V3.1 Replay: Record explicit client state hash
   socket.on('record_hash', (data: { roomId: string, f: number, hash: string }) => {
     if (!data || typeof data.roomId !== 'string' || typeof data.hash !== 'string' || typeof data.f !== 'number') return;
+    if (!Number.isFinite(data.f) || data.f < 0 || data.f > 360000) return;
+    if (data.hash.length > 256) return; // Prevent massive strings
     if (!checkSocketRate(socket.id, 'record_hash', 10)) return;
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
-    room.recordStateHash(playerIndex, data.f, data.hash);
+    room.recordStateHash(playerIndex, Math.floor(data.f), data.hash);
   });
 
   // V2 Replay: Tick frame counter — ONLY for replay frame numbering and AFK detection.

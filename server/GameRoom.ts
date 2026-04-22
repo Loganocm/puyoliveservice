@@ -344,6 +344,10 @@ export class GameRoom {
         const p0Settings = this.playerSettingsMap.get(playerIds[0]) ?? defaultSettings;
         const p1Settings = this.playerSettingsMap.get(playerIds[1]) ?? defaultSettings;
 
+        const maxInputFrame = this.replayInputs.length > 0 ? this.replayInputs.reduce((max, i) => Math.max(max, i.f), 0) : 0;
+        const maxHashFrame = this.stateHashes.length > 0 ? this.stateHashes.reduce((max, h) => Math.max(max, h.f), 0) : 0;
+        const actualDuration = Math.max(this.frameCount, maxInputFrame, maxHashFrame);
+
         return {
             version: 3,
             engineVersion: ENGINE_VERSION,
@@ -355,7 +359,7 @@ export class GameRoom {
                 elo: undefined
             })),
             winner: winnerIndex,
-            duration: this.frameCount,
+            duration: actualDuration,
             fps: this.replayFPS,
             inputs: this.replayInputs,
             playerSettings: [p0Settings, p1Settings],
