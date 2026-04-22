@@ -315,10 +315,16 @@ export class NetworkManager {
         this.socket.emit('player_lost', { roomId });
     }
 
-    // V2 Replay: Record player input for replay
-    public static recordInput(roomId: string, input: string) {
+    // V3.1 Replay: Record player input for replay with exact deterministic frame
+    public static recordInput(roomId: string, input: string, frame: number, amount?: number) {
         if (!this.socket) return;
-        this.socket.emit('record_input', { roomId, input });
+        this.socket.emit('record_input', { roomId, input, f: frame, a: amount });
+    }
+
+    // V3.1 Replay: Periodically send exact client-side state hashes to the server
+    public static recordHash(roomId: string, frame: number, hash: string) {
+        if (!this.socket) return;
+        this.socket.emit('record_hash', { roomId, f: frame, hash });
     }
 
     // V2 Replay: Record player settings for determinism

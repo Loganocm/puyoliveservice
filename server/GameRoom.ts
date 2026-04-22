@@ -79,7 +79,8 @@ export interface DeterministicEvent {
 // Periodic state hash for desync detection
 export interface StateHash {
     f: number;              // Frame number
-    h: [string, string];    // Board hash per player [p0, p1]
+    p: 0 | 1;               // Player index
+    h: string;              // Board hash
 }
 
 // V3 Replay File — the definitive format
@@ -288,10 +289,10 @@ export class GameRoom {
         this.recordReplayEvent('game_start', undefined, { seed: this.seed });
     }
 
-    // Record frame-based input
-    recordInput(playerIndex: 0 | 1, inputType: InputType, amount?: number) {
+    // V3.1 Replay: Record explicit frame-based input from client
+    recordInput(playerIndex: 0 | 1, inputType: InputType, frame: number, amount?: number) {
         this.replayInputs.push({
-            f: this.frameCount,
+            f: frame,
             p: playerIndex,
             i: inputType,
             a: amount
@@ -308,11 +309,12 @@ export class GameRoom {
         });
     }
 
-    // V3: Record periodic state hash (called from server tick loop)
-    recordStateHash(hash0: string, hash1: string) {
+    // V3.1 Replay: Record periodic state hash EXACTLY as calculated on the client
+    recordStateHash(playerIndex: 0 | 1, frame: number, hash: string) {
         this.stateHashes.push({
-            f: this.frameCount,
-            h: [hash0, hash1],
+            f: frame,
+            p: playerIndex,
+            h: hash,
         });
     }
 

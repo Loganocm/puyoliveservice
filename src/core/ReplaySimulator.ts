@@ -1,5 +1,5 @@
 import { GameEngine, GameState } from './GameEngine';
-import type { ReplayFileV3, ReplayInput, StateHash } from './ReplayEngine';
+import type { ReplayFileV3, ReplayInput } from './ReplayEngine';
 import { PuyoColor, COLS } from './Constants';
 
 /**
@@ -145,11 +145,13 @@ export class ReplaySimulator {
         // Sort inputs by frame (safety)
         const sortedInputs = [...inputs].sort((a, b) => a.f - b.f);
 
-        // V3: Build state hash lookup for validation
+        // V3.1: Build state hash lookups for validation (now per-player and independent)
         const stateHashes = this.replayData.stateHashes || [];
-        const hashMap = new Map<number, StateHash>();
+        const hash0Map = new Map<number, string>();
+        const hash1Map = new Map<number, string>();
         for (const sh of stateHashes) {
-            hashMap.set(sh.f, sh);
+            if (sh.p === 0) hash0Map.set(sh.f, sh.h);
+            else hash1Map.set(sh.f, sh.h);
         }
         let desyncCount = 0;
 
@@ -192,28 +194,30 @@ export class ReplaySimulator {
                 engine1.update(1.0);
                 engine2.update(1.0);
 
-                // 3. V3: State hash validation at checkpoints
-                const expectedHash = hashMap.get(currentFrame);
-                if (expectedHash) {
+                // 3. V3.1: State hash validation at checkpoints (per-player)
+                const expectedHash0 = hash0Map.get(currentFrame);
+                if (expectedHash0) {
                     const actualHash0 = engine1.computeBoardHash();
-                    const actualHash1 = engine2.computeBoardHash();
-
-                    if (actualHash0 !== expectedHash.h[0]) {
+                    if (actualHash0 !== expectedHash0) {
                         desyncCount++;
                         console.warn(
                             `[ReplaySimulator] DESYNC DETECTED — Player 0 at frame ${currentFrame}`,
-                            `\n  Expected: ${expectedHash.h[0]}`,
+                            `\n  Expected: ${expectedHash0}`,
                             `\n  Actual:   ${actualHash0}`,
                             `\n  Score: ${engine1.stats.score}, GarbageQ: ${engine1.garbageQueue}, Tray: ${engine1.nuisanceTray}`,
                             `\n  State: ${engine1.state}, Seed: ${engine1.getSeed()}`
                         );
                     }
+                }
 
-                    if (actualHash1 !== expectedHash.h[1]) {
+                const expectedHash1 = hash1Map.get(currentFrame);
+                if (expectedHash1) {
+                    const actualHash1 = engine2.computeBoardHash();
+                    if (actualHash1 !== expectedHash1) {
                         desyncCount++;
                         console.warn(
                             `[ReplaySimulator] DESYNC DETECTED — Player 1 at frame ${currentFrame}`,
-                            `\n  Expected: ${expectedHash.h[1]}`,
+                            `\n  Expected: ${expectedHash1}`,
                             `\n  Actual:   ${actualHash1}`,
                             `\n  Score: ${engine2.stats.score}, GarbageQ: ${engine2.garbageQueue}, Tray: ${engine2.nuisanceTray}`,
                             `\n  State: ${engine2.state}, Seed: ${engine2.getSeed()}`

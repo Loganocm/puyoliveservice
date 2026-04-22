@@ -157,8 +157,7 @@ function setupSimulators(
   room.simulators.clear();
   room.stopTickLoop();
 
-  // V3: Hash interval — compute state hashes every N frames (~5 seconds)
-  const HASH_INTERVAL = 300;
+  // V3: Hash interval — removed from server (now client-authoritative)
 
   for (const pid of playerIds) {
     const sim = new PuyoSimulator(room.seed);
@@ -241,17 +240,6 @@ function setupSimulators(
         // room.stopTickLoop();
         // onPlayerDeath(pid);
         // break;
-      }
-    }
-
-    // V3: Compute periodic state hashes for desync detection
-    if (room.frameCount > 0 && room.frameCount % HASH_INTERVAL === 0) {
-      const sims = Array.from(room.simulators.values()) as PuyoSimulator[];
-      if (sims.length >= 2) {
-        room.recordStateHash(
-          sims[0].computeBoardHash(),
-          sims[1].computeBoardHash()
-        );
       }
     }
   }, 16); 
@@ -770,23 +758,36 @@ io.on('connection', (socket: Socket) => {
   });
 
   // V2 Replay: Record player inputs
-  socket.on('record_input', (data: { roomId: string, input: string }) => {
-    if (!data || typeof data.roomId !== 'string' || typeof data.input !== 'string') return;
-    // 'G' (garbage) is server-only — clients cannot inject garbage via inputs
-    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD'];
+  // V3.1 Replay: Input recording uses the exact client-provided deterministic frame
+  socket.on('record_input', (data: { roomId: string, input: string, f: number, a?: number }) => {
+    if (!data || typeof data.roomId !== 'string' || typeof data.input !== 'string' || typeof data.f !== 'number') return;
+    // 'G' (garbage) is server-only — clients cannot inject garbage via inputs (handled by send_garbage natively, except in V3.1 the receiver reports it)
+    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD', 'G'];
     if (!validInputs.includes(data.input)) return;
     if (!checkSocketRate(socket.id, 'record_input', 120)) return;
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
-    room.recordInput(playerIndex, data.input as any);
+    room.recordInput(playerIndex, data.input as any, data.f, data.a);
 
     // Execute input on server-side simulator (authoritative game state)
+    // Server sim is delayed by ping, so it applies it "late" relative to client, but preserves game flow
     const sim = room.simulators.get(socket.id) as PuyoSimulator | undefined;
     if (sim && !sim.isGameOver) {
-      sim.executeInput({ i: data.input });
+      sim.executeInput({ i: data.input, a: data.a });
     }
+  });
+
+  // V3.1 Replay: Record explicit client state hash
+  socket.on('record_hash', (data: { roomId: string, f: number, hash: string }) => {
+    if (!data || typeof data.roomId !== 'string' || typeof data.hash !== 'string' || typeof data.f !== 'number') return;
+    if (!checkSocketRate(socket.id, 'record_hash', 10)) return;
+    const room = roomManager.getRoom(data.roomId);
+    if (!room || !room.players.has(socket.id)) return;
+    if (!room.matchStats || room.matchConcluded) return;
+    const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
+    room.recordStateHash(playerIndex, data.f, data.hash);
   });
 
   // V2 Replay: Tick frame counter — ONLY for replay frame numbering and AFK detection.
@@ -822,13 +823,9 @@ io.on('connection', (socket: Socket) => {
     // until the server simulator is fully synchronized with tick_frames
     socket.broadcast.to(data.roomId).emit('receive_garbage', { amount: data.amount });
     
-    // Disable server-only 'G' generation override, allow client 'G' to be recorded 
-    // for accurate V2 replays
-    const opponents = Array.from(room.players.keys()).filter(id => id !== socket.id);
-    for (const opponentId of opponents) {
-      const targetIndex = room.getPlayerIndex(opponentId) as 0 | 1;
-      room.recordInput(targetIndex, 'G', data.amount);
-    }
+    // V3.1 Replay: Garbage 'G' inputs are now strictly recorded by the receiving client 
+    // in order to capture the exact local frame the garbage entered their queue.
+    
     room.recordGarbage(socket.id, data.amount);
   });
 

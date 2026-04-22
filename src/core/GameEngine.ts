@@ -67,6 +67,7 @@ export class GameEngine {
 
     // Timers
     private frameCount = 0;
+    public get currentFrame(): number { return this.frameCount; }
     private dropTimer = 0;
     private currentDropDelay = 60; // Puyo Tsu Level 1 (Very Slow ~1s/row)
     private lockDelay = 30; // 0.5s placement delay (kept fast)

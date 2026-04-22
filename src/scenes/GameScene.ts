@@ -237,16 +237,12 @@ export class GameScene implements IScene {
         if (this.roomId) {
             const onGarbage = (data: any) => {
                 try {
-                    // Filter by opponent ID if known (prevent zombie/spectator interference)
-                    // garbage doesn't have senderId usually? Wait, receive_garbage just sends amount.
-                    // Ideally we should track sender. But garbage is room-event.
-                    // Assuming 1v1 for now, but server restricts send_garbage logic. 
-                    // However, receive_garbage comes from broadcast.
-                    // Let's assume server handles garbage validity.
                     if (data && typeof data.amount === 'number') {
                         console.log("Received Garbage:", data.amount);
                         this.engine.addGarbage(data.amount);
                         this.spawnFloatingText(400, 100, `Warning! +${data.amount}`, 0xff0000);
+                        // V3.1 Replay: Record EXACT local frame when garbage was received
+                        this.recordInputForReplay('G', data.amount);
                     }
                 } catch (e) { console.error("Error processing garbage:", e); }
             };
@@ -757,11 +753,11 @@ export class GameScene implements IScene {
         }
     }
 
-    // V2 Replay: Record input for server-side replay in multiplayer
-    private recordInputForReplay(inputType: string): void {
+    // V3.1 Replay: Record input for server-side replay in multiplayer with exact frame
+    private recordInputForReplay(inputType: string, amount?: number): void {
         if (this.roomId && !this.replayData) {
             // Only record in multiplayer matches, not replays
-            NetworkManager.recordInput(this.roomId, inputType);
+            NetworkManager.recordInput(this.roomId, inputType, this.engine.currentFrame, amount);
         }
     }
 
@@ -854,9 +850,18 @@ export class GameScene implements IScene {
                 if (state === GameState.ACTIVE || state === GameState.FALLING ||
                     state === GameState.CHECK_MATCH || state === GameState.SPAWN) {
 
-                    if (this.engine.isReplaying) {
-                        // Engine handles processReplayFrame() internally in update()
+                    // Replay logic handles its own frame advancement
+                    if (this.replayData && this.engine.isReplaying) {
+                        this.engine.update(delta);
                     } else {
+                        // Normal local gameplay updates
+                        this.engine.update(delta);
+
+                        // V3.1 Replay: Periodically send exact client-side state hashes to the server
+                        if (this.roomId && this.engine.currentFrame > 0 && this.engine.currentFrame % 300 === 0) {
+                            NetworkManager.recordHash(this.roomId, this.engine.currentFrame, this.engine.computeBoardHash());
+                        }
+
                         // Only handle input if NOT paused (Menu closed)
                         if (!this.isPaused) {
                             this.handleInput();

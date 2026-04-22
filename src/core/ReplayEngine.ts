@@ -69,7 +69,8 @@ export interface DeterministicEvent {
 
 export interface StateHash {
     f: number;              // Frame number
-    h: [string, string];    // Board hash per player [p0, p1]
+    p: 0 | 1;               // Player index
+    h: string;              // Board hash
 }
 
 // --- V3 Replay File Format ---
