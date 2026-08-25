@@ -10,6 +10,7 @@ import { MenuScene } from './MenuScene'; // needed for Back button
 import { SoundManager } from '../core/SoundManager';
 import { GameEngine, GameState } from '../core/GameEngine';
 import { NetworkManager } from '../core/NetworkManager';
+import { MatchClock } from '../core/MatchClock';
 import { GameEvents } from '../core/GameEvents';
 import { SettingsOverlay } from '../ui/SettingsOverlay';
 import { backgroundManager } from '../core/BackgroundManager';
@@ -100,9 +101,6 @@ export class GameScene implements IScene {
     // Seed
     private seed?: number;
     private opponentId?: string;
-
-    // Fixed timestep accumulator for server tick_frame (ensures 60 logical fps recording)
-    private tickFrameAccumulator: number = 0;
 
     private afkTimer: any = null;
     private afkCheckStart: number = 0;
@@ -814,16 +812,36 @@ export class GameScene implements IScene {
                 // engine.dt expects 1.0 = normal speed.
 
                 if (this.roomId && !this.replayData) {
-                    // MULTIPLAYER: Use fixed timestep for engine updates
-                    // The replay system replays at exactly 1.0 dt per frame.
-                    // If we use variable dt here, the engine state drifts from what
-                    // the replay will reproduce, causing desync after 1-2 seconds.
-                    // Unify engine.update + tickFrame into the same accumulator.
-                    this.tickFrameAccumulator += delta;
-                    while (this.tickFrameAccumulator >= 1.0) {
-                        this.tickFrameAccumulator -= 1.0;
-                        this.engine.update(1.0);
-                        NetworkManager.tickFrame(this.roomId);
+                    // MULTIPLAYER: drive the engine from the SHARED match clock.
+                    //
+                    // A local accumulator kept each client on its own timeline:
+                    // frame N happened at a different instant on each machine,
+                    // offset by network jitter and any tab stall. Cross-player
+                    // alignment was therefore approximate live, and replays --
+                    // which advance both engines in lockstep by frame index --
+                    // were reproducing a timeline that never existed.
+                    //
+                    // Deriving the frame from a clock both clients agree on
+                    // makes frame N the same moment everywhere, which fixes
+                    // live alignment and makes lockstep replay correct by
+                    // construction. The replay format is unchanged.
+                    // See docs/adr/0003-shared-match-clock.md.
+                    if (MatchClock.hasMatch) {
+                        const toAdvance = MatchClock.framesToAdvance(this.engine.currentFrame);
+                        for (let i = 0; i < toAdvance; i++) {
+                            this.engine.update(1.0);
+                        }
+
+                        // Falling far behind means this client can no longer
+                        // present an honest view. Surface it rather than
+                        // silently drifting; the server heartbeat aborts at 7s.
+                        if (!this.hasErrorText && MatchClock.isDesynced(this.engine.currentFrame)) {
+                            this.gameMessage = 'RECONNECTING…';
+                        }
+                    } else {
+                        // Clock not yet established (host-started room where the
+                        // start instant has not landed). Hold at frame 0 rather
+                        // than starting on a private timeline.
                     }
                 } else {
                     // SINGLE PLAYER / REPLAY: variable delta for smooth visuals

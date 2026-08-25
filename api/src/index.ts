@@ -34,13 +34,37 @@ const allowedOrigins = [
   "https://api.puyo.live"
 ];
 
+
+/**
+ * Additional allowed origins, comma-separated, from EXTRA_CORS_ORIGINS.
+ *
+ * Development here happens on one machine while the stack runs in Docker
+ * Desktop on another, so the browser origin is a LAN address that no
+ * hardcoded list can know in advance. Example:
+ *   EXTRA_CORS_ORIGINS=http://192.168.1.42:5173
+ *
+ * Only honoured outside production, so a stray value in a deployed
+ * environment cannot widen the public allowlist.
+ */
+const extraOrigins =
+  process.env.NODE_ENV === 'production'
+    ? []
+    : (process.env.EXTRA_CORS_ORIGINS || '')
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean);
+
+if (extraOrigins.length > 0) {
+  console.log(`[Dev] Extra CORS origins allowed: ${extraOrigins.join(', ')}`);
+}
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow extensions/mobile apps (no origin)
     if (!origin) return callback(null, true);
 
     // Check if origin is allowed
-    if (allowedOrigins.includes(origin) || origin === config.corsOrigin) {
+    if (allowedOrigins.includes(origin) || extraOrigins.includes(origin) || origin === config.corsOrigin) {
       return callback(null, true);
     }
 

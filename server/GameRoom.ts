@@ -164,7 +164,6 @@ export class GameRoom {
 
     // V3 Replay Data
     replayInputs: ReplayInput[] = [];
-    frameCount: number = 0;
     replayFPS: number = 60;
     seed: number = 0;
 
@@ -188,9 +187,22 @@ export class GameRoom {
     // Each inner array is the column order used for one garbage drop
     garbageColumns: [number[][], number[][]] = [[], []];
 
-    // Anti-cheat: tracks last time player 0 sent a tick_frame
-    // If this goes stale during an active match, player 0 is forfeited
-    lastTickFrame: number = 0;
+    /**
+     * Absolute instant (server epoch ms) at which frame 0 occurs.
+     *
+     * Both clients derive their frame number from this rather than from a
+     * local accumulator started on packet arrival, so frame N is the same
+     * moment on every machine. That is what makes cross-player alignment real
+     * live, and what makes lockstep replay correct rather than merely assumed.
+     * See docs/adr/0003-shared-match-clock.md.
+     */
+    startAtMs: number = 0;
+
+    /** Frame the shared clock says the match is on right now. */
+    currentSharedFrame(): number {
+        if (!this.startAtMs) return 0;
+        return Math.max(0, Math.floor((Date.now() - this.startAtMs) / (1000 / 60)));
+    }
 
     // Server-side game loop interval (runs sim independently of client tick_frame)
     tickInterval: ReturnType<typeof setInterval> | null = null;
@@ -266,14 +278,13 @@ export class GameRoom {
             player2GarbageSent: 0
         };
         this.seed = this.matchStats.startedAt.getTime();
-        this.frameCount = 0;
         this.replayInputs = [];
         this.replayLog = [];
         this.matchConcluded = false;
         this.conclusionLoser = null;
+        this.startAtMs = 0; // set by the caller once the countdown is announced
         this.simulators.clear();
         this.stopTickLoop(); // Clear any leftover loop from previous game
-        this.lastTickFrame = Date.now(); // Initialize tick heartbeat
 
         // V3: Reset all tracking arrays
         this.deterministicEvents = [];
@@ -307,7 +318,7 @@ export class GameRoom {
     // V3: Record a deterministic event
     recordDeterministicEvent(playerIndex: 0 | 1, type: DeterministicEventType, data?: any) {
         this.deterministicEvents.push({
-            f: this.frameCount,
+            f: this.currentSharedFrame(),
             p: playerIndex,
             t: type,
             d: data,
@@ -334,11 +345,6 @@ export class GameRoom {
         return ids.indexOf(socketId);
     }
 
-    // Increment frame (called each game tick)
-    tick() {
-        this.frameCount++;
-    }
-
     // Build V3 replay file — records everything for 1:1 deterministic playback
     buildReplayFile(winnerIndex: 0 | 1 | null): ReplayFileV3 {
         const playersArr = Array.from(this.players.values());
@@ -351,7 +357,7 @@ export class GameRoom {
 
         const maxInputFrame = this.replayInputs.length > 0 ? this.replayInputs.reduce((max, i) => Math.max(max, i.f), 0) : 0;
         const maxHashFrame = this.stateHashes.length > 0 ? this.stateHashes.reduce((max, h) => Math.max(max, h.f), 0) : 0;
-        const actualDuration = Math.max(this.frameCount, maxInputFrame, maxHashFrame);
+        const actualDuration = Math.max(this.currentSharedFrame(), maxInputFrame, maxHashFrame);
 
         return {
             version: 3,
@@ -468,7 +474,6 @@ export class GameRoom {
         this.conclusionLoser = null;
         this.matchStats = null;
         this.replayInputs = [];
-        this.frameCount = 0;
         this.replayLog = [];
         this.simulators.clear();
         this.currentGame++;

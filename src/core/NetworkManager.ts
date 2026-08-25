@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { MatchClock } from './MatchClock';
 
 type NetworkCallback = (...args: any[]) => void;
 
@@ -57,6 +58,7 @@ export class NetworkManager {
         this.socket.on('connect', () => {
             console.log('Connected to server:', this.socket?.id);
             this.isConnected = true;
+            this.syncClock();
             this.emit('connect');
         });
 
@@ -87,8 +89,20 @@ export class NetworkManager {
             this.emit('player_joined', data);
         });
 
-        this.socket.on('game_start', (data: { seed: number }) => {
+        this.socket.on('game_start', (data: { seed: number, startAt?: number }) => {
+            // Hand the shared start instant to the clock before anyone reacts to
+            // the event, so scenes constructed by listeners already see it.
+            if (typeof data.startAt === 'number') {
+                MatchClock.startMatch(data.startAt);
+            }
             this.emit('game_start', data);
+        });
+
+        // Clock synchronisation reply. See MatchClock for why the lowest-RTT
+        // sample wins rather than an average.
+        this.socket.on('time_sync_reply', (data: { t: number, server: number }) => {
+            if (!data || typeof data.t !== 'number' || typeof data.server !== 'number') return;
+            MatchClock.addSample(data.t, data.server, Date.now());
         });
 
         this.socket.on('receive_garbage', (data: { amount: number }) => {
@@ -229,6 +243,23 @@ export class NetworkManager {
         });
     }
 
+    /**
+     * Estimate the offset between this machine's clock and the server's.
+     *
+     * Fires a short burst of samples; MatchClock keeps only the one with the
+     * lowest round trip, which is the least polluted by queueing delay. Cheap
+     * enough to repeat whenever a match is about to start, and harmless to
+     * call more than once.
+     */
+    public static syncClock(samples: number = 5) {
+        if (!this.socket) return;
+        for (let i = 0; i < samples; i++) {
+            setTimeout(() => {
+                this.socket?.emit('time_sync', { t: Date.now() });
+            }, i * 120);
+        }
+    }
+
     public static authenticate(token: string) {
         if (!this.socket) return;
         console.log('Authenticating socket...');
@@ -331,12 +362,6 @@ export class NetworkManager {
     public static recordSettings(roomId: string, sdf: number, softDropProtection: boolean) {
         if (!this.socket) return;
         this.socket.emit('record_settings', { roomId, sdf, softDropProtection });
-    }
-
-    // V2 Replay: Advance frame counter on server
-    public static tickFrame(roomId: string) {
-        if (!this.socket) return;
-        this.socket.emit('tick_frame', { roomId });
     }
 
     public static requeue(roomId: string) {

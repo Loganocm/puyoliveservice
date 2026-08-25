@@ -24,6 +24,30 @@ const allowedOrigins = [
   "https://puyolive-git-main-loganocms-projects.vercel.app"
 ];
 
+
+/**
+ * Additional allowed origins, comma-separated, from EXTRA_CORS_ORIGINS.
+ *
+ * Development here happens on one machine while the stack runs in Docker
+ * Desktop on another, so the browser origin is a LAN address that no
+ * hardcoded list can know in advance. Example:
+ *   EXTRA_CORS_ORIGINS=http://192.168.1.42:5173
+ *
+ * Only honoured outside production, so a stray value in a deployed
+ * environment cannot widen the public allowlist.
+ */
+const extraOrigins =
+  process.env.NODE_ENV === 'production'
+    ? []
+    : (process.env.EXTRA_CORS_ORIGINS || '')
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean);
+
+if (extraOrigins.length > 0) {
+  console.log(`[Dev] Extra CORS origins allowed: ${extraOrigins.join(', ')}`);
+}
+
 const corsOrigin = process.env.CORS_ORIGIN || allowedOrigins;
 
 // Explicitly add CORS middleware for the Express app
@@ -31,7 +55,7 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || (typeof corsOrigin === 'string' && origin === corsOrigin)) {
+    if (allowedOrigins.indexOf(origin) !== -1 || extraOrigins.includes(origin) || (typeof corsOrigin === 'string' && origin === corsOrigin)) {
       callback(null, true);
     } else {
       console.warn(`Blocked by CORS: ${origin}`);
@@ -62,7 +86,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (allowedOrigins.includes(origin) || extraOrigins.includes(origin)) return callback(null, true);
       callback(new Error('Not allowed by CORS'));
     },
     methods: ["GET", "POST"],
@@ -288,8 +312,58 @@ minesRoom.onStateSync = (socketId: string, state: { score: number; depth: number
   }
 };
 
+/**
+ * Countdown between "match found" and frame 0.
+ *
+ * Emitted as an absolute instant on the server clock rather than enforced with
+ * a setTimeout, so every client counts down to the SAME moment instead of
+ * starting whenever its own packet happened to arrive. This is what makes
+ * frame N mean the same thing on both machines.
+ * See docs/adr/0003-shared-match-clock.md.
+ */
+const MATCH_COUNTDOWN_MS = 3000;
+
+/**
+ * Dev-only outbound latency injection. Two browser tabs on one machine have
+ * effectively zero RTT, which hides precisely the clock-offset bugs the shared
+ * clock exists to fix. Set SIMULATED_LATENCY_MS to test realistically without
+ * a second machine. Ignored in production.
+ */
+const SIMULATED_LATENCY_MS =
+  process.env.NODE_ENV === 'production'
+    ? 0
+    : Math.max(0, Math.min(2000, Number(process.env.SIMULATED_LATENCY_MS) || 0));
+
+if (SIMULATED_LATENCY_MS > 0) {
+  console.log(`[Dev] Injecting ${SIMULATED_LATENCY_MS}ms artificial latency on outbound events`);
+}
+
+/** Emit to a room, honouring the dev latency injection. */
+function emitToRoom(roomId: string, event: string, payload?: any) {
+  if (SIMULATED_LATENCY_MS > 0) {
+    setTimeout(() => io.to(roomId).emit(event, payload), SIMULATED_LATENCY_MS);
+  } else {
+    io.to(roomId).emit(event, payload);
+  }
+}
+
 io.on('connection', (socket: Socket) => {
   console.log(`User connected: ${socket.id}`);
+
+  /**
+   * Clock synchronisation. The client sends its own timestamp; we echo it back
+   * alongside ours so the client can compute round-trip time and derive the
+   * offset between its clock and the server's. Deliberately does no work and
+   * touches no state, so the reply is not delayed by anything we do.
+   *
+   * Not latency-injected: skewing this would corrupt the very measurement the
+   * client is taking. Injection applies to gameplay events only.
+   */
+  socket.on('time_sync', (data: { t: number }) => {
+    if (!data || typeof data.t !== 'number' || !Number.isFinite(data.t)) return;
+    if (!checkSocketRate(socket.id, 'time_sync', 12)) return;
+    socket.emit('time_sync_reply', { t: data.t, server: Date.now() });
+  });
 
   // Track IP for same-IP ranked prevention
   socketIPs.set(socket.id, getSocketIP(socket));
@@ -479,13 +553,21 @@ io.on('connection', (socket: Socket) => {
 
         io.to(room.id).emit('player_joined', { id: p2, count: 2 });
 
-        // Auto-start game after short delay
-        setTimeout(() => {
-          room.startMatch();
-          setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
-          const playerIds = Array.from(room.players.keys());
-          io.to(room.id).emit('game_start', { seed: room.seed, roomId: room.id, players: playerIds });
-        }, 3000);
+        // Start the match on a shared, absolute instant.
+        //
+        // Previously a setTimeout fired 3s later and each client began when its
+        // own packet landed, so the two frame counters were offset by network
+        // jitter and frame N meant a different moment on each machine. Now the
+        // start time is announced up front and both clients count down to it.
+        room.startMatch();
+        room.startAtMs = Date.now() + MATCH_COUNTDOWN_MS;
+        setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
+        emitToRoom(room.id, 'game_start', {
+          seed: room.seed,
+          roomId: room.id,
+          players: Array.from(room.players.keys()),
+          startAt: room.startAtMs,
+        });
       }
     }
   });
@@ -590,9 +672,14 @@ io.on('connection', (socket: Socket) => {
 
         console.log(`Starting game in room ${roomId}`);
         room.startMatch();
+        room.startAtMs = Date.now() + MATCH_COUNTDOWN_MS;
         setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
-        const playerIds = Array.from(room.players.keys());
-        io.to(roomId).emit('game_start', { seed: room.seed, roomId: room.id, players: playerIds });
+        emitToRoom(roomId, 'game_start', {
+          seed: room.seed,
+          roomId: room.id,
+          players: Array.from(room.players.keys()),
+          startAt: room.startAtMs,
+        });
       } else {
         console.warn(`Unauthorized start_game attempt by ${socket.id} for room ${roomId}`);
       }
@@ -792,21 +879,6 @@ io.on('connection', (socket: Socket) => {
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
     room.recordStateHash(playerIndex, Math.floor(data.f), data.hash);
-  });
-
-  // V2 Replay: Tick frame counter — ONLY for replay frame numbering and AFK detection.
-  // Sim advancement now runs on the server-side game loop in setupSimulators.
-  socket.on('tick_frame', (data: { roomId: string }) => {
-    if (!data || typeof data.roomId !== 'string') return;
-    if (!checkSocketRate(socket.id, 'tick_frame', 65)) return;
-    const room = roomManager.getRoom(data.roomId);
-    if (!room || !room.players.has(socket.id)) return;
-    if (!room.matchStats || room.matchConcluded) return;
-    const playerIndex = room.getPlayerIndex(socket.id);
-    if (playerIndex === 0) {
-      room.lastTickFrame = Date.now(); // Anti-cheat: tracks active ticking
-      room.tick(); // Increment replay frame counter (sim advancement is server-side)
-    }
   });
 
   // send_garbage
@@ -1131,12 +1203,15 @@ io.on('connection', (socket: Socket) => {
 
         io.to(newRoom.id).emit('player_joined', { id: p2, count: 2 });
 
-        setTimeout(() => {
-          newRoom.startMatch();
-          setupSimulators(newRoom, (loserSocketId) => handleMatchEnd(newRoom.id, loserSocketId, 'lost'));
-          const replayerIds = Array.from(newRoom.players.keys());
-          io.to(newRoom.id).emit('game_start', { seed: newRoom.seed, roomId: newRoom.id, players: replayerIds });
-        }, 3000);
+        newRoom.startMatch();
+        newRoom.startAtMs = Date.now() + MATCH_COUNTDOWN_MS;
+        setupSimulators(newRoom, (loserSocketId) => handleMatchEnd(newRoom.id, loserSocketId, 'lost'));
+        emitToRoom(newRoom.id, 'game_start', {
+          seed: newRoom.seed,
+          roomId: newRoom.id,
+          players: Array.from(newRoom.players.keys()),
+          startAt: newRoom.startAtMs,
+        });
       }
     }
   });
