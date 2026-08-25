@@ -1,5 +1,4 @@
 import { GameEngine } from '../../src/core/GameEngine';
-import { SettingsManager } from '../../src/core/SettingsManager';
 
 /**
  * Deterministic test harness for the game engine.
@@ -63,16 +62,15 @@ export function applyAction(engine: GameEngine, action: ScriptedAction): void {
 }
 
 /**
- * Pin every setting that affects simulation. The engine reads SettingsManager
- * statics directly today, so a developer's saved preferences would otherwise
- * leak into test results.
+ * Deterministic engine handling settings shared by every test.
+ *
+ * This replaced a pinSettings() helper that reached into SettingsManager. The
+ * engine takes an injected config now, so tests configure the engine directly
+ * and touch no globals -- which is what lets this suite run without a DOM.
  */
-export function pinSettings(): void {
-  SettingsManager.das = 25;
-  SettingsManager.arr = 15;
-  SettingsManager.sdf = 10;
-  SettingsManager.lineClearDelay = 20;
-  SettingsManager.softDropProtection = true;
+export function applyTestConfig(engine: GameEngine, sdf: number = 10): void {
+  engine.config.sdf = sdf;
+  engine.config.softDropProtection = true;
 }
 
 export interface RunResult {
@@ -102,8 +100,8 @@ export function runScripted(
   checkpointEvery: number,
   script?: ScriptedAction[],
 ): RunResult {
-  pinSettings();
   const engine = new GameEngine(seed);
+  applyTestConfig(engine);
   const actions = script ?? makeScript(seed, frames);
   const checkpoints: string[] = [];
 
@@ -198,8 +196,8 @@ export function runHeuristic(
   frames: number,
   checkpointEvery: number,
 ): RunResult {
-  pinSettings();
   const engine = new GameEngine(seed);
+  applyTestConfig(engine);
   const checkpoints: string[] = [];
 
   let executed = 0;

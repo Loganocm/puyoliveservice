@@ -127,17 +127,15 @@ export class GameScene implements IScene {
     private escapeHoldTimer: number = 0;
     private readonly FORFEIT_HOLD_TIME = 1.5; // Seconds to hold escape to forfeit
     private forfeitBar: Graphics;
-    private replayData: any = null;
 
     // Bound handlers for GameEvents (for cleanup on destroy)
     private handleGameResume = () => { this.isPaused = false; };
 
-    constructor(roomId?: string, timeLimit: number = 0, seed?: number, opponentId?: string, replayData?: any) {
+    constructor(roomId?: string, timeLimit: number = 0, seed?: number, opponentId?: string) {
         this.roomId = roomId;
         this.timeLimit = timeLimit;
         this.seed = seed;
         this.opponentId = opponentId;
-        this.replayData = replayData;
 
         console.log(`[GameScene] Initializing. Room: ${roomId}, Seed: ${seed}, Opponent: ${opponentId}`);
         if (roomId) {
@@ -506,6 +504,18 @@ export class GameScene implements IScene {
         this.spawnAnim = -1;
         this.popAnimProgress = 0;
 
+        // The engine reports audible moments; the scene decides what they sound
+        // like. Replay playback and the opponent view simply do not wire this,
+        // which is why neither needs a "suppress audio" flag.
+        this.engine.onSound = (sound, value) => {
+            switch (sound) {
+                case 'chain':        SoundManager.playCombo(value ?? 1); break;
+                case 'garbageLand':  SoundManager.play('tinygarbage');   break;
+                case 'garbageSmall': SoundManager.play('tinygarbage');   break;
+                case 'garbageLarge': SoundManager.play('hugegarbage');   break;
+            }
+        };
+
         this.engine.onPieceSpawn = () => {
             this.nextQueueAnimation = 1.0;
             this.spawnAnim = 0; // Start spawn scale-up animation
@@ -751,7 +761,7 @@ export class GameScene implements IScene {
 
     // V3.1 Replay: Record input for server-side replay in multiplayer with exact frame
     private recordInputForReplay(inputType: string, amount?: number): void {
-        if (this.roomId && !this.replayData) {
+        if (this.roomId) {
             // Only record in multiplayer matches, not replays
             NetworkManager.recordInput(this.roomId, inputType, this.engine.currentFrame, amount);
         }
@@ -803,14 +813,19 @@ export class GameScene implements IScene {
                     }
                 }
             } else {
-                // Update Logic FIRST  
+                // Handling settings are read from the engine's own config, so
+                // keep it in step with the player's preferences -- they can be
+                // changed mid-match from the pause overlay.
+                this.engine.config.sdf = SettingsManager.sdf;
+                this.engine.config.softDropProtection = SettingsManager.softDropProtection;
+
                 const prevState = this.engine.state;
 
                 // normalize delta:
                 // Pixi delta is roughly 1.0 at 60fps.
                 // engine.dt expects 1.0 = normal speed.
 
-                if (this.roomId && !this.replayData) {
+                if (this.roomId) {
                     // MULTIPLAYER: drive the engine from the SHARED match clock.
                     //
                     // A local accumulator kept each client on its own timeline:
@@ -893,8 +908,7 @@ export class GameScene implements IScene {
                 if (state === GameState.ACTIVE || state === GameState.FALLING ||
                     state === GameState.CHECK_MATCH || state === GameState.SPAWN) {
 
-                    // Replays drive their own playback; live input is ignored.
-                    if (!(this.replayData && this.engine.isReplaying)) {
+                    {
                         // V3.1 Replay: Periodically send exact client-side state hashes to the server
                         if (this.roomId && this.engine.currentFrame > 0 && this.engine.currentFrame % 300 === 0) {
                             NetworkManager.recordHash(this.roomId, this.engine.currentFrame, this.engine.computeBoardHash());
@@ -1144,7 +1158,6 @@ export class GameScene implements IScene {
                 dx = -1;
             } else {
                 // Buffer the initial shift so it executes on spawn!
-                this.engine.bufferedMove = -1;
             }
         } else if (rightPressed && !leftPressed) {
             this.dasFrameRight = this.currentFrame + SettingsManager.das;
@@ -1156,7 +1169,6 @@ export class GameScene implements IScene {
                 dx = 1;
             } else {
                 // Buffer the initial shift so it executes on spawn!
-                this.engine.bufferedMove = 1;
             }
         }
         // Priority 2: Held keys - DAS then ARR
@@ -1249,8 +1261,6 @@ export class GameScene implements IScene {
             // But Engine shouldn't depend on SoundManager directly?
             // Actually, SoundManager is core/static. It's fine.
 
-            if (rotCCW) this.engine.bufferAction = 'rotateCCW';
-            if (rotCW) this.engine.bufferAction = 'rotateCW';
 
         }
 

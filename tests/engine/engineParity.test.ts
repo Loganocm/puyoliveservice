@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GameEngine } from '../../src/core/GameEngine';
 import { PuyoSimulator } from '../../server/PuyoSimulator';
 import { COLS, TOTAL_ROWS } from '../../src/core/Constants';
-import { GOLDEN_SEEDS, pinSettings } from '../helpers/scriptedRun';
-import { SettingsManager } from '../../src/core/SettingsManager';
+import { GOLDEN_SEEDS } from '../helpers/scriptedRun';
 
 /**
  * ENGINE PARITY
@@ -17,11 +16,6 @@ import { SettingsManager } from '../../src/core/SettingsManager';
  * difference the extraction must consciously resolve rather than accidentally
  * pick a side of.
  */
-
-beforeEach(() => {
-  pinSettings();
-});
-
 /** Hash the parts of the state both implementations claim to share. */
 function hashOf(grid: number[][], score: number, gq: number, tray: number): string {
   let h = 0x811c9dc5;
@@ -56,12 +50,14 @@ interface Divergence {
  * first frame at which any shared observable disagrees.
  */
 function findFirstDivergence(seed: number, frames: number, sdf: number = 10): Divergence | null {
-  pinSettings();
-  SettingsManager.sdf = sdf;
   const e = new GameEngine(seed);
   const s = new PuyoSimulator(seed);
+  // Both sides take handling settings from their own config now, so set them
+  // explicitly on each rather than through a shared global.
+  e.config.sdf = sdf;
+  e.config.softDropProtection = true;
   s.sdf = sdf;
-  s.softDropProtection = SettingsManager.softDropProtection;
+  s.softDropProtection = true;
 
   // Independent PRNG so the script is identical for a given seed but is not
   // correlated with the engines' own randomness.

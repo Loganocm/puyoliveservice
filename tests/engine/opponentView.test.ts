@@ -4,7 +4,7 @@ import { OpponentView } from '../../src/core/OpponentView';
 import { MatchClock, FRAME_MS } from '../../src/core/MatchClock';
 import type { InputType } from '../../src/core/ReplayEngine';
 import { COLS, TOTAL_ROWS, PuyoColor } from '../../src/core/Constants';
-import { GOLDEN_SEEDS, pinSettings } from '../helpers/scriptedRun';
+import { GOLDEN_SEEDS, applyTestConfig } from '../helpers/scriptedRun';
 
 /**
  * OPPONENT VIEW
@@ -38,8 +38,8 @@ interface Recorded {
 
 /** Play a match, recording inputs exactly as the client relays them. */
 function playAndRecord(seed: number, maxFrames: number): Recorded {
-    pinSettings();
     const engine = new GameEngine(seed);
+    applyTestConfig(engine);
     const inputs: { f: number; i: InputType; a?: number }[] = [];
     const rec = (i: InputType) => inputs.push({ f: engine.currentFrame, i });
 
@@ -82,7 +82,6 @@ beforeEach(() => {
     (MatchClock as any).offsetMs = 0;
     (MatchClock as any).synced = false;
     (MatchClock as any).bestRttMs = Number.POSITIVE_INFINITY;
-    pinSettings();
 });
 
 afterEach(() => {

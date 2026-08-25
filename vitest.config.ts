@@ -3,10 +3,11 @@ import path from 'path';
 
 // Client-side test suite. The API has its own suite under api/.
 //
-// Environment is jsdom because the engine currently reaches SettingsManager
-// (localStorage at module load) and SoundManager (asset imports). Removing
-// that coupling is the point of the engine extraction; until then jsdom lets
-// the characterization suite run against the unmodified engine.
+// Environment is 'node': the engine is pure. It takes its handling settings
+// from an injected config and reports audio through a hook, so it reaches no
+// browser global and needs no DOM. If a test here ever fails for want of
+// localStorage or Audio, something has re-coupled the engine to the browser --
+// fix that rather than switching this back to jsdom.
 //
 // See README §"Testing".
 
@@ -16,7 +17,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
+    environment: 'node',
     include: ['tests/**/*.test.ts'],
     // A simulation bug can turn into an unbounded loop. Fail fast rather than
     // hanging CI: every test must finish well inside this budget.

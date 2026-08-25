@@ -265,7 +265,7 @@ EXTRA_CORS_ORIGINS=http://192.168.1.42:5173
 ## Testing
 
 ```bash
-npm test              # engine suite: no database, no network, ~150ms
+npm test              # engine suite: no database, no network, no DOM, ~800ms
 npm run test:watch
 npm run test:coverage
 npm run typecheck
@@ -273,8 +273,14 @@ npm run typecheck
 cd api && npm test    # API suite: requires PostgreSQL
 ```
 
-The engine suite runs anywhere because it touches nothing external. That is
-deliberate — it is the suite that gates every refactor.
+The engine suite runs anywhere because it touches nothing external — no
+database, no network, and **no DOM**. The engine takes its handling settings
+from an injected `EngineConfig` and reports audio through an `onSound` hook, so
+it reaches no browser global.
+
+If an engine test ever fails for want of `localStorage` or `Audio`, something
+has re-coupled the engine to the browser. Fix that rather than switching the
+environment back to jsdom.
 
 ### What is covered
 
@@ -460,6 +466,21 @@ Three distinct identifiers, deliberately not interchangeable:
 
 Reconnection swaps `socketId` while keeping `userId` and `playerIndex`, which
 is why room state is keyed by socket but *identity* is keyed by user.
+
+### Engine inputs and outputs
+
+The engine is a pure function of its seed, its config, and the inputs applied
+to it. Everything else is a hook.
+
+| Term | Meaning |
+|---|---|
+| `EngineConfig` | Handling settings that affect simulation: `sdf`, `softDropProtection`. Injected, never read from a global. Live play points it at the player's settings; replay and the opponent view point it at what was recorded |
+| `onSound` | Reports audible moments (`chain`, `garbageLand`, `garbageSmall`, `garbageLarge`). Left unwired, the engine is silent — which is how replay and the opponent view stay quiet without a flag |
+| `seed` | The only source of randomness. Same seed plus same inputs always produces the same game |
+
+There is deliberately **no** `isReplaying` flag. It used to exist to select
+recorded settings and mute audio; injected config and an optional hook do both
+without a mode.
 
 ### Engines
 

@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GameEngine } from '../../src/core/GameEngine';
 import { ReplaySimulator } from '../../src/core/ReplaySimulator';
 import type { ReplayFileV3, ReplayInput } from '../../src/core/ReplayEngine';
 import { ENGINE_VERSION } from '../../src/core/ReplayEngine';
 import { COLS, TOTAL_ROWS, PuyoColor } from '../../src/core/Constants';
-import { GOLDEN_SEEDS, pinSettings } from '../helpers/scriptedRun';
+import { GOLDEN_SEEDS, applyTestConfig } from '../helpers/scriptedRun';
 
 /**
  * REPLAY FIDELITY
@@ -29,11 +29,6 @@ import { GOLDEN_SEEDS, pinSettings } from '../helpers/scriptedRun';
  *
  * See docs/adr/0002-replay-determinism.md.
  */
-
-beforeEach(() => {
-  pinSettings();
-});
-
 const CHECKPOINT_EVERY = 300;
 
 /** Row index of the topmost filled cell in a column, or TOTAL_ROWS if empty. */
@@ -63,8 +58,8 @@ interface RecordedMatch {
  * would pass even with the old force-disabled behaviour.
  */
 function recordMatch(seed: number, maxFrames: number, holdPattern: boolean): RecordedMatch {
-  pinSettings();
   const engine = new GameEngine(seed);
+  applyTestConfig(engine);
   const inputs: ReplayInput[] = [];
   const checkpoints = new Map<number, string>();
 

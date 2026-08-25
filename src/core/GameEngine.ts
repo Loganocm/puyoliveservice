@@ -1,8 +1,5 @@
 import { Board } from '../game/Board';
 import { COLS, TOTAL_ROWS, PuyoColor } from './Constants';
-import { SettingsManager } from './SettingsManager';
-
-import { SoundManager } from './SoundManager';
 
 export const GameState = {
     SPAWN: 0,
@@ -15,6 +12,31 @@ export const GameState = {
 } as const;
 
 export type GameState = typeof GameState[keyof typeof GameState];
+
+/**
+ * Handling settings that affect simulation, injected rather than read from a
+ * global.
+ *
+ * The engine used to read SettingsManager directly, which made it depend on
+ * the browser and forced a second pair of fields (replaySDF,
+ * replaySoftDropProtection) plus an isReplaying flag to select between live
+ * and recorded values. One mutable config replaces all of it: live play points
+ * it at the player's settings, replay and the opponent view point it at the
+ * values recorded for that player.
+ *
+ * See README "Vocabulary".
+ */
+export interface EngineConfig {
+    /** Soft-drop factor: gravity multiplier while soft drop is held. >= 40 is sonic drop. */
+    sdf: number;
+    /** Require a fresh soft-drop press after each spawn, so a held key cannot slam a new piece. */
+    softDropProtection: boolean;
+}
+
+export const DEFAULT_ENGINE_CONFIG: EngineConfig = { sdf: 10, softDropProtection: true };
+
+/** Audible moments the engine reports. Naming them keeps audio out of the engine. */
+export type EngineSound = 'garbageLand' | 'garbageSmall' | 'garbageLarge' | 'chain';
 
 export interface GameStats {
     score: number;
@@ -50,9 +72,8 @@ export class GameEngine {
         garbageReceived: 0
     };
 
-    // Matching Data (exposed for renderer)
+    /** Cells currently mid-clear, exposed so the renderer can animate them. */
     public matchedPuyos: { c: number, r: number }[][] = [];
-    public chainGroup: { c: number, r: number }[][] = [];
 
     // Garbage System
     // Score remainder carried over to next calculation
@@ -98,14 +119,6 @@ export class GameEngine {
     private softDropLocked: boolean = false; // For protection
     public horizontalMoveHeld: boolean = false; // For sticky top buffering
 
-    // Input Buffer (IRS/IHS)
-    // Stores an action string to be executed on the frame a piece spawns
-    public bufferAction: string | null = null;
-
-    // Initial Move Buffer (DAS Buffering)
-    // Stores a movement direction (-1 or 1) that was pressed during ARE but couldn't execute
-    public bufferedMove: number = 0;
-
     // State Timers (managed by engine, but renderer can override/sync)
     public stateTimer = 0;
     /** Hold time for the clear animation. 9 = 0.15s, chain-scaled at use. */
@@ -129,17 +142,14 @@ export class GameEngine {
     // Animation queue for dropping garbage
     public fallingGarbage: { c: number, r: number, destR: number, delay: number }[] = [];
     public fallingDestinations: { c: number, r: number, destR: number }[] = []; // For normal gravity
-    public garbageAnimationTimer = 0;
 
-    /** True for engines driven by recorded input (replay playback, opponent
-     *  view) rather than by a live player. Suppresses audio side effects and
-     *  selects the recorded handling settings below. */
-    public isReplaying: boolean = false;
+    /** Reports audible moments. Left unset, the engine is silent -- which is
+     *  how replay playback and the opponent view stay quiet without a flag. */
+    public onSound?: (sound: EngineSound, value?: number) => void;
 
-    // Replay-locked settings (set by ReplaySimulator for determinism)
-    // These override SettingsManager values during replay to match the original game
-    public replaySDF: number = 10;
-    public replaySoftDropProtection: boolean = true;
+    /** Handling settings for THIS engine. Mutable so live play can follow the
+     *  player's preferences mid-match; replay and opponent view set it once. */
+    public config: EngineConfig = { ...DEFAULT_ENGINE_CONFIG };
 
     constructor(seed?: number) {
         // If no seed provided, generate one
@@ -341,11 +351,6 @@ export class GameEngine {
         return false;
     }
 
-    public fastDrop(_active: boolean) {
-        // Just modifies speed for the update loop
-        // handled via `handleActiveState` pulling settings
-    }
-
     // For replay engine - explicit soft drop control
     public setSoftDrop(active: boolean): void {
         this._softDrop = active;
@@ -457,16 +462,13 @@ export class GameEngine {
 
             // Soft Drop Protection
             // During replay, use recorded setting for determinism
-            const softDropProtection = this.isReplaying ? this.replaySoftDropProtection : SettingsManager.softDropProtection;
+            const softDropProtection = this.config.softDropProtection;
             if (softDropProtection && this.softDrop) {
                 this.softDropLocked = true;
             } else {
                 this.softDropLocked = false;
             }
 
-            // Reset Buffer Actions
-            this.bufferAction = null;
-            this.bufferedMove = 0;
         }
     }
 
@@ -492,7 +494,7 @@ export class GameEngine {
             // SDF Logic: Drop speed = Base Speed * SDF
             // Delay = Base Delay / SDF
             // During replay, use recorded SDF for determinism
-            const sdf = this.isReplaying ? this.replaySDF : SettingsManager.sdf;
+            const sdf = this.config.sdf;
             delay = Math.max(1, Math.floor(this.currentDropDelay / sdf));
 
             // If SDF is huge (infinity/40), we might want immediate ground.
@@ -661,8 +663,6 @@ export class GameEngine {
         // the X cell (column 2, row 0 - the spawn point).
         // Row 0 is the first hidden row where the X marker sits.
 
-        // Trigger chain check
-        this.chainGroup = [];
         this.dropTimer = 0;
         this.changeState(GameState.FALLING);
     }
@@ -796,8 +796,8 @@ export class GameEngine {
             }
         }
 
-        if (this.fallingGarbage.length > 0 && !this.isReplaying) {
-            SoundManager.play('tinygarbage');
+        if (this.fallingGarbage.length > 0) {
+            this.onSound?.('garbageLand');
         }
     }
 
@@ -859,10 +859,7 @@ export class GameEngine {
             this.stats.chainCount++;
 
             this.onChainStep?.(this.stats.chainCount);
-            // Don't play sounds from engine during replay — ReplayScene hooks handle audio
-            if (!this.isReplaying) {
-                SoundManager.playCombo(this.stats.chainCount);
-            }
+            this.onSound?.('chain', this.stats.chainCount);
 
             this.changeState(GameState.POP_ANIM);
         } else {
@@ -959,11 +956,7 @@ export class GameEngine {
         this.scoreRemainder = generatedPoints % 70;
 
         if (rocksToSend > 0) {
-            // Play Garbage Sound (suppress during replay - scene hooks handle audio)
-            if (!this.isReplaying) {
-                if (rocksToSend >= 15) SoundManager.play('hugegarbage');
-                else SoundManager.play('tinygarbage');
-            }
+            this.onSound?.(rocksToSend >= 15 ? 'garbageLarge' : 'garbageSmall');
 
             this.stats.garbageSent += rocksToSend;
             this.onGarbageGenerated?.(rocksToSend);

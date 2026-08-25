@@ -55,9 +55,8 @@ export class OpponentView {
 
     constructor(seed: number) {
         this.engine = new GameEngine(seed);
-        // Suppress sound and the replay-only branches; this engine exists to be
-        // looked at, not played.
-        this.engine.isReplaying = true;
+        // No onSound hook is wired, so this engine is silent: the opponent's
+        // board is watched, not played.
         this.sizeBufferFromRtt();
     }
 

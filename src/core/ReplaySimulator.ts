@@ -111,30 +111,17 @@ export class ReplaySimulator {
         // Create two engines with identical seeds (matches live game)
         const engine1 = new GameEngine(seed);
         const engine2 = new GameEngine(seed);
-        engine1.isReplaying = true;
-        engine2.isReplaying = true;
 
         // V3: Apply per-player settings for deterministic replay
         // Each player can have different SDF/softDropProtection values.
+        // Each player may have played with different handling settings, so both
+        // engines are configured from what was recorded for that player rather
+        // than from whatever this machine's preferences happen to be.
         const playerSettings = this.replayData.playerSettings;
-        if (playerSettings) {
-            // Player 0 settings
-            if (playerSettings[0]) {
-                if (typeof playerSettings[0].sdf === 'number') {
-                    engine1.replaySDF = playerSettings[0].sdf;
-                }
-                if (typeof playerSettings[0].softDropProtection === 'boolean') {
-                    engine1.replaySoftDropProtection = playerSettings[0].softDropProtection;
-                }
-            }
-            // Player 1 settings (may differ from player 0)
-            if (playerSettings[1]) {
-                if (typeof playerSettings[1].sdf === 'number') {
-                    engine2.replaySDF = playerSettings[1].sdf;
-                }
-                if (typeof playerSettings[1].softDropProtection === 'boolean') {
-                    engine2.replaySoftDropProtection = playerSettings[1].softDropProtection;
-                }
+        for (const [engine, recorded] of [[engine1, playerSettings?.[0]], [engine2, playerSettings?.[1]]] as const) {
+            if (typeof recorded?.sdf === 'number') engine.config.sdf = recorded.sdf;
+            if (typeof recorded?.softDropProtection === 'boolean') {
+                engine.config.softDropProtection = recorded.softDropProtection;
             }
         }
 

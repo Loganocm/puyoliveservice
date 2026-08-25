@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GameEngine } from '../../src/core/GameEngine';
 import {
   runScripted,
   runHeuristic,
   makeScript,
   GOLDEN_SEEDS,
-  pinSettings,
 } from '../helpers/scriptedRun';
 
 /**
@@ -23,11 +22,6 @@ import {
  *
  * See README §"Testing" -> "Characterization goldens".
  */
-
-beforeEach(() => {
-  pinSettings();
-});
-
 describe('piece sequence', () => {
   /**
    * The piece order a seed produces is the single most load-bearing property in
