@@ -88,3 +88,68 @@ jobs:
         run: |
           test -f dist/index.html || { echo "::error::client build produced no index.html"; exit 1; }
           echo "client bundle OK ($(du -sh dist | cut -f1))"
+
+  deploy-smoke:
+    name: Deploy smoke test
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      # Building the images is not enough: an image can build cleanly and still
+      # fail to boot (bad migration, missing env var, wrong entrypoint). This
+      # brings the real stack up and proves it answers, because Watchtower
+      # deploys whatever is published within ~5 minutes with no other gate.
+      - name: Build and start the stack
+        env:
+          DB_PASSWORD: smoke_test_password
+          JWT_SECRET: smoke_test_jwt_secret_that_is_at_least_sixty_four_characters_long_ok
+          INTERNAL_API_KEY: smoke_test_internal_key_at_least_32_chars
+          CLOUDFLARE_TUNNEL_TOKEN: unused-in-ci
+        run: |
+          # Tunnel and watchtower are host concerns, not part of the artifact.
+          docker compose up -d --build db api game-server
+
+      - name: Wait for the API to report healthy
+        run: |
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' puyio-api 2>/dev/null || echo starting)
+            if [ "$status" = "healthy" ]; then echo "API healthy after ${i}0s"; exit 0; fi
+            if [ "$status" = "unhealthy" ]; then echo "::error::API became unhealthy"; break; fi
+            sleep 10
+          done
+          echo "::error::API did not become healthy in time"
+          exit 1
+
+      - name: Check the API answers over HTTP
+        run: |
+          body=$(curl -fsS --max-time 10 http://localhost:8080/health)
+          echo "$body"
+          echo "$body" | grep -q '"database":"connected"' \
+            || { echo "::error::API is up but not connected to Postgres"; exit 1; }
+
+      - name: Check the game server answers
+        run: |
+          body=$(curl -fsS --max-time 10 http://localhost:3000/health)
+          echo "game server: $body"
+          [ "$body" = "OK" ] || { echo "::error::unexpected game server health response"; exit 1; }
+
+      - name: Confirm migrations actually ran
+        env:
+          DB_PASSWORD: smoke_test_password
+        run: |
+          # The entrypoint runs `prisma migrate deploy` before starting. If that
+          # silently failed the API would still answer /health, so assert the
+          # schema exists rather than trusting the exit code.
+          docker compose exec -T -e PGPASSWORD="$DB_PASSWORD" db \
+            psql -U postgres -d puyio_db -c '\dt' | tee /tmp/tables.txt
+          grep -q 'users' /tmp/tables.txt || { echo "::error::users table missing — migrations did not run"; exit 1; }
+          grep -q 'matches' /tmp/tables.txt || { echo "::error::matches table missing"; exit 1; }
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

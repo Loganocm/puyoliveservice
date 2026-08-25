@@ -54,8 +54,12 @@ export class GameScene implements IScene {
     private opponentActivePiece: any = null; // { x, y, rot, main, sub }
     /** Local simulation of the opponent, driven by their relayed inputs. */
     private opponentView: OpponentView | null = null;
+
+    /** Board-state heartbeat cadence. Must stay well under the server's 7s
+     *  AFK timeout while sending far less than the 10/s the server allows. */
+    private static readonly BOARD_SYNC_INTERVAL_MS = 500;
+    private lastBoardSendMs = 0;
     private opponentGarbage: number = 0; // Track opponent's garbage tray
-    private opponentScoreText: Text | null = null;
 
 
     // Effects
@@ -561,30 +565,21 @@ export class GameScene implements IScene {
             }
         };
 
+        // Board snapshots are no longer how the opponent sees us -- they see a
+        // local simulation of our input stream (see OpponentView). What remains
+        // is a low-rate safety net: it feeds the server's AFK heartbeat and
+        // lets the opponent detect drift if inputs are ever lost.
+        //
+        // Firing on every board change was pointless: the server caps this
+        // event at 10/s and silently drops the rest, so most packets were
+        // discarded. Throttling here makes the real rate intentional.
         this.engine.onBoardChange = () => {
-            if (this.roomId) {
-                // Send board AND current garbage tray state to synchronize opponent's view
-                const totalGarbage = this.engine.garbageQueue + this.engine.nuisanceTray;
-                NetworkManager.sendBoardState(this.roomId, this.engine.board.getSerializedData(), totalGarbage);
-            }
-        };
-
-        this.engine.onActivePieceUpdate = () => {
-            if (this.roomId && this.engine.activePiece) {
-                NetworkManager.sendPlayerState(this.roomId, {
-                    x: this.engine.activePiece.x,
-                    y: this.engine.activePiece.y,
-                    rot: this.engine.activePiece.rot,
-                    main: this.engine.activePiece.mainColor,
-                    sub: this.engine.activePiece.subColor
-                });
-            }
-        };
-
-        this.engine.onScoreChange = (score) => {
-            if (this.roomId) {
-                NetworkManager.sendScore(this.roomId, score);
-            }
+            if (!this.roomId) return;
+            const now = performance.now();
+            if (now - this.lastBoardSendMs < GameScene.BOARD_SYNC_INTERVAL_MS) return;
+            this.lastBoardSendMs = now;
+            const totalGarbage = this.engine.garbageQueue + this.engine.nuisanceTray;
+            NetworkManager.sendBoardState(this.roomId, this.engine.board.getSerializedData(), totalGarbage);
         };
 
         this.engine.onPieceLock = (cells) => {
@@ -1458,7 +1453,7 @@ export class GameScene implements IScene {
         // Skip the persistent border graphics
         const opChildren = this.opponentContainer.removeChildren();
         for (let i = 0; i < opChildren.length; i++) {
-            if (opChildren[i] !== this.opponentBorderGraphics && opChildren[i] !== this.opponentScoreText) {
+            if (opChildren[i] !== this.opponentBorderGraphics) {
                 opChildren[i].destroy();
             }
         }

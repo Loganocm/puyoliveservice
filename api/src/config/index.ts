@@ -35,7 +35,10 @@ export const config = {
   },
 
   // API
-  port: parseInt(process.env.PORT || '3001', 10),
+  // 8080 matches both docker-compose and the client's dev fallback in
+  // src/api/client.ts. It previously defaulted to 3001, which collided with the
+  // game server's default and meant local dev could not work unconfigured.
+  port: parseInt(process.env.PORT || '8080', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
 
   // CORS

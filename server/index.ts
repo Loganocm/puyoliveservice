@@ -97,7 +97,9 @@ const io = new Server(httpServer, {
   maxHttpBufferSize: 256 * 1024, // 256 KB max payload — prevents oversized grid/state DoS
 });
 
-const port = process.env.PORT || 3001;
+// 3000 matches both docker-compose and NetworkManager's dev fallback. This
+// previously defaulted to 3001, colliding with the API's default.
+const port = process.env.PORT || 3000;
 
 // Track authenticated users: socket.id -> { userId, token }
 const authenticatedUsers = new Map<string, {
@@ -942,33 +944,6 @@ io.on('connection', (socket: Socket) => {
 
     // Relay to opponent for display (cosmetic only — server sim is authoritative)
     socket.broadcast.to(data.roomId).emit('receive_board_state', { grid: data.grid, playerId: socket.id });
-  });
-
-  socket.on('send_player_state', (data: { roomId: string, state: any }) => {
-    if (!data || typeof data.roomId !== 'string') return;
-    if (!data.state || typeof data.state !== 'object' || Array.isArray(data.state)) return;
-    // Whitelist only known player state keys to prevent data injection
-    const s = data.state;
-    if (typeof s.x !== 'number' || typeof s.y !== 'number' || typeof s.rot !== 'number' ||
-        typeof s.main !== 'number' || typeof s.sub !== 'number') return;
-    const sanitizedState = { x: s.x, y: s.y, rot: s.rot, main: s.main, sub: s.sub };
-    if (!checkSocketRate(socket.id, 'send_player_state', 60)) return;
-    const room = roomManager.getRoom(data.roomId);
-    if (!room || !room.players.has(socket.id)) return;
-    if (!room.matchStats || room.matchConcluded) return;
-    socket.broadcast.to(data.roomId).emit('receive_player_state', { state: sanitizedState, playerId: socket.id });
-  });
-
-  // Score is COSMETIC RELAY ONLY — does not affect match results, ELO, or any server state.
-  // Server-authoritative data (garbage sent, chains) is tracked via recordGarbage/recordChain.
-  socket.on('send_score', (data: { roomId: string, score: number }) => {
-    if (!data || typeof data.roomId !== 'string') return;
-    if (typeof data.score !== 'number' || !Number.isFinite(data.score) || data.score < 0 || data.score > 999999) return;
-    if (!checkSocketRate(socket.id, 'send_score', 10)) return;
-    const room = roomManager.getRoom(data.roomId);
-    if (!room || !room.players.has(socket.id)) return;
-    if (!room.matchStats || room.matchConcluded) return;
-    socket.broadcast.to(data.roomId).emit('receive_score', { score: data.score, playerId: socket.id });
   });
 
   // Helper to handle match end, recording, and notifications

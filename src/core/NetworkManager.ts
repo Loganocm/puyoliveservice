@@ -113,14 +113,6 @@ export class NetworkManager {
             this.emit('receive_board_state', data);
         });
 
-        this.socket.on('receive_player_state', (data: { state: any, playerId: string }) => {
-            this.emit('receive_player_state', data);
-        });
-
-        this.socket.on('receive_score', (data: { score: number, playerId: string }) => {
-            this.emit('receive_score', data);
-        });
-
         this.socket.on('opponent_lost', () => {
             this.emit('opponent_lost');
         });
@@ -325,16 +317,6 @@ export class NetworkManager {
     public static sendPlayerLost(roomId: string) {
         if (!this.socket) return;
         this.socket.emit('player_lost', { roomId });
-    }
-
-    public static sendPlayerState(roomId: string, state: { x: number, y: number, rot: number, main: number, sub: number }) {
-        if (!this.socket) return;
-        this.socket.emit('send_player_state', { roomId, state });
-    }
-
-    public static sendScore(roomId: string, score: number) {
-        if (!this.socket) return;
-        this.socket.emit('send_score', { roomId, score });
     }
 
     public static sendLost(roomId: string) {
