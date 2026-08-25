@@ -40,6 +40,34 @@ jobs:
         working-directory: ./server
         run: npx tsc --noEmit -p tsconfig.json
 
+  engine-tests:
+    name: Engine tests
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Pure simulation tests: no database, no network, no browser.
+      # Characterization goldens gate every refactor of the engine.
+      - name: Run engine suite
+        run: npm test
+
+      - name: Fail if goldens drifted
+        run: |
+          if ! git diff --quiet -- tests/**/__snapshots__; then
+            echo "::error::Snapshot goldens changed during the test run."
+            echo "A behaviour change must be committed deliberately with an ADR."
+            git diff -- tests/**/__snapshots__
+            exit 1
+          fi
+          echo "goldens stable"
+
   build:
     name: Build artifacts
     runs-on: ubuntu-latest
