@@ -11,6 +11,7 @@ import { SoundManager } from '../core/SoundManager';
 import { GameEngine, GameState } from '../core/GameEngine';
 import { NetworkManager } from '../core/NetworkManager';
 import { MatchClock } from '../core/MatchClock';
+import { OpponentView } from '../core/OpponentView';
 import { GameEvents } from '../core/GameEvents';
 import { SettingsOverlay } from '../ui/SettingsOverlay';
 import { backgroundManager } from '../core/BackgroundManager';
@@ -51,6 +52,8 @@ export class GameScene implements IScene {
     private engine!: GameEngine;
     private opponentBoard: Board;
     private opponentActivePiece: any = null; // { x, y, rot, main, sub }
+    /** Local simulation of the opponent, driven by their relayed inputs. */
+    private opponentView: OpponentView | null = null;
     private opponentGarbage: number = 0; // Track opponent's garbage tray
     private opponentScoreText: Text | null = null;
 
@@ -247,39 +250,35 @@ export class GameScene implements IScene {
             NetworkManager.on('receive_garbage', onGarbage);
             this.networkListeners.push({ event: 'receive_garbage', cb: onGarbage });
 
+            // The opponent's board is SIMULATED locally from their input stream,
+            // not reconstructed from relayed grids. Both engines share a seed and
+            // the engine is deterministic, so replaying their inputs reproduces
+            // their board exactly, at 60fps, for a fraction of the bandwidth.
+            // See src/core/OpponentView.ts and docs/adr/0004-opponent-simulation.md.
+            const onOpponentInput = (data: any) => {
+                if (this.opponentId && data.playerId && data.playerId !== this.opponentId) return;
+                if (!this.opponentView || typeof data?.f !== 'number') return;
+                this.opponentView.receiveInput(data.f, data.i, data.a);
+            };
+            NetworkManager.on('opponent_input', onOpponentInput);
+            this.networkListeners.push({ event: 'opponent_input', cb: onOpponentInput });
+
+            // Board snapshots are now a low-rate safety net, not the mechanism.
+            // The simulation should already agree; reconcile() only writes when
+            // it does not, so the common case has no visual pop.
             const onBoard = (data: any) => {
                 try {
-                    // Filter stray packets
-                    if (this.opponentId && data.playerId && data.playerId !== this.opponentId) {
-                        // console.log("Ignoring board from non-opponent:", data.playerId);
-                        return;
+                    if (this.opponentId && data.playerId && data.playerId !== this.opponentId) return;
+                    if (data?.grid && this.opponentView) {
+                        this.opponentView.reconcile(data.grid);
                     }
-
-                    if (data && data.grid) {
-                        this.opponentBoard.updateFromData(data.grid);
-                        // Clear active piece on board update (assuming lock)
-                        this.opponentActivePiece = null;
-
-                        // Update opponent garbage
-                        if (typeof data.garbageTray === 'number') {
-                            this.opponentGarbage = data.garbageTray;
-                        }
+                    if (typeof data?.garbageTray === 'number') {
+                        this.opponentGarbage = data.garbageTray;
                     }
-                } catch (e) { console.error("Error processing opponent board:", e); }
+                } catch (e) { console.error("Error reconciling opponent board:", e); }
             };
             NetworkManager.on('receive_board_state', onBoard);
             this.networkListeners.push({ event: 'receive_board_state', cb: onBoard });
-
-            const onPlayer = (data: any) => {
-                // { state: { x, y, rot, main, sub }, playerId: ... }
-                if (this.opponentId && data.playerId && data.playerId !== this.opponentId) return;
-
-                if (data && data.state) {
-                    this.opponentActivePiece = data.state;
-                }
-            };
-            NetworkManager.on('receive_player_state', onPlayer);
-            this.networkListeners.push({ event: 'receive_player_state', cb: onPlayer });
 
             const onOpponentWon = (_data: any) => {
                 // Handled by opponent_lost
@@ -486,6 +485,10 @@ export class GameScene implements IScene {
 
             if (this.roomId) {
                 NetworkManager.recordSettings(this.roomId, SettingsManager.sdf, SettingsManager.softDropProtection);
+                // Both players share a seed, so the opponent's board can be
+                // reconstructed locally from the inputs the server relays.
+                this.opponentView?.dispose();
+                this.opponentView = new OpponentView(this.seed ?? 0);
             }
         }
 
@@ -915,6 +918,19 @@ export class GameScene implements IScene {
                             }
                         }
                     }
+                }
+
+                // Advance the opponent's simulation and mirror it into the
+                // fields the renderer already reads. Keeping the render path
+                // unchanged means this swap is invisible to the draw code.
+                if (this.opponentView) {
+                    this.opponentView.update();
+                    this.opponentBoard.grid = this.opponentView.board.grid;
+                    const op = this.opponentView.activePiece;
+                    this.opponentActivePiece = op
+                        ? { x: op.x, y: op.y, rot: op.rot, main: op.mainColor, sub: op.subColor }
+                        : null;
+                    this.opponentGarbage = this.opponentView.garbageQueue + this.opponentView.nuisanceTray;
                 }
 
                 // Update timer
@@ -2084,6 +2100,9 @@ export class GameScene implements IScene {
 
 
     destroy(): void {
+        this.opponentView?.dispose();
+        this.opponentView = null;
+
         console.log("[GameScene] Destroying...");
         document.removeEventListener('visibilitychange', this.handleVisibilityChange);
         if (this.afkTimer) clearInterval(this.afkTimer);

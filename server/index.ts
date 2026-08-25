@@ -338,6 +338,15 @@ if (SIMULATED_LATENCY_MS > 0) {
   console.log(`[Dev] Injecting ${SIMULATED_LATENCY_MS}ms artificial latency on outbound events`);
 }
 
+/** Broadcast to everyone in a room EXCEPT the sender, honouring dev latency. */
+function relayToRoom(from: Socket, roomId: string, event: string, payload?: any) {
+  if (SIMULATED_LATENCY_MS > 0) {
+    setTimeout(() => from.broadcast.to(roomId).emit(event, payload), SIMULATED_LATENCY_MS);
+  } else {
+    from.broadcast.to(roomId).emit(event, payload);
+  }
+}
+
 /** Emit to a room, honouring the dev latency injection. */
 function emitToRoom(roomId: string, event: string, payload?: any) {
   if (SIMULATED_LATENCY_MS > 0) {
@@ -858,7 +867,20 @@ io.on('connection', (socket: Socket) => {
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
     const playerIndex = room.getPlayerIndex(socket.id) as 0 | 1;
-    room.recordInput(playerIndex, data.input as any, Math.floor(data.f), data.a ? Math.floor(data.a) : undefined);
+    const frame = Math.floor(data.f);
+    const amount = data.a ? Math.floor(data.a) : undefined;
+    room.recordInput(playerIndex, data.input as any, frame, amount);
+
+    // Relay to the opponent so they can simulate this player's board locally
+    // instead of receiving rate-limited grid snapshots. One input stream now
+    // serves live spectating, replay playback and the mirrored simulation.
+    // See src/core/OpponentView.ts and docs/adr/0004-opponent-simulation.md.
+    relayToRoom(socket, data.roomId, 'opponent_input', {
+      playerId: socket.id,
+      f: frame,
+      i: data.input,
+      a: amount,
+    });
 
     // Execute input on server-side simulator (authoritative game state)
     // Server sim is delayed by ping, so it applies it "late" relative to client, but preserves game flow
