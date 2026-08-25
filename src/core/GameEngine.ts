@@ -69,12 +69,22 @@ export class GameEngine {
     private frameCount = 0;
     public get currentFrame(): number { return this.frameCount; }
     private dropTimer = 0;
-    private currentDropDelay = 60; // Puyo Tsu Level 1 (Very Slow ~1s/row)
-    private lockDelay = 30; // 0.5s placement delay (kept fast)
+    // ── Frame timing ─────────────────────────────────────────────────────────
+    // All values are ENGINE FRAMES at 60 logical fps. The engine is advanced
+    // exactly once per logical frame (see GameScene and MatchClock).
+    //
+    // These were previously written as if the engine ran at 60 fps while a
+    // double-advance bug in the scene layer ran it at ~120, so every value
+    // took half its stated wall-clock time. The bug is fixed; these numbers
+    // are now restated to what the game has always actually played at, which
+    // is the speed it was tuned around. Puyo Tsu Level 1 is 60 frames/row
+    // (~1 row/s); this game deliberately runs at double that.
+    // See docs/adr/0001-frame-timing.md.
+    /** Gravity: frames per row of natural fall. 30 = 2 rows/sec. */
+    private currentDropDelay = 30;
+    /** Grace after touching down before the piece locks. 15 = 0.25s. */
+    private lockDelay = 15;
     private lockTimer = 0;
-
-    // Timer for ARE (Entry Delay)
-    public areTimer: number = 0;
 
     // Input States
     private _softDrop: boolean = false;
@@ -98,8 +108,10 @@ export class GameEngine {
 
     // State Timers (managed by engine, but renderer can override/sync)
     public stateTimer = 0;
-    public readonly POP_ANIM_DURATION = 18; // 300ms (18 frames)
-    public readonly FALL_STEP_DELAY = 10; // Slowed down from 2 -> 10 for better rhythm
+    /** Hold time for the clear animation. 9 = 0.15s, chain-scaled at use. */
+    public readonly POP_ANIM_DURATION = 9;
+    /** Delay per cascade step after a pop. 5 = 0.083s, chain-scaled at use. */
+    public readonly FALL_STEP_DELAY = 5;
 
     // Events
     public onStateChange?: (state: GameState) => void;
@@ -181,7 +193,6 @@ export class GameEngine {
         this.garbageFellThisTurn = false;
         this.dropTimer = 0;
         this.lockTimer = 0;
-        this.areTimer = 0;
         this.stateTimer = 0;
         this._softDrop = false;
         this.softDropLocked = false;
@@ -373,9 +384,6 @@ export class GameEngine {
     // --- Actions (Input Interfacing) ---
 
     public movePiece(dx: number): boolean {
-        // Enforce ARE freeze on movement
-        if (this.areTimer > 0) return false;
-
         // Allow movement if ACTIVE or (just for safety) if activePiece exists
         // (Caller usually checks state, but engine should be strict or lenient?)
         // Let's keep it strict but allow movement if piece exists for our spawn logic
@@ -408,7 +416,6 @@ export class GameEngine {
     // Instant hard drop (optional for Puyo, but requested in modern clones)
     public hardDrop(): boolean {
         if (this.state !== GameState.ACTIVE || !this.activePiece) return false;
-        if (this.areTimer > 0) return false;
 
         let dropped = 0;
         while (this.canMove(0, 1)) {
@@ -437,7 +444,6 @@ export class GameEngine {
 
     public rotate(dir: 1 | -1): boolean {
         if (this.state !== GameState.ACTIVE || !this.activePiece) return false;
-        if (this.areTimer > 0) return false;
 
         const newRot = (this.activePiece.rot + dir + 4) % 4;
 
@@ -524,24 +530,10 @@ export class GameEngine {
             this.bufferAction = null;
             this.bufferedMove = 0;
         }
-
-        // Handle ARE Delay
-        if (this.areTimer > 0) {
-            this.areTimer -= this.dt;
-            if (this.areTimer > 0) {
-                return; // Wait comfortably, active piece exists (visible) but frozen
-            }
-        }
     }
 
     private handleActiveState() {
         if (!this.activePiece) return;
-
-        // Freeze logic if still in ARE (Spawn Delay)
-        if (this.areTimer > 0) {
-            this.areTimer -= this.dt; // Wait for ARE
-            return;
-        }
 
         // Gravity Calculation
         // Standard Puyo G = ~0.03G to ~1G depending on level.
@@ -810,7 +802,7 @@ export class GameEngine {
 
         if (amount <= 0) {
             this.changeState(GameState.SPAWN);
-            if (this.areTimer === 0) this.spawnPiece();
+            this.spawnPiece();
             return;
         }
 
@@ -964,9 +956,7 @@ export class GameEngine {
                 this.changeState(GameState.GARBAGE_FALL);
             } else {
                 this.changeState(GameState.SPAWN);
-                if (this.areTimer === 0) {
-                    this.spawnPiece();
-                }
+                this.spawnPiece();
             }
         }
     }

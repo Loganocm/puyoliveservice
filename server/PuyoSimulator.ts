@@ -211,10 +211,13 @@ export class PuyoSimulator {
   private stateTimer = 0;
 
   // Fixed settings (must match client defaults for determinism)
-  private readonly currentDropDelay = 60;
-  private readonly lockDelay = 30;
-  private readonly POP_ANIM_DURATION = 18;
-  private readonly FALL_STEP_DELAY = 10;
+  // Frame timing. MUST match the client engine exactly or the mirrored
+  // simulation diverges. This duplication is removed when both engines
+  // become one package. See docs/adr/0001-frame-timing.md.
+  private readonly currentDropDelay = 30; // gravity: frames per row
+  private readonly lockDelay = 15;        // grace before lock-in
+  private readonly POP_ANIM_DURATION = 9; // clear animation hold
+  private readonly FALL_STEP_DELAY = 5;   // cascade step delay
   // V3: Per-player configurable settings (set by server from recorded player prefs)
   sdf = 10; // Soft Drop Factor (matches SettingsManager default)
   softDropProtection = true;

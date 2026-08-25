@@ -9,7 +9,8 @@
       "DOM.Iterable"
     ],
     "types": [
-      "vite/client"
+      "vite/client",
+      "vitest/globals"
     ],
     "skipLibCheck": true,
     /* Bundler mode */
@@ -34,7 +35,12 @@
       ]
     }
   },
+  // tests/ is included deliberately: a stale reference in the suite (an
+  // assignment to a field that no longer exists) previously survived because
+  // Vitest transpiles without type-checking and tests/ sat outside this scope.
   "include": [
-    "src"
+    "src",
+    "tests",
+    "vitest.config.ts"
   ]
 }

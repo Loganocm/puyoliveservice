@@ -71,7 +71,6 @@ export function pinSettings(): void {
   SettingsManager.das = 25;
   SettingsManager.arr = 15;
   SettingsManager.sdf = 10;
-  SettingsManager.are = 30;
   SettingsManager.lineClearDelay = 20;
   SettingsManager.softDropProtection = true;
 }

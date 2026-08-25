@@ -16,10 +16,6 @@ export class SettingsManager {
   // User requested default 10
   public static sdf = 10;
 
-  // ARE: Are Ready Entry (Spawn Delay in frames)
-  // 0 = Instant Spawn, 6-10 = Standard arcade feel, 30 = 0.5s "Time to think"
-  public static are = 30;
-
   // Line Clear Delay (frames to wait during clear animation)
   // 0 = Instant, 20 = Standard
   public static lineClearDelay = 20;
@@ -48,7 +44,6 @@ export class SettingsManager {
       das: this.das,
       arr: this.arr,
       sdf: this.sdf,
-      are: this.are,
       lineClearDelay: this.lineClearDelay,
       masterVolume: this.masterVolume,
       bgmVolume: this.bgmVolume,
@@ -69,7 +64,6 @@ export class SettingsManager {
         if (parsed.sdf !== undefined) this.sdf = parsed.sdf;
         else if (parsed.softDropSpeed !== undefined) this.sdf = parsed.softDropSpeed;
 
-        if (parsed.are !== undefined) this.are = parsed.are;
         if (parsed.lineClearDelay !== undefined) this.lineClearDelay = parsed.lineClearDelay;
         if (parsed.masterVolume !== undefined) {
           this.masterVolume = parsed.masterVolume;
