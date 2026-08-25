@@ -35,7 +35,6 @@ const initGame = async () => {
   try {
     NetworkManager.connect(); // Connect to server
     await SceneManager.init(1000, 900, appDiv);
-    // await UIManager.init(); // Legacy UI disabled
     await ResourceManager.load();
     await SoundManager.load();
 
@@ -65,7 +64,6 @@ const initGame = async () => {
       SceneManager.appInstance.ticker.add((ticker) => {
         SceneManager.update(ticker.deltaTime);
         Input.update();
-        // UIManager.update(); // Legacy UI disabled
       });
     }
   } catch (error) {

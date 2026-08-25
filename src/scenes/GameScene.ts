@@ -422,7 +422,6 @@ export class GameScene implements IScene {
         // Listen for React overlay events
         GameEvents.on('game_resume', this.handleGameResume);
 
-        // UIManager.showGameHUD(!!this.roomId); // Handled by React now
 
     }
 
