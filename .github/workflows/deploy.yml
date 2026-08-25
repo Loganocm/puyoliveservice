@@ -1,5 +1,14 @@
 name: Build & Push Docker Images
 
+# Publishes service images to GHCR. Watchtower on the host polls GHCR every
+# 300s and hot-swaps running containers, so anything published here is in
+# production within ~5 minutes.
+#
+# GATE: every job below requires `verify` to pass first. A commit that does
+# not type-check or build cannot be published.
+#
+# See README §"Deployment pipeline".
+
 on:
   push:
     branches: [main]
@@ -9,8 +18,13 @@ env:
   OWNER: loganocm
 
 jobs:
+  verify:
+    name: Verify
+    uses: ./.github/workflows/verify.yml
+
   build-api:
     name: Build & Push API
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,6 +55,7 @@ jobs:
 
   build-game-server:
     name: Build & Push Game Server
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read

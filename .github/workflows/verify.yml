@@ -1,0 +1,62 @@
+name: Verify
+
+# Reusable verification pipeline. Called by:
+#   - ci.yml     on every branch push and PR
+#   - deploy.yml as a required gate before any image is published
+#
+# Nothing reaches production without passing every job here. Watchtower
+# auto-deploys published images within ~5 minutes, so this is the only gate.
+#
+# See README §"Continuous integration".
+
+on:
+  workflow_call:
+
+jobs:
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install client dependencies
+        run: npm ci
+      - name: Install API dependencies
+        working-directory: ./api
+        run: npm ci
+      - name: Install game server dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Type check client
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Type check API
+        working-directory: ./api
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Type check game server
+        working-directory: ./server
+        run: npx tsc --noEmit -p tsconfig.json
+
+  build:
+    name: Build artifacts
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install client dependencies
+        run: npm ci
+
+      - name: Build client bundle
+        run: npm run build
+
+      - name: Fail if the client bundle is empty
+        run: |
+          test -f dist/index.html || { echo "::error::client build produced no index.html"; exit 1; }
+          echo "client bundle OK ($(du -sh dist | cut -f1))"

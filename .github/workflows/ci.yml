@@ -1,0 +1,22 @@
+name: CI
+
+# Runs the full verification pipeline on every branch and pull request.
+# The same pipeline gates deploy.yml, so a green CI here means the commit
+# is publishable.
+#
+# See README §"Continuous integration".
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    uses: ./.github/workflows/verify.yml
