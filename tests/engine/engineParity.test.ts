@@ -97,7 +97,7 @@ function findFirstDivergence(seed: number, frames: number, sdf: number = 10): Di
       s.executeInput({ i: 'G', a: amount });
     }
 
-    e.update(1.0);
+    e.update();
     s.update();
 
     const eOver = e.state === 6;

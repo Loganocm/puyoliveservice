@@ -110,7 +110,7 @@ export function runScripted(
   let executed = 0;
   for (let f = 0; f < frames; f++) {
     applyAction(engine, actions[f] ?? 'NONE');
-    engine.update(1.0);
+    engine.update();
     executed = f + 1;
     if ((f + 1) % checkpointEvery === 0) {
       checkpoints.push(engine.computeBoardHash());
@@ -218,7 +218,7 @@ export function runHeuristic(
       engine.hardDrop();
     }
 
-    engine.update(1.0);
+    engine.update();
     executed = f + 1;
     if ((f + 1) % checkpointEvery === 0) checkpoints.push(engine.computeBoardHash());
     if (engine.state === 6 /* GAMEOVER */) break;

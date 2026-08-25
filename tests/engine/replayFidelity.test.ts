@@ -74,7 +74,7 @@ function recordMatch(seed: number, maxFrames: number, holdPattern: boolean): Rec
 
   let frames = 0;
   for (let f = 0; f < maxFrames; f++) {
-    engine.update(1.0);
+    engine.update();
     frames = engine.currentFrame;
 
     // Checkpoint BEFORE this frame's inputs are applied.

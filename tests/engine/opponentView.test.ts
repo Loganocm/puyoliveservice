@@ -44,7 +44,7 @@ function playAndRecord(seed: number, maxFrames: number): Recorded {
     const rec = (i: InputType) => inputs.push({ f: engine.currentFrame, i });
 
     for (let f = 0; f < maxFrames; f++) {
-        engine.update(1.0);
+        engine.update();
 
         if (engine.state === 1 /* ACTIVE */ && engine.activePiece) {
             let best = -Infinity;

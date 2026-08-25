@@ -113,10 +113,6 @@ export class ReplaySimulator {
         const engine2 = new GameEngine(seed);
         engine1.isReplaying = true;
         engine2.isReplaying = true;
-        // Prevent engine.update() from calling processReplayFrame() internally;
-        // this simulator drives input application externally via executeInput().
-        engine1.externalReplayControl = true;
-        engine2.externalReplayControl = true;
 
         // V3: Apply per-player settings for deterministic replay
         // Each player can have different SDF/softDropProtection values.
@@ -191,8 +187,8 @@ export class ReplaySimulator {
                 }
 
                 // 2. Advance both engines by exactly 1 logical frame
-                engine1.update(1.0);
-                engine2.update(1.0);
+                engine1.update();
+                engine2.update();
 
                 // 3. V3.1: State hash validation at checkpoints (per-player)
                 const expectedHash0 = hash0Map.get(currentFrame);

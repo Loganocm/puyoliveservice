@@ -131,19 +131,15 @@ export class GameEngine {
     public fallingDestinations: { c: number, r: number, destR: number }[] = []; // For normal gravity
     public garbageAnimationTimer = 0;
 
-    // Replay System V2
-    public replayInputs: { f: number, i: string, a?: number }[] = [];
+    /** True for engines driven by recorded input (replay playback, opponent
+     *  view) rather than by a live player. Suppresses audio side effects and
+     *  selects the recorded handling settings below. */
     public isReplaying: boolean = false;
-    private replayCursor: number = 0;
 
     // Replay-locked settings (set by ReplaySimulator for determinism)
     // These override SettingsManager values during replay to match the original game
     public replaySDF: number = 10;
     public replaySoftDropProtection: boolean = true;
-
-    // When true, engine.update() will NOT call processReplayFrame() internally.
-    // Used by ReplaySimulator which drives input application externally.
-    public externalReplayControl: boolean = false;
 
     constructor(seed?: number) {
         // If no seed provided, generate one
@@ -166,79 +162,12 @@ export class GameEngine {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
-    private dt: number = 1.0;
-
     private currentBag: { main: PuyoColor, sub: PuyoColor }[] = [];
 
     // Record an action (Legacy/Unused in V2 client-side, handled by NetworkManager)
     private recordAction(_type: string, _data?: any) {
         // V2: Inputs are recorded by GameScene/NetworkManager sending 'record_input' to server.
         // GameEngine does not need to store them locally unless we want local replay save.
-    }
-
-    public loadReplay(data: { seed: number, inputs: { f: number, i: string, a?: number }[] }) {
-        this.replayInputs = data.inputs;
-        this.isReplaying = true;
-        this.replayCursor = 0;
-        this.frameCount = 0;
-        this.board = new Board();
-        this.state = GameState.SPAWN;
-        this.activePiece = null;
-        this.matchedPuyos = [];
-        this.chainGroup = [];
-        this.stats = { score: 0, chainCount: 0, maxChain: 0, puyosCleared: 0, garbageSent: 0, garbageReceived: 0 };
-        this.garbageQueue = 0;
-        this.nuisanceTray = 0;
-        this.scoreRemainder = 0;
-        this.garbageFellThisTurn = false;
-        this.dropTimer = 0;
-        this.lockTimer = 0;
-        this.stateTimer = 0;
-        this._softDrop = false;
-        this.softDropLocked = false;
-        this.horizontalMoveHeld = false;
-        this.bufferAction = null;
-        this.bufferedMove = 0;
-        this.fallingGarbage = [];
-        this.fallingDestinations = [];
-        this.garbageAnimationTimer = 0;
-
-        // Reset PRNG
-        this.seed = data.seed;
-        this.random(); this.random(); this.random(); this.random();
-
-        this.currentBag = this.generateBag(true); // First bag
-        this.nextPieces = [];
-        this.fillNextQueue();
-    }
-
-    public processReplayFrame() {
-        if (!this.isReplaying) return;
-
-        while (this.replayCursor < this.replayInputs.length) {
-            const input = this.replayInputs[this.replayCursor];
-            if (input.f <= this.frameCount) {
-                this.executeReplayInput(input);
-                this.replayCursor++;
-            } else {
-                break;
-            }
-        }
-    }
-
-    private executeReplayInput(input: { f: number, i: string, a?: number }) {
-        switch (input.i) {
-            case 'L': this.movePiece(-1); break;
-            case 'R': this.movePiece(1); break;
-            case 'CW': this.rotate(1); break;
-            case 'CC': this.rotate(-1); break;
-            case 'SD': this.softDrop = true; break;
-            case 'SU': this.softDrop = false; break;
-            case 'HD': this.hardDrop(); break;
-            case 'HH': this.horizontalMoveHeld = true; break;
-            case 'HU': this.horizontalMoveHeld = false; break;
-            case 'G': if (input.a) this.addGarbage(input.a); break;
-        }
     }
 
     // isStartBag: restricts to 3 colors for first batch
@@ -340,14 +269,23 @@ export class GameEngine {
 
     // --- Main Loop ---
 
-    public update(dt: number = 1.0) {
-        this.dt = dt;
+    /**
+     * Advance the simulation by exactly one logical frame.
+     *
+     * The engine has no notion of wall-clock time and takes no delta. Callers
+     * that render faster than 60fps accumulate real time and step this once per
+     * logical frame (see MatchClock, and the accumulators in GameScene and
+     * QuickPlayScene).
+     *
+     * This used to take a `dt` multiplier that scaled every timer while
+     * frameCount incremented unconditionally, so on a 144Hz display frameCount
+     * advanced 144/sec while the simulation advanced 60/sec worth of time. The
+     * field therefore meant "update calls" in single player and "logical
+     * frames" in multiplayer. One meaning is worth more than the smoothness.
+     * See README "Vocabulary" and docs/adr/0005-fixed-step-engine.md.
+     */
+    public update() {
         this.frameCount++;
-
-        // Process Replay Inputs if active (skip when externally driven by ReplaySimulator)
-        if (this.isReplaying && !this.externalReplayControl) {
-            this.processReplayFrame();
-        }
 
         switch (this.state) {
             case GameState.SPAWN:
@@ -563,7 +501,7 @@ export class GameEngine {
             }
         }
 
-        this.dropTimer += this.dt;
+        this.dropTimer += 1;
 
         // Handle recursive dropping if speed > 1G (delay < 1)
 
@@ -629,7 +567,7 @@ export class GameEngine {
             if (isGliding) shouldIncrement = false;
 
             if (shouldIncrement) {
-                this.lockTimer += this.dt;
+                this.lockTimer += 1;
             }
 
             if (this.lockTimer > this.lockDelay) {
@@ -744,7 +682,7 @@ export class GameEngine {
             }
         }
 
-        this.stateTimer += this.dt;
+        this.stateTimer += 1;
         // Scale fall delay based on chain count (exponential slowdown for emphasis)
 
         const scaledDelay = this.getChainScaledDuration(this.FALL_STEP_DELAY);
@@ -770,7 +708,7 @@ export class GameEngine {
     }
 
     private handlePopAnim() {
-        this.stateTimer += this.dt;
+        this.stateTimer += 1;
         // Scale pop animation duration based on chain count (exponential slowdown for emphasis)
 
         const scaledDuration = this.getChainScaledDuration(this.POP_ANIM_DURATION);
@@ -871,13 +809,13 @@ export class GameEngine {
 
         for (const garb of this.fallingGarbage) {
             if (garb.delay > 0) {
-                garb.delay -= this.dt;
+                garb.delay -= 1;
                 allDone = false;
                 continue;
             }
 
             if (garb.r < garb.destR) {
-                garb.r += speed * this.dt;
+                garb.r += speed;
                 allDone = false;
                 if (garb.r >= garb.destR) {
                     garb.r = garb.destR; // Snap

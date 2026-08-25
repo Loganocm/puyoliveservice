@@ -53,7 +53,7 @@ describe('piece sequence', () => {
     // Bounded so a stall fails the test instead of hanging the suite.
     let placed = 0;
     for (let f = 0; f < 20_000 && pairs.length < 20; f++) {
-      engine.update(1.0);
+      engine.update();
       if (engine.state === 1 /* ACTIVE */ && engine.activePiece) {
         const target = placed % 6;
         while (engine.activePiece.x > target && engine.movePiece(-1)) { /* slide */ }

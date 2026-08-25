@@ -58,7 +58,6 @@ export class OpponentView {
         // Suppress sound and the replay-only branches; this engine exists to be
         // looked at, not played.
         this.engine.isReplaying = true;
-        this.engine.externalReplayControl = true;
         this.sizeBufferFromRtt();
     }
 
@@ -162,7 +161,7 @@ export class OpponentView {
                     p++;
                 }
             }
-            this.engine.update(1.0);
+            this.engine.update();
         }
     }
 

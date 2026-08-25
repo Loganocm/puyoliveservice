@@ -124,6 +124,8 @@ export class QuickPlayScene implements IScene {
     private lastMoveFrameLeft: number = -999;
     private lastMoveFrameRight: number = -999;
     private currentFrame: number = 0;
+    /** Real time carried between rendered frames, in logical frames. */
+    private engineAccumulator = 0;
 
     // Network listeners (for cleanup)
     private networkListeners: { event: string, cb: any }[] = [];
@@ -467,7 +469,17 @@ export class QuickPlayScene implements IScene {
 
             // Update engine
             const prevState = this.engine.state;
-            this.engine.update(delta);
+            // The engine is fixed-step, so accumulate real time here. This is a
+            // mechanical wrapper that preserves the previous wall-clock rate --
+            // it does not address this mode's client/server divergence.
+            this.engineAccumulator += delta;
+            let steps = 0;
+            while (this.engineAccumulator >= 1 && steps < 5) {
+                this.engineAccumulator -= 1;
+                this.engine.update();
+                steps++;
+            }
+            if (this.engineAccumulator > 5) this.engineAccumulator = 0;
 
             if (prevState !== this.engine.state) {
                 if (this.engine.state === GameState.GARBAGE_FALL) {

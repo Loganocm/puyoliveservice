@@ -19,6 +19,7 @@ multiplayer, deterministic replays, ELO rankings and player profiles.
 - [Continuous integration](#continuous-integration)
 - [Deployment pipeline](#deployment-pipeline)
 - [Logging](#logging)
+- [Vocabulary](#vocabulary)
 - [Project layout](#project-layout)
 - [Known limitations](#known-limitations)
 - [Decision records](#decision-records)
@@ -88,6 +89,9 @@ cross-player alignment real and lockstep replay correct
 | `FALL_STEP_DELAY` | 5 | 0.083s cascade step |
 
 DAS, ARR and SDF are player settings and are counted on the same clock.
+
+Terms used throughout — frame, accumulator, tray vs queue, main vs sub — are
+defined once under [Vocabulary](#vocabulary).
 
 ---
 
@@ -368,6 +372,124 @@ localStorage.setItem('puyolive_debug', '1'); // then reload
 
 ---
 
+## Vocabulary
+
+One name per concept. Where the codebase currently uses two, both are listed
+and the canonical one is marked — those collapse when the engine is unified.
+
+### Time
+
+The engine has **no notion of wall-clock time**. Its only unit is the frame.
+
+| Term | Meaning |
+|---|---|
+| **frame** | One logical simulation step: 1/60 s. Every engine timer is counted in these |
+| `currentFrame` | Frames elapsed since this engine started. Always logical frames — never "update calls" ([ADR 0005](docs/adr/0005-fixed-step-engine.md)) |
+| `startAt` | Absolute instant on the **server** clock at which frame 0 occurs |
+| `targetFrame` | The frame the shared clock says we should be on right now |
+| **accumulator** | Real time carried between rendered frames, expressed in logical frames. Lives in callers, never in the engine |
+| `delta` | Renderer-only: Pixi's frame delta, ~1.0 at 60fps. Never reaches the engine |
+
+`update()` takes no argument and advances exactly one frame. Wall-clock pacing
+is the caller's job.
+
+### Board
+
+| Term | Meaning |
+|---|---|
+| `grid[col][row]` | Column-major. Gravity walks one column, so columns are contiguous |
+| `COLS` / `ROWS` | 6 columns, 12 visible rows |
+| `HIDDEN_ROWS` / `TOTAL_ROWS` | 2 hidden rows above the visible board; 14 total |
+| **vanish zone** | Rows above row 0. Traversable but not occupiable — locking there is a top-out |
+| `c` / `r` | Column and row indices. Always in that order |
+
+Note that a **larger** row index means **lower** on the board. Row 13 is the
+floor.
+
+### Piece
+
+| Term | Meaning |
+|---|---|
+| `activePiece` | The falling pair: `{ x, y, rot, mainColor, subColor }` |
+| **main** | The axis puyo — the one the pair rotates around, and the one that lands against the stack at rotation 0 |
+| **sub** | The orbiting puyo. At rotation 0 it sits *above* main |
+| `rot` | 0–3. Offsets are `[{0,-1}, {1,0}, {0,1}, {-1,0}]` |
+
+⚠️ `nextPieces` uses `{ main, sub }` while `activePiece` uses
+`{ mainColor, subColor }` for the same values. Unify on `mainColor`/`subColor`.
+
+### Garbage
+
+The two fields below hold **different units**. This is the easiest thing in the
+codebase to get wrong.
+
+| Term | Unit | Meaning |
+|---|---|---|
+| **rock** | — | One garbage puyo |
+| `nuisanceTray` | **points** | Incoming garbage that can still be cancelled by chaining. 70 points = 1 rock |
+| `garbageQueue` | **rocks** | Committed garbage that will fall next turn. No longer cancellable |
+| `scoreRemainder` | **points** | Sub-rock remainder carried between chain steps |
+
+Points, not rocks, are the working unit: settling in points means a partial
+counter-attack is preserved exactly instead of rounding away.
+
+Flow: chain scores points → offset against `nuisanceTray` → surplus ÷ 70 sent
+as rocks → at chain end, leftover tray points floor into `garbageQueue`.
+
+### Input
+
+Ten symbols, carried identically on the wire, in replays and to the opponent.
+See [Replay format](#replay-format) for the table.
+
+| Field | Meaning |
+|---|---|
+| `f` | Frame the input was taken on |
+| `p` | Player index within the room: `0` or `1` |
+| `i` | Input symbol |
+| `a` | Amount — only used by `G` |
+
+### Identity
+
+Three distinct identifiers, deliberately not interchangeable:
+
+| Term | Scope | Lifetime |
+|---|---|---|
+| `socketId` | One WebSocket connection | Dies on disconnect; changes on reconnect |
+| `userId` | Database primary key | Permanent; absent for guests |
+| `playerIndex` | Position within a room or replay (`0` or `1`) | The match |
+
+Reconnection swaps `socketId` while keeping `userId` and `playerIndex`, which
+is why room state is keyed by socket but *identity* is keyed by user.
+
+### Engines
+
+| Name | Where | Role |
+|---|---|---|
+| `GameEngine` | `src/core/` | The simulation. Used by the local player, the opponent view and replay playback |
+| `PuyoSimulator` | `server/` | A hand-mirrored copy of the same rules, used by the game server and Puyo Mines |
+
+These are **the same engine written twice**. They are verified behaviourally
+identical by `tests/engine/engineParity.test.ts` (30 runs × 3000 frames, zero
+divergence). Unifying them collapses the duplicate names below.
+
+### Known duplicate names
+
+Each pair is one concept with two spellings, pending unification:
+
+| Client | Server |
+|---|---|
+| `GameState` | `SimState` |
+| `Board` | `SimBoard` |
+| `PuyoColor` (Constants.ts) | `PuyoColor` (inline) |
+| `InputType`, `ReplayInput` | same names, redeclared |
+| `ReplayFileV3`, `StateHash`, `DeterministicEvent` | same names, redeclared |
+| `ENGINE_VERSION` | same name, redeclared |
+
+`CELL_SIZE` and `PUYO_COLORS` live in `Constants.ts` but are **render-only** and
+must not move into a shared engine package.
+
+---
+
 ## Project layout
 
 ```
@@ -458,6 +580,7 @@ no memory of earlier sessions.
 | [0002](docs/adr/0002-replay-determinism.md) | Replays store a seed and an input log |
 | [0003](docs/adr/0003-shared-match-clock.md) | Both players derive frames from a shared clock |
 | [0004](docs/adr/0004-opponent-simulation.md) | The opponent's board is simulated, not relayed |
+| [0005](docs/adr/0005-fixed-step-engine.md) | The engine is fixed-step and takes no delta |
 
 ---
 

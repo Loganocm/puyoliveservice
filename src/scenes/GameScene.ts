@@ -55,6 +55,11 @@ export class GameScene implements IScene {
     /** Local simulation of the opponent, driven by their relayed inputs. */
     private opponentView: OpponentView | null = null;
 
+    /** Real time carried between rendered frames, in logical frames. */
+    private singlePlayerAccumulator = 0;
+    /** Cap on engine steps per rendered frame, so a stall cannot spiral. */
+    private static readonly MAX_CATCHUP_STEPS = 5;
+
     /** Board-state heartbeat cadence. Must stay well under the server's 7s
      *  AFK timeout while sending far less than the 10/s the server allows. */
     private static readonly BOARD_SYNC_INTERVAL_MS = 500;
@@ -480,11 +485,7 @@ export class GameScene implements IScene {
     }
 
     setupEngine() {
-        if (this.replayData) {
-            console.log("Starting Replay Mode");
-            this.engine = new GameEngine(this.replayData.seed);
-            this.engine.loadReplay(this.replayData);
-        } else {
+        {
             this.engine = new GameEngine(this.seed);
 
             if (this.roomId) {
@@ -827,7 +828,7 @@ export class GameScene implements IScene {
                     if (MatchClock.hasMatch) {
                         const toAdvance = MatchClock.framesToAdvance(this.engine.currentFrame);
                         for (let i = 0; i < toAdvance; i++) {
-                            this.engine.update(1.0);
+                            this.engine.update();
                         }
 
                         // Falling far behind means this client can no longer
@@ -842,8 +843,21 @@ export class GameScene implements IScene {
                         // than starting on a private timeline.
                     }
                 } else {
-                    // SINGLE PLAYER / REPLAY: variable delta for smooth visuals
-                    this.engine.update(delta);
+                    // SINGLE PLAYER: accumulate real time and step the engine
+                    // once per logical frame. The engine takes no delta, so
+                    // wall-clock pacing lives here rather than inside it.
+                    this.singlePlayerAccumulator += delta;
+                    let steps = 0;
+                    while (this.singlePlayerAccumulator >= 1 && steps < GameScene.MAX_CATCHUP_STEPS) {
+                        this.singlePlayerAccumulator -= 1;
+                        this.engine.update();
+                        steps++;
+                    }
+                    // Drop any backlog beyond the clamp: after a long stall,
+                    // replaying it would fast-forward the game past the player.
+                    if (this.singlePlayerAccumulator > GameScene.MAX_CATCHUP_STEPS) {
+                        this.singlePlayerAccumulator = 0;
+                    }
                 }
 
                 // Log state transitions
