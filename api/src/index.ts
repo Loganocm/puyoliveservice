@@ -44,8 +44,16 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Optional: Allow Vercel preview deployments (wildcard matching)
-    if (origin.endsWith('.vercel.app')) {
+    // Vercel preview deployments for THIS project only.
+    // A bare `.vercel.app` suffix test admits every site hosted on Vercel,
+    // which combined with `credentials: true` below is a real cross-origin
+    // hole. Preview URLs look like:
+    //   puyolive-<hash>-<scope>.vercel.app
+    // so the project prefix is the part worth matching. Override with
+    // VERCEL_PREVIEW_PREFIX if the project is ever renamed.
+    const previewPrefix = process.env.VERCEL_PREVIEW_PREFIX || 'puyolive';
+    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin) &&
+        origin.slice('https://'.length).startsWith(previewPrefix)) {
       return callback(null, true);
     }
 

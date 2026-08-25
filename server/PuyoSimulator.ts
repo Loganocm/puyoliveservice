@@ -222,6 +222,9 @@ export class PuyoSimulator {
   // Input state
   private _softDrop = false;
   private softDropLocked = false;
+  /** Horizontal key held. Drives the glide buffer; fed by HH/HU replay inputs
+   *  so server lock timing matches the client instead of drifting each piece. */
+  horizontalMoveHeld = false;
 
   // Matching data (held during POP_ANIM state)
   private matchedPuyos: { c: number; r: number }[][] = [];
@@ -420,6 +423,12 @@ export class PuyoSimulator {
       case 'HD':
         this.hardDrop();
         break;
+      case 'HH':
+        this.horizontalMoveHeld = true;
+        break;
+      case 'HU':
+        this.horizontalMoveHeld = false;
+        break;
       case 'G':
         if (input.a) this.addGarbage(input.a);
         break;
@@ -577,9 +586,10 @@ export class PuyoSimulator {
 
       let shouldIncrement = true;
       if (this.softDropLocked) shouldIncrement = false;
-      // Note: horizontalMoveHeld (gliding buffer) is not tracked server-side.
-      // This may cause lock timing to differ by a few frames in rare edge cases.
-      // The server is authoritative regardless.
+      // Glide buffer: pause the lock timer while a horizontal key is held, on
+      // the inference that the player is sliding into a gap rather than
+      // placing. Fed by HH/HU inputs so this matches the client exactly.
+      if (this.horizontalMoveHeld) shouldIncrement = false;
 
       if (shouldIncrement) {
         this.lockTimer += 1;

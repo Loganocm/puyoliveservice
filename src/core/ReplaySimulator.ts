@@ -281,6 +281,8 @@ export class ReplaySimulator {
             case 'SD': engine.setSoftDrop(true);  break;
             case 'SU': engine.setSoftDrop(false); break;
             case 'HD': engine.hardDrop();    break;
+            case 'HH': engine.horizontalMoveHeld = true;  break;
+            case 'HU': engine.horizontalMoveHeld = false; break;
             case 'G':  engine.addGarbage(input.a ?? 0); break;
         }
     }

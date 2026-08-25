@@ -43,8 +43,13 @@ export interface MatchStats {
 /** Current engine version — bump when game logic changes affect determinism */
 export const ENGINE_VERSION = '1.0.0';
 
-export type InputType = 'L' | 'R' | 'CW' | 'CC' | 'SD' | 'SU' | 'HD' | 'G';
-// L=Left, R=Right, CW=RotateCW, CC=RotateCCW, SD=SoftDropStart, SU=SoftDropStop, HD=HardDrop, G=GarbageRecv
+export type InputType =
+    | 'L' | 'R'      // move left / right
+    | 'CW' | 'CC'    // rotate clockwise / counter-clockwise
+    | 'SD' | 'SU'    // soft drop pressed / released
+    | 'HD'           // hard drop
+    | 'HH' | 'HU'    // horizontal key held / released (drives the glide buffer)
+    | 'G';           // garbage received (server-recorded)
 
 export interface ReplayInput {
     f: number;      // Frame number

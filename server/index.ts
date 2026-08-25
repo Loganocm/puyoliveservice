@@ -764,7 +764,7 @@ io.on('connection', (socket: Socket) => {
     if (!Number.isFinite(data.f) || data.f < 0 || data.f > 360000) return; // Cap at ~100 minutes of gameplay
     if (data.a !== undefined && (!Number.isFinite(data.a) || data.a < 0 || data.a > 100)) return;
     // 'G' (garbage) is server-only — clients cannot inject garbage via inputs (handled by send_garbage natively, except in V3.1 the receiver reports it)
-    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD', 'G'];
+    const validInputs = ['L', 'R', 'CW', 'CC', 'SD', 'SU', 'HD', 'HH', 'HU', 'G'];
     if (!validInputs.includes(data.input)) return;
     if (!checkSocketRate(socket.id, 'record_input', 120)) return;
     const room = roomManager.getRoom(data.roomId);

@@ -17,11 +17,26 @@ import gameBgm1 from './resources/bgm/gameplay/abc123.mp3';
 import gameBgm2 from './resources/bgm/gameplay/dnbfart.mp3';
 import gameBgm3 from './resources/bgm/gameplay/flemnco.mp3';
 
-// Disable console methods to prevent easy exploitation in the browser
-const noop = () => {};
-['log', 'warn', 'error', 'info', 'debug', 'dir', 'trace'].forEach(method => {
-  (console as any)[method] = noop;
-});
+// Quiet the console in production builds.
+//
+// This is noise control, NOT a security measure: anyone can read the bundle
+// or set the override below. The previous version replaced every console
+// method with a no-op "to prevent exploitation", which stopped no attacker
+// and made it impossible to diagnose a bug from a user's browser.
+//
+// Errors and warnings are always kept -- they are what you need when
+// something breaks in the wild. Verbose levels can be restored at runtime
+// with `localStorage.setItem('puyolive_debug', '1')` and a reload.
+// See README section "Logging".
+const debugEnabled =
+  import.meta.env.DEV || localStorage.getItem('puyolive_debug') === '1';
+
+if (!debugEnabled) {
+  const noop = () => {};
+  for (const method of ['log', 'info', 'debug', 'dir', 'trace'] as const) {
+    (console as any)[method] = noop;
+  }
+}
 
 const initGame = async () => {
   const appDiv = document.getElementById('app');

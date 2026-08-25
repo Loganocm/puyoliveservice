@@ -844,18 +844,27 @@ export class GameScene implements IScene {
                     }
                 }
 
-                // Process Input during ACTIVE and transition states
+                // Process input during ACTIVE and transition states.
+                //
+                // INVARIANT: the engine is advanced exactly once per rendered
+                // frame, by the block above and nowhere else. This block reads
+                // engine state and applies input; it must never call update().
+                //
+                // Previously it called update() a second time here, so the
+                // engine ran at roughly twice the intended rate: gravity was
+                // effectively 30 frames per row rather than 60, every frame
+                // constant was silently halved, and DAS/ARR (counted against
+                // this.currentFrame, which ticks once per rendered frame)
+                // drifted from gravity at a 2:1 ratio. It also stamped replay
+                // inputs on a ~120 Hz clock while the replay file declared 60,
+                // which is why recorded matches never played back faithfully.
+                // See docs/adr/0001-fixed-timestep.md.
                 const state = this.engine.state;
                 if (state === GameState.ACTIVE || state === GameState.FALLING ||
                     state === GameState.CHECK_MATCH || state === GameState.SPAWN) {
 
-                    // Replay logic handles its own frame advancement
-                    if (this.replayData && this.engine.isReplaying) {
-                        this.engine.update(delta);
-                    } else {
-                        // Normal local gameplay updates
-                        this.engine.update(delta);
-
+                    // Replays drive their own playback; live input is ignored.
+                    if (!(this.replayData && this.engine.isReplaying)) {
                         // V3.1 Replay: Periodically send exact client-side state hashes to the server
                         if (this.roomId && this.engine.currentFrame > 0 && this.engine.currentFrame % 300 === 0) {
                             NetworkManager.recordHash(this.roomId, this.engine.currentFrame, this.engine.computeBoardHash());
@@ -1210,7 +1219,15 @@ export class GameScene implements IScene {
         }
 
         // Pass horizontal state to engine for "Sticky Top/Glide" logic
-        this.engine.horizontalMoveHeld = Input.isActionDown('moveLeft') || Input.isActionDown('moveRight');
+        // Glide buffer state. Recorded as HH/HU edges (like SD/SU) so replays
+        // can reconstruct held-key state; without this the buffer is invisible
+        // to playback and nearly every piece locks a few frames early.
+        // See docs/adr/0002-replay-determinism.md.
+        const horizontalHeld = Input.isActionDown('moveLeft') || Input.isActionDown('moveRight');
+        if (horizontalHeld !== this.engine.horizontalMoveHeld) {
+            this.engine.horizontalMoveHeld = horizontalHeld;
+            this.recordInputForReplay(horizontalHeld ? 'HH' : 'HU');
+        }
 
         // Hard Drop
         if (Input.isActionPressed('hardDrop')) {

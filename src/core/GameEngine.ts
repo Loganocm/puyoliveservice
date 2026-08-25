@@ -224,6 +224,8 @@ export class GameEngine {
             case 'SD': this.softDrop = true; break;
             case 'SU': this.softDrop = false; break;
             case 'HD': this.hardDrop(); break;
+            case 'HH': this.horizontalMoveHeld = true; break;
+            case 'HU': this.horizontalMoveHeld = false; break;
             case 'G': if (input.a) this.addGarbage(input.a); break;
         }
     }
@@ -620,9 +622,14 @@ export class GameEngine {
                 return;
             }
 
-            // During replay, we can't know held-key state, so disable glide buffer.
-            // Inputs still reset lockTimer on moves, keeping timing close enough.
-            const isGliding = this.isReplaying ? false : this.horizontalMoveHeld;
+            // The glide buffer depends on HELD key state, which cannot be
+            // recovered from movement edges alone. It used to be force-disabled
+            // during replay, which meant nearly every piece locked on a
+            // different frame in playback than it did live -- a guaranteed
+            // desync, not an edge case. Hold state is now recorded explicitly
+            // as HH/HU edges (mirroring SD/SU), so replay uses the same value
+            // as live play. See docs/adr/0002-replay-determinism.md.
+            const isGliding = this.horizontalMoveHeld;
 
             let shouldIncrement = true;
             if (this.softDropLocked) shouldIncrement = false;
