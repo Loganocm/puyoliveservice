@@ -1,6 +1,6 @@
-import { GameEngine, GameState } from './GameEngine';
+import { COLS, GameEngine, GameState } from '@puyolive/engine';
+import type { ActivePiece, PuyoPair } from '@puyolive/engine';
 import type { ReplayFileV3, ReplayInput } from './ReplayEngine';
-import { PuyoColor, COLS } from './Constants';
 
 /**
  * Snapshot of a single player's board at a specific frame.
@@ -8,11 +8,8 @@ import { PuyoColor, COLS } from './Constants';
  */
 export interface BoardSnapshot {
     grid: number[][];                                      // Column-major [col][row]
-    activePiece: {
-        x: number; y: number; rot: number;
-        mainColor: PuyoColor; subColor: PuyoColor;
-    } | null;
-    nextPieces: { main: PuyoColor; sub: PuyoColor }[];
+    activePiece: ActivePiece | null;
+    nextPieces: PuyoPair[];
     garbageQueue: number;
     nuisanceTray: number;
     score: number;
@@ -52,7 +49,7 @@ function captureBoard(engine: GameEngine): BoardSnapshot {
     } : null;
 
     // Deep copy next pieces (up to 3)
-    const nextPieces = engine.nextPieces.slice(0, 3).map(p => ({ main: p.main, sub: p.sub }));
+    const nextPieces = engine.nextPieces.slice(0, 3).map(p => ({ mainColor: p.mainColor, subColor: p.subColor }));
 
     // Deep copy animation arrays
     const fallingGarbage = engine.fallingGarbage.map(g => ({ ...g }));

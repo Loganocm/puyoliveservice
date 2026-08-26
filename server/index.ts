@@ -6,6 +6,7 @@ import { roomManager } from './RoomManager.js';
 import { minesRoom, MinesRoom } from './MinesRoom.js';
 import { recordMatch, verifyToken, checkApiHealth } from './ApiClient.js';
 import { PuyoSimulator } from './PuyoSimulator.js';
+import type { PuyoPair } from '@puyolive/engine';
 
 const app = express();
 const httpServer = createServer(app);
@@ -217,7 +218,7 @@ function setupSimulators(
       room.recordDeterministicEvent(playerIndex, 'gameover', {});
     };
 
-    sim.onBagGenerated = (_bag: { main: number; sub: number }[]) => {
+    sim.onBagGenerated = (_bag: PuyoPair[]) => {
       room.recordDeterministicEvent(playerIndex, 'bag_gen', { count: _bag.length });
     };
 

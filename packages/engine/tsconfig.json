@@ -1,0 +1,37 @@
+{
+  // Compiles to NodeNext ESM so the game server can `import` the built output
+  // with plain node and no loader. The browser client does not use this output:
+  // it aliases the package straight to src/ (see vite.config.ts), so the client
+  // never needs the package built.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    // No DOM. This is the purity rule from ADR 0006 made mechanical: if
+    // someone reaches for `document`, `localStorage` or `Audio` in here, this
+    // package stops compiling rather than quietly re-coupling the engine to the
+    // browser. `types: []` does the same for Node's globals.
+    //
+    // The one host facility the engine does use is console.warn, declared
+    // explicitly in src/env.d.ts so that dependency is visible rather than
+    // inherited from a lib nobody chose.
+    "lib": ["ES2022"],
+    "types": [],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

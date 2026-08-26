@@ -13,7 +13,12 @@ import path from 'path';
 
 export default defineConfig({
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      // Must match vite.config.ts. The suite tests the engine SOURCE, so a
+      // stale packages/engine/dist can never make a red suite look green.
+      '@puyolive/engine': path.resolve(__dirname, './packages/engine/src/index.ts'),
+    },
   },
   test: {
     globals: true,
@@ -29,7 +34,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
-      include: ['src/core/**', 'src/game/**'],
+      // The simulation moved to packages/engine, so coverage follows it.
+      // 'src/game/**' used to hold Board.ts and no longer exists; leaving it
+      // listed would have quietly reported coverage over nothing.
+      include: ['packages/engine/src/**', 'src/core/**'],
       exclude: ['src/core/AudioContext.ts', 'src/core/BGMManager.ts', 'src/core/SoundManager.ts'],
     },
   },

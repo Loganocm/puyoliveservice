@@ -1,12 +1,23 @@
-# Backend folders (deployed to Render)
+# Backend folders (deployed to GHCR / the minipc, not to Vercel)
 # Use leading slash to only match root-level folders
 /api/
 /server/
+
+# NOTE: packages/ must NOT be listed here.
+#
+# The client imports the simulation from @puyolive/engine, which resolves
+# through the npm workspace to packages/engine. Excluding it would break
+# `npm install` and then the build.
+#
+# /server/ is safe to exclude even though it is also a declared workspace: npm
+# tolerates a workspace path that is not present, installs the rest, and still
+# links packages/engine for the client. Verified rather than assumed.
 
 # Docker files
 Dockerfile
 Dockerfile.server
 docker-compose.yml
+.dockerignore
 
 # Development
 .env

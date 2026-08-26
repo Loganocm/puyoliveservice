@@ -1,13 +1,14 @@
 /**
  * Simulation constants.
  *
- * Everything here is part of the game's RULES and belongs in the engine
- * package when the client and server engines are unified. Nothing in this file
- * may reference the DOM, a renderer, or a pixel.
+ * Everything here is part of the game's RULES. Nothing in this file may
+ * reference the DOM, a renderer, or a pixel -- and the package's tsconfig
+ * enforces that by compiling without the DOM lib at all.
  *
- * Values that describe how the game LOOKS live in RenderConstants.ts. Keeping
- * them apart is what makes the engine extractable: a rule and a sprite size
- * were sitting in the same file, and only one of them belongs on the server.
+ * Values that describe how the game LOOKS live in src/core/RenderConstants.ts,
+ * on the client side of the boundary. Splitting them apart is what made this
+ * extraction possible: a rule and a sprite size were sitting in the same file,
+ * and only one of them belongs on the server.
  *
  * See README "Vocabulary" -> Board.
  */

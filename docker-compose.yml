@@ -60,8 +60,11 @@ services:
   # --- Game Server (WebSocket) ---
   game-server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      # Context is the repo root, not ./server: the game server depends on
+      # packages/engine, and a context rooted at server/ cannot see a sibling
+      # directory. See server/Dockerfile and the root .dockerignore.
+      context: .
+      dockerfile: server/Dockerfile
     image: ghcr.io/loganocm/puyio-game:latest
     networks:
       - puyo-net

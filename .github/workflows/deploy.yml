@@ -76,7 +76,11 @@ jobs:
       - name: Build & push Game Server image
         uses: docker/build-push-action@v6
         with:
-          context: ./server
+          # Root context: the server depends on packages/engine, which a
+          # context rooted at server/ cannot see. Must stay in step with the
+          # game-server service in docker-compose.yml.
+          context: .
+          file: server/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/puyio-game:latest

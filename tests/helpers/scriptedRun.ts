@@ -1,4 +1,4 @@
-import { GameEngine } from '../../src/core/GameEngine';
+import { GameEngine } from '@puyolive/engine';
 
 /**
  * Deterministic test harness for the game engine.
@@ -148,7 +148,7 @@ export const GOLDEN_SEEDS = [
 // identically on every run.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { COLS, TOTAL_ROWS, PuyoColor } from '../../src/core/Constants';
+import { COLS, TOTAL_ROWS, PuyoColor } from '@puyolive/engine';
 
 /** Row the topmost filled cell sits in for a column, or TOTAL_ROWS if empty. */
 function columnTop(grid: number[][], c: number): number {

@@ -1,15 +1,15 @@
 import { Container, Graphics, Sprite, AnimatedSprite, Text, TextStyle, Texture } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
-import { Board } from '../game/Board';
-import { COLS, TOTAL_ROWS, PuyoColor, HIDDEN_ROWS } from '../core/Constants';
+import { Board, COLS, TOTAL_ROWS, PuyoColor, HIDDEN_ROWS } from '@puyolive/engine';
 import { CELL_SIZE, PUYO_COLORS } from '../core/RenderConstants';
 import { Input } from '../core/Input';
 import { ResourceManager } from '../core/ResourceManager';
 import { SettingsManager } from '../core/SettingsManager';
 import { MenuScene } from './MenuScene'; // needed for Back button
 import { SoundManager } from '../core/SoundManager';
-import { GameEngine, GameState } from '../core/GameEngine';
+import { GameEngine, GameState } from '@puyolive/engine';
+import type { ActivePiece } from '@puyolive/engine';
 import { NetworkManager } from '../core/NetworkManager';
 import { MatchClock } from '../core/MatchClock';
 import { OpponentView } from '../core/OpponentView';
@@ -52,7 +52,7 @@ export class GameScene implements IScene {
     // Game Logic Engine
     private engine!: GameEngine;
     private opponentBoard: Board;
-    private opponentActivePiece: any = null; // { x, y, rot, main, sub }
+    private opponentActivePiece: ActivePiece | null = null;
     /** Local simulation of the opponent, driven by their relayed inputs. */
     private opponentView: OpponentView | null = null;
 
@@ -952,7 +952,7 @@ export class GameScene implements IScene {
                     this.opponentBoard.grid = this.opponentView.board.grid;
                     const op = this.opponentView.activePiece;
                     this.opponentActivePiece = op
-                        ? { x: op.x, y: op.y, rot: op.rot, main: op.mainColor, sub: op.subColor }
+                        ? { x: op.x, y: op.y, rot: op.rot, mainColor: op.mainColor, subColor: op.subColor }
                         : null;
                     this.opponentGarbage = this.opponentView.garbageQueue + this.opponentView.nuisanceTray;
                 }
@@ -1426,14 +1426,14 @@ export class GameScene implements IScene {
                 displaySize = ICON_BASE * 0.9; spacing = 30;
             }
 
-            subSprite.texture = ResourceManager.getPuyoTexture(p.sub, 0);
+            subSprite.texture = ResourceManager.getPuyoTexture(p.subColor, 0);
             subSprite.x = tx - (spacing / 2);
             subSprite.y = ty;
             subSprite.width = displaySize;
             subSprite.height = displaySize;
             subSprite.visible = true;
 
-            mainSprite.texture = ResourceManager.getPuyoTexture(p.main, 0);
+            mainSprite.texture = ResourceManager.getPuyoTexture(p.mainColor, 0);
             mainSprite.x = tx + (spacing / 2);
             mainSprite.y = ty;
             mainSprite.width = displaySize;
@@ -1536,7 +1536,7 @@ export class GameScene implements IScene {
 
             // Draw Active Piece and Ghost
             if (this.opponentActivePiece) {
-                const { x, y, rot, main, sub } = this.opponentActivePiece;
+                const { x, y, rot, mainColor: main, subColor: sub } = this.opponentActivePiece;
 
                 // Skip if piece data is incomplete
                 if (main === undefined || sub === undefined || rot === undefined) {

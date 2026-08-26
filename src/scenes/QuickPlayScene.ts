@@ -17,14 +17,13 @@
 import { Container, Graphics, Sprite, AnimatedSprite, Text, TextStyle } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
-import { Board } from '../game/Board';
-import { COLS, TOTAL_ROWS, PuyoColor, HIDDEN_ROWS } from '../core/Constants';
+import { Board, COLS, TOTAL_ROWS, PuyoColor, HIDDEN_ROWS } from '@puyolive/engine';
 import { CELL_SIZE } from '../core/RenderConstants';
 import { Input } from '../core/Input';
 import { ResourceManager } from '../core/ResourceManager';
 import { SettingsManager } from '../core/SettingsManager';
 import { SoundManager } from '../core/SoundManager';
-import { GameEngine, GameState } from '../core/GameEngine';
+import { GameEngine, GameState } from '@puyolive/engine';
 import { NetworkManager } from '../core/NetworkManager';
 import { GameEvents } from '../core/GameEvents';
 import { backgroundManager } from '../core/BackgroundManager';
@@ -1006,8 +1005,8 @@ export class QuickPlayScene implements IScene {
                 displaySize = ICON_BASE * 0.9; spacing = 30;
             }
 
-            const subTex = ResourceManager.getPuyoTexture(p.sub, 0);
-            const mainTex = ResourceManager.getPuyoTexture(p.main, 0);
+            const subTex = ResourceManager.getPuyoTexture(p.subColor, 0);
+            const mainTex = ResourceManager.getPuyoTexture(p.mainColor, 0);
 
             if (subTex) {
                 const subSprite = new Sprite(subTex);

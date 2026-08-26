@@ -3,16 +3,21 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "server"
+  ],
   "scripts": {
     "dev": "vite",
     "server": "tsx --watch server/index.ts",
     "api": "npm run dev --prefix api",
-    "build": "tsc && vite build",
+    "build": "npm run build:engine && tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:engine": "npm run build --workspace @puyolive/engine"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
@@ -45,6 +50,7 @@
     "react-dom": "^18.3.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "@puyolive/engine": "*"
   }
 }

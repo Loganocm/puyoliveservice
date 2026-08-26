@@ -1,4 +1,4 @@
-import { COLS, TOTAL_ROWS, PuyoColor } from '../core/Constants';
+import { COLS, TOTAL_ROWS, PuyoColor } from './Constants.js';
 
 export class Board {
   grid: PuyoColor[][];

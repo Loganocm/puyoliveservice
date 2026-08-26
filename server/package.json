@@ -8,6 +8,7 @@
         "dev": "tsx --watch index.ts"
     },
     "dependencies": {
+        "@puyolive/engine": "*",
         "cors": "^2.8.5",
         "express": "^5.2.1",
         "socket.io": "^4.8.3"

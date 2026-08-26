@@ -1,0 +1,46 @@
+# Build context for the GAME SERVER image.
+#
+# server/Dockerfile builds from the repository root rather than from server/,
+# because the server now depends on packages/engine and a context rooted at
+# server/ cannot see a sibling directory. That makes everything in the repo
+# part of the context, so the expensive and dangerous things are excluded here.
+#
+# `data/` matters most: it is the Postgres bind mount from docker-compose.yml.
+# Sending it would be slow at best, and reading a running database's data
+# directory fails on permissions at worst.
+#
+# api/ has its own context (./api) and its own api/.dockerignore; nothing here
+# affects it.
+
+# Dependencies and build output, at every level
+node_modules
+**/node_modules
+dist
+**/dist
+server_dist
+
+# The database bind mount and local backups
+data
+postgres_data
+
+# Version control and CI
+.git
+.github
+.vscode
+
+# Secrets — never in an image layer
+.env
+.env.*
+!.env.example
+
+# Client-only assets. The game server serves no static files, and these are the
+# bulk of the repository.
+public
+src
+index.html
+*.log
+
+# Docs and tests: not part of any runtime artifact
+docs
+tests
+README.md

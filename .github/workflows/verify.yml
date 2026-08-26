@@ -22,14 +22,26 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install client dependencies
+      # One `npm ci` covers the root, packages/engine and server: they are one
+      # npm workspace with one lockfile. The API is deliberately NOT a
+      # workspace -- it does not use the engine, and hoisting its node_modules
+      # would relocate Prisma's generated client for no benefit -- so it still
+      # installs on its own. See docs/adr/0006-shared-engine-package.md.
+      - name: Install client, engine and game server dependencies
         run: npm ci
       - name: Install API dependencies
         working-directory: ./api
         run: npm ci
-      - name: Install game server dependencies
-        working-directory: ./server
-        run: npm ci
+
+      # Compiling the engine IS its type check, and it runs under the package's
+      # own tsconfig: no DOM lib, no Node types. That is the purity rule from
+      # ADR 0006 enforced by the compiler rather than by review.
+      #
+      # It must also run before the game server is checked, because the server
+      # resolves @puyolive/engine through node_modules to its built output.
+      # The client does not need it: it aliases the package to src/.
+      - name: Build & type check the shared engine
+        run: npm run build:engine
 
       - name: Type check client
         run: npx tsc --noEmit -p tsconfig.json

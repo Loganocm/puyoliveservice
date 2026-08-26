@@ -42,10 +42,14 @@ the API server-to-server with a shared secret.
 
 | Service | Root | Responsibility |
 |---|---|---|
-| Client | `src/` | Rendering, input, local simulation, all UI |
+| Client | `src/` | Rendering, input, all UI |
 | Game server | `server/` | Matchmaking, rooms, input relay, replay recording |
 | REST API | `api/` | Accounts, JWT, matches, ELO, XP, leaderboard, admin |
 | Database | `api/prisma/` | Users, matches, replays, bans, audit and login logs |
+
+The simulation is not in that list, because it is not a service. It is a
+package, `packages/engine`, and the client and the game server both run it
+([ADR 0006](docs/adr/0006-shared-engine-package.md)).
 
 Match state is hot, ephemeral and lives in memory on the game server. Account
 state is durable and lives in Postgres. Nothing about a live match touches the
@@ -99,14 +103,18 @@ defined once under [Vocabulary](#vocabulary).
 
 **State this honestly, because the code does.**
 
-The server runs a mirrored `PuyoSimulator` per player and validates, clamps and
-rate-limits everything the client sends. But **garbage and death are currently
-client-authoritative**: the server does not independently verify them.
+The server runs a `PuyoSimulator` per player — since
+[ADR 0006](docs/adr/0006-shared-engine-package.md), literally the same engine
+the client runs rather than a hand-mirrored copy of it — and validates, clamps
+and rate-limits everything the client sends. But **garbage and death are
+currently client-authoritative**: the server does not independently verify them.
 
-The mirror exists and is wired; enforcement is deliberately switched off. The
+The simulation exists and is wired; enforcement is deliberately switched off,
+and unifying the engines does not change that. The problem was never that the
+two implementations disagreed about the rules — they agreed. It is that the
 server's simulation runs one network round trip behind the client, and under
 that skew it reported deaths on boards the client had already resolved and
-relayed garbage at the wrong frame — producing false losses for honest players.
+relayed garbage at the wrong frame, producing false losses for honest players.
 Disabling enforcement was judged better than shipping a game that steals wins.
 
 The known fix is rollback netcode: buffer inputs against a frame-tagged
@@ -210,6 +218,8 @@ when simulation genuinely disagrees.
 docker compose up -d db
 
 # 2. Install dependencies
+#    One install covers the client, packages/engine and the game server: they
+#    are one npm workspace. The API is not a workspace and installs separately.
 npm install
 cd api && npm install && cd ..
 
@@ -268,10 +278,18 @@ EXTRA_CORS_ORIGINS=http://192.168.1.42:5173
 npm test              # engine suite: no database, no network, no DOM, ~800ms
 npm run test:watch
 npm run test:coverage
-npm run typecheck
+npm run typecheck     # client + tests
+
+npm run build:engine  # compiles the engine — also its type check
+cd server && npx tsc --noEmit && cd ..   # needs build:engine first
+cd api && npx tsc --noEmit && cd ..
 
 cd api && npm test    # API suite: requires PostgreSQL
 ```
+
+The game server needs `build:engine` first because it resolves
+`@puyolive/engine` through `node_modules` to the package's built output. The
+client and the test suite do not: they alias it to the source.
 
 The engine suite runs anywhere because it touches nothing external — no
 database, no network, and **no DOM**. The engine takes its handling settings
@@ -293,6 +311,7 @@ environment back to jsdom.
 | Opponent view | The opponent's board reproduced cell-for-cell from their input stream |
 | Match clock | Two clients with different local clocks and latencies agree on frame numbers; catch-up is clamped; never runs ahead |
 | Negative controls | Different inputs must diverge; the hash must react to grid and garbage changes |
+| Server recording | The frame each replay-recording hook fires on, and the order they fire in — pinned as goldens captured from the pre-unification server simulator |
 
 ### Characterization goldens
 
@@ -312,6 +331,17 @@ Some tests assert that the *test drivers* still reach chains and garbage. Golden
 captured from a driver that tops out immediately look green and protect nothing;
 these fail loudly instead.
 
+This is not hypothetical. The engine parity suite reported "identical for 3000
+frames" across 30 runs while its driver was actually topping out in 60–250
+frames, having never once reached `CHECK_MATCH` — so chain scoring, the colour
+and group bonuses, the offset arithmetic and the garbage column shuffle were
+never compared at all. Its assertion also filtered for `'diverged'` against a
+message that said `'DIVERGED'`, so it could not have failed either way. Both
+were found and fixed while unifying the engines
+([ADR 0006](docs/adr/0006-shared-engine-package.md)); the suite now runs a
+second driver that plays well enough to chain, and reports the frames it
+actually compared rather than the frame budget.
+
 ---
 
 ## Continuous integration
@@ -321,7 +351,7 @@ these fail loudly instead.
 
 | Job | Guarantee |
 |---|---|
-| `typecheck` | All three projects compile, including the test suite |
+| `typecheck` | The engine package, the client, the API and the game server all compile, including the test suite. The engine is checked under its own no-DOM, no-Node tsconfig |
 | `engine-tests` | Engine suite passes and goldens did not drift |
 | `build` | Client bundle builds and is non-empty |
 | `deploy-smoke` | The full Docker stack boots and answers its health check |
@@ -380,8 +410,9 @@ localStorage.setItem('puyolive_debug', '1'); // then reload
 
 ## Vocabulary
 
-One name per concept. Where the codebase currently uses two, both are listed
-and the canonical one is marked — those collapse when the engine is unified.
+One name per concept. The table of names that used to exist twice is gone: the
+duplicates it tracked collapsed when the engine became one package
+([ADR 0006](docs/adr/0006-shared-engine-package.md)).
 
 ### Time
 
@@ -416,13 +447,15 @@ floor.
 
 | Term | Meaning |
 |---|---|
-| `activePiece` | The falling pair: `{ x, y, rot, mainColor, subColor }` |
+| `PuyoPair` | A pair of colours: `{ mainColor, subColor }`. What `nextPieces` and the bag hold |
+| `ActivePiece` | A `PuyoPair` plus where it is: `{ x, y, rot, mainColor, subColor }` |
 | **main** | The axis puyo — the one the pair rotates around, and the one that lands against the stack at rotation 0 |
 | **sub** | The orbiting puyo. At rotation 0 it sits *above* main |
 | `rot` | 0–3. Offsets are `[{0,-1}, {1,0}, {0,1}, {-1,0}]` |
 
-⚠️ `nextPieces` uses `{ main, sub }` while `activePiece` uses
-`{ mainColor, subColor }` for the same values. Unify on `mainColor`/`subColor`.
+`nextPieces` used to spell these `{ main, sub }` while `activePiece` spelled the
+same two values `{ mainColor, subColor }`, so every spawn translated between
+them. One spelling now, declared once.
 
 ### Garbage
 
@@ -484,76 +517,94 @@ without a mode.
 
 ### Engines
 
-| Name | Where | Role |
+There is one. `GameEngine`, in `packages/engine`, is the simulation, and every
+consumer runs that same code:
+
+| Consumer | Where | How it uses the engine |
 |---|---|---|
-| `GameEngine` | `src/core/` | The simulation. Used by the local player, the opponent view and replay playback |
-| `PuyoSimulator` | `server/` | A hand-mirrored copy of the same rules, used by the game server and Puyo Mines |
+| Local player | `src/scenes/GameScene.ts` | One engine, advanced by `MatchClock` |
+| Opponent view | `src/core/OpponentView.ts` | A second engine fed by their relayed inputs |
+| Replay playback | `src/core/ReplaySimulator.ts` | Two engines fed by the recorded log |
+| Game server | `server/PuyoSimulator.ts` | One per player, fed by the wire |
+| Puyo Mines | `server/MinesRoom.ts` | One per player, via `PuyoSimulator` |
 
-These are **the same engine written twice**. They are verified behaviourally
-identical by `tests/engine/engineParity.test.ts` (30 runs × 3000 frames, zero
-divergence). Unifying them collapses the duplicate names below.
+`PuyoSimulator` keeps its name but is now an adapter, not an implementation: it
+translates the wire alphabet into engine calls and shapes the engine's recorded
+moments for `GameRoom`. It contains no rules
+([ADR 0006](docs/adr/0006-shared-engine-package.md)).
 
-### Known duplicate names
+`tests/engine/engineParity.test.ts` still compares the engine against the
+adapter frame by frame, and still prints what it measured.
 
-Each pair is one concept with two spellings, pending unification:
-
-| Client | Server |
-|---|---|
-| `GameState` | `SimState` |
-| `Board` | `SimBoard` |
-| `PuyoColor` (Constants.ts) | `PuyoColor` (inline) |
-| `InputType`, `ReplayInput` | same names, redeclared |
-| `ReplayFileV3`, `StateHash`, `DeterministicEvent` | same names, redeclared |
-| `ENGINE_VERSION` | same name, redeclared |
-
-Simulation constants and presentation constants are now separate files:
+### The rules / presentation boundary
 
 | File | Holds | May be imported by |
 |---|---|---|
-| `src/core/Constants.ts` | The rules: `COLS`, `ROWS`, `HIDDEN_ROWS`, `TOTAL_ROWS`, `PuyoColor` | Anything, including the server |
+| `packages/engine/src/Constants.ts` | The rules: `COLS`, `ROWS`, `HIDDEN_ROWS`, `TOTAL_ROWS`, `PuyoColor` | Anything, including the server |
 | `src/core/RenderConstants.ts` | How it looks: `CELL_SIZE`, `PUYO_COLORS` | Scenes only |
 
-`Constants.ts`, `Board.ts` and `GameEngine.ts` form a closed dependency island
-— `Constants` imports nothing, `Board` imports only `Constants`, `GameEngine`
-imports only those two, and none touch the DOM. That set is what moves into a
-shared engine package.
+Splitting those apart is what made the extraction possible: a rule and a sprite
+size were sitting in the same file, and only one of them belongs on the server.
+
+The engine package compiles with **no DOM lib and no Node types**, so reaching
+for `document`, `localStorage`, `Audio` or `process` inside it is a compile
+error rather than a review comment. Its one host dependency, `console.warn`, is
+declared explicitly in `packages/engine/src/env.d.ts`.
 
 ---
 
 ## Project layout
 
+An npm workspace. The root, `packages/engine` and `server/` share one
+`package-lock.json` and one `node_modules`; `api/` deliberately does not
+([ADR 0006](docs/adr/0006-shared-engine-package.md)).
+
 ```
+packages/
+  engine/        THE SIMULATION — shared by the client and the game server
+    src/
+      Constants.ts   the rules: board size, colours
+      Board.ts       grid, gravity, flood fill
+      GameEngine.ts  state machine, scoring, garbage
+      replay.ts      the replay format, declared once
+      env.d.ts       the engine's entire dependency on its host
 src/
-  core/          engine, clock, opponent view, replay, network, audio, settings
-  game/          board: grid, gravity, flood fill
+  core/          clock, opponent view, replay, network, audio, settings
   scenes/        Pixi scenes: game, menu, quick play, replay
   screens/       React overlays and menus
   components/    shared React components
 server/
   index.ts       socket handlers, matchmaking, rooms
   GameRoom.ts    per-room state, replay assembly
-  PuyoSimulator.ts  server-side mirror of the engine
+  PuyoSimulator.ts  adapter: wire alphabet in, recorded events out
   MinesRoom.ts   persistent free-for-all mode
 api/
   src/routes/    REST endpoints
   src/services/  auth, match, leaderboard, XP
   prisma/        schema and migrations
 tests/
-  engine/        characterization, replay fidelity, clock, opponent view
+  engine/        characterization, replay fidelity, clock, opponent view, parity
   helpers/       deterministic drivers and fixed seeds
 docs/adr/        architecture decision records
 ```
+
+The client resolves `@puyolive/engine` to the package's **source**, through an
+alias in `vite.config.ts`, `vitest.config.ts` and `tsconfig.json`. The game
+server resolves the same package through `node_modules` to its **built output**,
+so `npm run build:engine` must run before `cd server && npx tsc --noEmit`.
 
 ### Where things live
 
 | Concern | File |
 |---|---|
-| Simulation, state machine, scoring, garbage | `src/core/GameEngine.ts` |
-| Grid, gravity, flood fill | `src/game/Board.ts` |
+| Simulation, state machine, scoring, garbage | `packages/engine/src/GameEngine.ts` |
+| Grid, gravity, flood fill | `packages/engine/src/Board.ts` |
+| Replay format declarations | `packages/engine/src/replay.ts` |
 | Shared frame timeline | `src/core/MatchClock.ts` |
 | Opponent simulation | `src/core/OpponentView.ts` |
-| Replay format and playback | `src/core/ReplayEngine.ts`, `ReplaySimulator.ts` |
+| Replay playback | `src/core/ReplayEngine.ts`, `ReplaySimulator.ts` |
 | Render loop, input, DAS/ARR | `src/scenes/GameScene.ts` |
+| Wire alphabet to engine calls | `server/PuyoSimulator.ts` |
 | Matchmaking, rooms, wire validation | `server/index.ts` |
 | Accounts, ELO, leaderboard | `api/src/services/` |
 | Test drivers and fixed seeds | `tests/helpers/scriptedRun.ts` |
@@ -565,10 +616,6 @@ docs/adr/        architecture decision records
 Stated up front rather than discovered.
 
 - **Anti-cheat is not enforced.** See [Authority model](#authority-model).
-- **The engine exists twice.** `src/core/GameEngine.ts` and
-  `server/PuyoSimulator.ts` implement the same rules independently, kept in
-  sync by convention. Every rules change must be made twice or replays and
-  server state diverge. Unifying them is the next planned change.
 - **The game server cannot scale horizontally.** Room state lives in process
   memory with no Redis adapter, so one instance is the ceiling.
 - **Leaderboard rank is computed per request** as a count over the users table.
@@ -596,9 +643,14 @@ no memory of earlier sessions.
   input whitelist. Never spread untrusted objects into settings.
 - **Frame constants are in frames, not milliseconds**, and the engine is
   advanced exactly once per logical frame.
-- **Adding an input symbol** means widening the alphabet in five places until
-  the engines are unified: client engine, replay types, `ReplaySimulator`, the
-  server wire whitelist, and `PuyoSimulator`.
+- **Adding an input symbol** means widening `InputType` in
+  `packages/engine/src/replay.ts`, then handling it in `ReplaySimulator`,
+  `PuyoSimulator.executeInput` and the server's wire whitelist. The alphabet
+  itself is declared once, so the four handlers cannot disagree about what the
+  symbols *are*.
+- **The engine package stays pure.** No DOM, no Node APIs, no settings
+  singleton, no renderer. Its tsconfig enforces this; if you find yourself
+  fighting it, the code you are writing belongs in a consumer.
 
 ---
 
@@ -611,6 +663,7 @@ no memory of earlier sessions.
 | [0003](docs/adr/0003-shared-match-clock.md) | Both players derive frames from a shared clock |
 | [0004](docs/adr/0004-opponent-simulation.md) | The opponent's board is simulated, not relayed |
 | [0005](docs/adr/0005-fixed-step-engine.md) | The engine is fixed-step and takes no delta |
+| [0006](docs/adr/0006-shared-engine-package.md) | The engine is one package, shared by the client and the server |
 
 ---
 

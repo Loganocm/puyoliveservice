@@ -1,5 +1,5 @@
 import { Assets, Texture, Rectangle, groupD8 } from 'pixi.js';
-import { PuyoColor } from './Constants';
+import { PuyoColor } from '@puyolive/engine';
 import puyoPng from '../resources/puyo.png';
 // // import playbgPng from '../resources/playbg.png'; // Removed per user request // Removed per user request
 

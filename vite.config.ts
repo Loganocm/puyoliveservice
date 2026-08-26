@@ -8,6 +8,17 @@ export default defineConfig({
         extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
         alias: {
             '@': path.resolve(__dirname, './src'),
+            // Point the shared engine at its SOURCE, not its build output.
+            //
+            // The package publishes `dist/` for the game server, which imports
+            // it through node and needs real JavaScript. The client has a
+            // bundler, so it can read the TypeScript directly -- which means
+            // `npm run dev` needs no watch task on the package, and an edit to
+            // the engine hot-reloads like any other file under src/.
+            //
+            // Vitest applies the same alias (see vitest.config.ts), so the test
+            // suite exercises the source the client ships, not a stale build.
+            '@puyolive/engine': path.resolve(__dirname, './packages/engine/src/index.ts'),
         },
     },
     build: {

@@ -2,9 +2,8 @@ import { Container, Graphics, Sprite, Text, TextStyle, Texture, Assets } from 'p
 import type { IScene } from '../core/SceneManager';
 import { ReplayEngine, type ReplayFile } from '../core/ReplayEngine';
 import type { BoardSnapshot } from '../core/ReplaySimulator';
-import { COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor } from '../core/Constants';
+import { COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor, GameState } from '@puyolive/engine';
 import { CELL_SIZE, PUYO_COLORS } from '../core/RenderConstants';
-import { GameState } from '../core/GameEngine';
 import { ResourceManager } from '../core/ResourceManager';
 import { GameEvents } from '../core/GameEvents';
 import { backgroundManager } from '../core/BackgroundManager';
@@ -621,7 +620,7 @@ export class ReplayScene implements IScene {
             }
 
             // Sub puyo (top)
-            this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.sub, 0);
+            this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.subColor, 0);
             const subSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
             subSpr.x = queueCenterX;
             subSpr.y = nextY + displaySize / 2;
@@ -629,7 +628,7 @@ export class ReplayScene implements IScene {
             subSpr.height = displaySize;
 
             // Main puyo (bottom)
-            this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.main, 0);
+            this.addPuyoSprite(puyoContainer, anim, 0, HIDDEN_ROWS, next.mainColor, 0);
             const mainSpr = puyoContainer.children[puyoContainer.children.length - 1] as Sprite;
             mainSpr.x = queueCenterX;
             mainSpr.y = nextY + displaySize / 2 + displaySize + 4;

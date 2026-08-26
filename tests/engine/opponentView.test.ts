@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GameEngine } from '../../src/core/GameEngine';
 import { OpponentView } from '../../src/core/OpponentView';
 import { MatchClock, FRAME_MS } from '../../src/core/MatchClock';
 import type { InputType } from '../../src/core/ReplayEngine';
-import { COLS, TOTAL_ROWS, PuyoColor } from '../../src/core/Constants';
+import { COLS, TOTAL_ROWS, PuyoColor, GameEngine } from '@puyolive/engine';
 import { GOLDEN_SEEDS, applyTestConfig } from '../helpers/scriptedRun';
 
 /**

@@ -1,4 +1,4 @@
-import { GameEngine } from './GameEngine';
+import { GameEngine } from '@puyolive/engine';
 import { MatchClock, FRAME_MS } from './MatchClock';
 import type { InputType } from './ReplayEngine';
 

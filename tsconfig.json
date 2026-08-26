@@ -32,6 +32,15 @@
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      // Mirrors the bundler alias in vite.config.ts / vitest.config.ts: the
+      // client type-checks against the engine's SOURCE, so `npm run typecheck`
+      // does not depend on packages/engine having been built, and cannot pass
+      // against a stale build. The game server resolves the same package
+      // through node_modules to its built output instead -- see
+      // docs/adr/0006-shared-engine-package.md.
+      "@puyolive/engine": [
+        "packages/engine/src/index.ts"
       ]
     }
   },

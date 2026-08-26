@@ -1,960 +1,229 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// PuyoSimulator — Server-authoritative Puyo game simulation
-// Deterministic engine for anti-cheat: no rendering, no sound.
-// Must match client GameEngine logic exactly for frame-perfect determinism.
+// PuyoSimulator — the server's view of a player's game.
+//
+// This used to be 960 lines of hand-mirrored simulation, headed by a comment
+// reading "Must match client GameEngine logic exactly". It does not implement
+// the rules any more: it is an adapter over @puyolive/engine, which is now the
+// single implementation the client also runs.
+//
+// What is left here is genuinely server-specific and does NOT belong in the
+// engine:
+//
+//   - `executeInput`, which turns a wire symbol into an engine call. The
+//     engine has a typed API; the wire has a ten-symbol alphabet. Translating
+//     between them is the server's job.
+//   - The replay RECORDING surface: `spawnedPieces`, `garbageColumnLog` and
+//     seven event hooks, each shaped the way GameRoom wants to record it. The
+//     engine reports the moments; this decides what to keep.
+//
+// The public surface is unchanged, so server/index.ts and server/MinesRoom.ts
+// call it exactly as before.
+//
+// See docs/adr/0006-shared-engine-package.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── Constants (must match client Constants.ts) ──
-const COLS = 6;
-const HIDDEN_ROWS = 2;
-const TOTAL_ROWS = 12 + HIDDEN_ROWS; // 14
-
-const PuyoColor = {
-  None: 0,
-  Red: 1,
-  Green: 2,
-  Blue: 3,
-  Yellow: 4,
-  Purple: 5,
-  Garbage: 6,
-} as const;
-
-const SimState = {
-  SPAWN: 0,
-  ACTIVE: 1,
-  FALLING: 2,
-  CHECK_MATCH: 3,
-  POP_ANIM: 4,
-  GARBAGE_FALL: 5,
-  GAMEOVER: 6,
-} as const;
-type SimState = (typeof SimState)[keyof typeof SimState];
-
-// ── Board ──
-class SimBoard {
-  grid: number[][];
-
-  constructor() {
-    this.grid = [];
-    for (let c = 0; c < COLS; c++) {
-      this.grid[c] = new Array(TOTAL_ROWS).fill(PuyoColor.None);
-    }
-  }
-
-  isValid(c: number, r: number): boolean {
-    return c >= 0 && c < COLS && r >= 0 && r < TOTAL_ROWS;
-  }
-
-  applyGravity(): boolean {
-    let fell = false;
-    for (let c = 0; c < COLS; c++) {
-      let writeRow = TOTAL_ROWS - 1;
-      for (let r = TOTAL_ROWS - 1; r >= 0; r--) {
-        if (this.grid[c][r] !== PuyoColor.None) {
-          if (r !== writeRow) {
-            this.grid[c][writeRow] = this.grid[c][r];
-            this.grid[c][r] = PuyoColor.None;
-            fell = true;
-          }
-          writeRow--;
-        }
-      }
-    }
-    return fell;
-  }
-
-  getFallingDestinations(): { c: number; r: number; destR: number }[] {
-    const falling: { c: number; r: number; destR: number }[] = [];
-    for (let c = 0; c < COLS; c++) {
-      let writeRow = TOTAL_ROWS - 1;
-      for (let r = TOTAL_ROWS - 1; r >= 0; r--) {
-        if (this.grid[c][r] !== PuyoColor.None) {
-          if (r !== writeRow) {
-            falling.push({ c, r, destR: writeRow });
-          }
-          writeRow--;
-        }
-      }
-    }
-    return falling;
-  }
-
-  findMatches(): { c: number; r: number }[][] {
-    const visited: boolean[][] = [];
-    for (let c = 0; c < COLS; c++) visited[c] = [];
-
-    const matches: { c: number; r: number }[][] = [];
-
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 1; r < TOTAL_ROWS; r++) {
-        if (
-          this.grid[c][r] === PuyoColor.None ||
-          this.grid[c][r] === PuyoColor.Garbage
-        )
-          continue;
-        if (visited[c][r]) continue;
-
-        const group = this.floodFill(c, r, visited, this.grid[c][r]);
-        if (group.length >= 4) {
-          matches.push(group);
-        }
-      }
-    }
-    return matches;
-  }
-
-  private floodFill(
-    c: number,
-    r: number,
-    visited: boolean[][],
-    color: number,
-  ): { c: number; r: number }[] {
-    const queue = [{ c, r }];
-    const group: { c: number; r: number }[] = [];
-    visited[c][r] = true;
-
-    while (queue.length > 0) {
-      const current = queue.pop()!;
-      group.push(current);
-
-      const neighbors = [
-        { c: current.c + 1, r: current.r },
-        { c: current.c - 1, r: current.r },
-        { c: current.c, r: current.r + 1 },
-        { c: current.c, r: current.r - 1 },
-      ];
-
-      for (const n of neighbors) {
-        if (
-          this.isValid(n.c, n.r) &&
-          !visited[n.c][n.r] &&
-          this.grid[n.c][n.r] === color
-        ) {
-          visited[n.c][n.r] = true;
-          queue.push(n);
-        }
-      }
-    }
-    return group;
-  }
-
-  findNeighborGarbage(
-    matches: { c: number; r: number }[][],
-  ): { c: number; r: number }[] {
-    const garbage: { c: number; r: number }[] = [];
-    const seen = new Set<string>();
-
-    for (const group of matches) {
-      for (const p of group) {
-        const neighbors = [
-          { c: p.c + 1, r: p.r },
-          { c: p.c - 1, r: p.r },
-          { c: p.c, r: p.r + 1 },
-          { c: p.c, r: p.r - 1 },
-        ];
-        for (const n of neighbors) {
-          if (
-            this.isValid(n.c, n.r) &&
-            this.grid[n.c][n.r] === PuyoColor.Garbage
-          ) {
-            const key = `${n.c},${n.r}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              garbage.push(n);
-            }
-          }
-        }
-      }
-    }
-    return garbage;
-  }
-}
-
-// ── Simulator ──
+import { GameEngine, GameState, type InputType, type PuyoPair } from '@puyolive/engine';
 
 export class PuyoSimulator {
-  board: SimBoard;
-  state: SimState = SimState.SPAWN;
+  /** The shared engine. Public so callers can read board state directly. */
+  private readonly engine: GameEngine;
 
-  private seed: number;
+  constructor(seed: number) {
+    this.engine = new GameEngine(seed);
+    // Deliberately left unwired: `onSound`. An unset hook is a silent engine,
+    // which is how the server stays quiet without a "headless" flag.
+    this.wireRecording();
+  }
 
-  // Active piece
-  activePiece: {
-    x: number;
-    y: number;
-    rot: number;
-    mainColor: number;
-    subColor: number;
-  } | null = null;
+  // ── Simulation surface ────────────────────────────────────────────────────
+  // Thin pass-throughs. Everything below reads or writes engine state; none of
+  // it reimplements any of it.
 
-  nextPieces: { main: number; sub: number }[] = [];
+  get board(): { grid: number[][] } {
+    return this.engine.board as unknown as { grid: number[][] };
+  }
 
-  stats = {
-    score: 0,
-    chainCount: 0,
-    maxChain: 0,
-    puyosCleared: 0,
-    garbageSent: 0,
-    garbageReceived: 0,
-  };
+  get state(): GameState {
+    return this.engine.state;
+  }
 
-  // Garbage system
-  private scoreRemainder = 0;
-  garbageQueue = 0;
-  nuisanceTray = 0;
-  private garbageFellThisTurn = false;
+  get stats() {
+    return this.engine.stats;
+  }
 
-  // Timers (frame-based, dt = 1 per tick)
-  frameCount = 0;
-  private dropTimer = 0;
-  private lockTimer = 0;
-  private stateTimer = 0;
+  get frameCount(): number {
+    return this.engine.currentFrame;
+  }
 
-  // Fixed settings (must match client defaults for determinism)
-  // Frame timing. MUST match the client engine exactly or the mirrored
-  // simulation diverges. This duplication is removed when both engines
-  // become one package. See docs/adr/0001-frame-timing.md.
-  private readonly currentDropDelay = 30; // gravity: frames per row
-  private readonly lockDelay = 15;        // grace before lock-in
-  private readonly POP_ANIM_DURATION = 9; // clear animation hold
-  private readonly FALL_STEP_DELAY = 5;   // cascade step delay
-  // V3: Per-player configurable settings (set by server from recorded player prefs)
-  sdf = 10; // Soft Drop Factor (matches SettingsManager default)
-  softDropProtection = true;
+  get garbageQueue(): number {
+    return this.engine.garbageQueue;
+  }
 
-  // Input state
-  private _softDrop = false;
-  private softDropLocked = false;
-  /** Horizontal key held. Drives the glide buffer; fed by HH/HU replay inputs
-   *  so server lock timing matches the client instead of drifting each piece. */
-  horizontalMoveHeld = false;
+  get nuisanceTray(): number {
+    return this.engine.nuisanceTray;
+  }
 
-  // Matching data (held during POP_ANIM state)
-  private matchedPuyos: { c: number; r: number }[][] = [];
+  get activePiece() {
+    return this.engine.activePiece;
+  }
 
-  // Garbage animation tracking (must match client timing)
-  private fallingGarbage: {
-    c: number;
-    r: number;
-    destR: number;
-    delay: number;
-  }[] = [];
+  get nextPieces(): PuyoPair[] {
+    return this.engine.nextPieces;
+  }
 
-  // Bag system
-  private currentBag: { main: number; sub: number }[] = [];
+  get isGameOver(): boolean {
+    return this.engine.state === GameState.GAMEOVER;
+  }
 
-  // ── Events (set by server for integration) ──
+  /**
+   * Per-player handling, set by the server from the client's `record_settings`.
+   *
+   * These forward to the engine's injected config rather than shadowing it.
+   * The mirrored copy used to hold its own `sdf` / `softDropProtection` fields
+   * that had to be kept in step with the client's SettingsManager by hand;
+   * there is now one place the value lives.
+   */
+  get sdf(): number {
+    return this.engine.config.sdf;
+  }
+  set sdf(value: number) {
+    this.engine.config.sdf = value;
+  }
+
+  get softDropProtection(): boolean {
+    return this.engine.config.softDropProtection;
+  }
+  set softDropProtection(value: boolean) {
+    this.engine.config.softDropProtection = value;
+  }
+
+  /** Horizontal key held. Drives the glide buffer; fed by HH/HU inputs. */
+  get horizontalMoveHeld(): boolean {
+    return this.engine.horizontalMoveHeld;
+  }
+  set horizontalMoveHeld(value: boolean) {
+    this.engine.horizontalMoveHeld = value;
+  }
+
+  /** Advance exactly one logical frame. */
+  update(): void {
+    this.engine.update();
+  }
+
+  addGarbage(amount: number): void {
+    this.engine.addGarbage(amount);
+  }
+
+  computeBoardHash(): string {
+    return this.engine.computeBoardHash();
+  }
+
+  /** Expose current PRNG state for debugging */
+  getSeed(): number {
+    return this.engine.getSeed();
+  }
+
+  // ── Wire input ────────────────────────────────────────────────────────────
+
+  /**
+   * Apply one input from the wire.
+   *
+   * The alphabet is validated upstream in server/index.ts before anything
+   * reaches here, and unknown symbols are ignored rather than thrown on: a
+   * malformed packet must not be able to kill a room.
+   */
+  executeInput(input: { i: string; a?: number }): void {
+    switch (input.i as InputType) {
+      case 'L':  this.engine.movePiece(-1); break;
+      case 'R':  this.engine.movePiece(1);  break;
+      case 'CW': this.engine.rotate(1);     break;
+      case 'CC': this.engine.rotate(-1);    break;
+      // setSoftDrop, not the `softDrop` setter: the setter also fires the
+      // engine's input-recording path, which the server does not want here.
+      case 'SD': this.engine.setSoftDrop(true);  break;
+      case 'SU': this.engine.setSoftDrop(false); break;
+      case 'HD': this.engine.hardDrop();         break;
+      case 'HH': this.engine.horizontalMoveHeld = true;  break;
+      case 'HU': this.engine.horizontalMoveHeld = false; break;
+      case 'G':  if (input.a) this.engine.addGarbage(input.a); break;
+    }
+  }
+
+  // ── Replay recording ──────────────────────────────────────────────────────
+  //
+  // Set by server/index.ts, which stamps each one into the room's deterministic
+  // event log with the frame it fired on. Signatures are unchanged from the
+  // hand-mirrored simulator, so the recorded events keep their existing shape.
+
   onGarbageGenerated?: (amount: number) => void;
   onGarbageOffset?: (amount: number) => void;
 
-  // ── V3 Replay Events — deterministic event hooks ──
-  // These fire at every state-changing moment so the server can record them.
   onPieceSpawn?: (mainColor: number, subColor: number) => void;
   onPieceLock?: (x: number, y: number, rot: number, mainColor: number, subColor: number) => void;
   onMatchFound?: (groups: { c: number; r: number }[][], chainStep: number) => void;
   onGarbageDrop?: (columnOrder: number[], amount: number) => void;
   onChainEnd?: (maxChain: number, score: number, puyosCleared: number) => void;
   onSimGameOver?: () => void;
-  onBagGenerated?: (bag: { main: number; sub: number }[]) => void;
+  onBagGenerated?: (bag: PuyoPair[]) => void;
 
-  // V3: Piece sequence tracking (explicit log of every piece spawned)
-  spawnedPieces: number[] = []; // Flattened: [main, sub, main, sub, ...]
+  /** Explicit log of every piece spawned. Flattened: [main, sub, main, sub, ...] */
+  spawnedPieces: number[] = [];
 
-  // V3: Garbage column order log (each entry is the column order for one garbage drop)
+  /** Column order used for each garbage drop, one entry per drop. */
   garbageColumnLog: number[][] = [];
 
-  constructor(seed: number) {
-    this.seed = seed;
-    this.board = new SimBoard();
-
-    // Warmup PRNG — must match client (4 calls)
-    this.random();
-    this.random();
-    this.random();
-    this.random();
-
-    // Generate initial bag
-    this.currentBag = this.generateBag(true);
-    this.onBagGenerated?.(this.currentBag);
-    this.fillNextQueue();
-  }
-
-  // Mulberry32 PRNG — must be identical to client
-  private random(): number {
-    let t = (this.seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }
-
-  private generateBag(
-    isStartBag: boolean,
-  ): { main: number; sub: number }[] {
-    const bag: { main: number; sub: number }[] = [];
-    const colors = [
-      PuyoColor.Red,
-      PuyoColor.Green,
-      PuyoColor.Blue,
-      PuyoColor.Yellow,
-      PuyoColor.Purple,
-    ];
-
-    if (isStartBag) {
-      // Start bag: balanced shuffle — 4 of each color, 6 pairs
-      const pool: number[] = [];
-      for (const c of colors) {
-        for (let k = 0; k < 4; k++) pool.push(c);
-      }
-
-      // Fisher-Yates shuffle
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(this.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-      }
-
-      for (let i = 0; i < 6; i++) {
-        let m = pool[i * 2];
-        let s = pool[i * 2 + 1];
-
-        // Enforce no doubles for first 2 hands
-        if (i < 2 && m === s) {
-          const k = i * 2 + 1;
-          let attempts = 0;
-          while (m === s && attempts < 10) {
-            const swapIdx =
-              i * 2 +
-              2 +
-              Math.floor(this.random() * (pool.length - (i * 2 + 2)));
-            if (swapIdx < pool.length) {
-              const temp = pool[k];
-              pool[k] = pool[swapIdx];
-              pool[swapIdx] = temp;
-              s = pool[k];
-            }
-            attempts++;
-          }
-        }
-
-        bag.push({ main: m, sub: s });
-      }
-      return bag;
-    }
-
-    // Main game: deck of pairs (5×5×4 = 100 pairs)
-    const deck: { main: number; sub: number }[] = [];
-    for (const m of colors) {
-      for (const s of colors) {
-        for (let k = 0; k < 4; k++) {
-          deck.push({ main: m, sub: s });
-        }
-      }
-    }
-
-    // Fisher-Yates shuffle
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(this.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-
-    // V3: Notify bag generation
-    this.onBagGenerated?.(deck);
-    return deck;
-  }
-
-  private fillNextQueue() {
-    while (this.nextPieces.length < 3) {
-      if (this.currentBag.length === 0) {
-        this.currentBag = this.generateBag(false);
-      }
-      this.nextPieces.push(this.currentBag.shift()!);
-    }
-  }
-
-  // ═══ Main Loop (called once per frame via tick_frame) ═══
-
-  update() {
-    this.frameCount++;
-
-    switch (this.state) {
-      case SimState.SPAWN:
-        this.spawnPiece();
-        break;
-      case SimState.ACTIVE:
-        this.handleActiveState();
-        break;
-      case SimState.FALLING:
-        this.handleFallingState();
-        break;
-      case SimState.CHECK_MATCH:
-        this.handleCheckMatch();
-        break;
-      case SimState.POP_ANIM:
-        this.handlePopAnim();
-        break;
-      case SimState.GARBAGE_FALL:
-        if (this.fallingGarbage.length > 0) {
-          this.handleGarbageAnimation();
-        } else {
-          this.handleGarbageFall();
-        }
-        break;
-    }
-  }
-
-  // ═══ Input Interface (called from record_input events) ═══
-
-  executeInput(input: { i: string; a?: number }) {
-    switch (input.i) {
-      case 'L':
-        this.movePiece(-1);
-        break;
-      case 'R':
-        this.movePiece(1);
-        break;
-      case 'CW':
-        this.rotate(1);
-        break;
-      case 'CC':
-        this.rotate(-1);
-        break;
-      case 'SD':
-        this._softDrop = true;
-        break;
-      case 'SU':
-        this._softDrop = false;
-        break;
-      case 'HD':
-        this.hardDrop();
-        break;
-      case 'HH':
-        this.horizontalMoveHeld = true;
-        break;
-      case 'HU':
-        this.horizontalMoveHeld = false;
-        break;
-      case 'G':
-        if (input.a) this.addGarbage(input.a);
-        break;
-    }
-  }
-
-  // ═══ Actions ═══
-
-  private movePiece(dx: number): boolean {
-    if (!this.activePiece) return false;
-    if (this.canMove(dx, 0)) {
-      this.activePiece.x += dx;
-      this.lockTimer = 0;
-      return true;
-    }
-    return false;
-  }
-
-  private hardDrop(): boolean {
-    if (this.state !== SimState.ACTIVE || !this.activePiece) return false;
-
-    let dropped = 0;
-    while (this.canMove(0, 1)) {
-      this.activePiece.y += 1;
-      dropped++;
-    }
-
-    this.lockPiece();
-    if (dropped > 0) {
-      this.stats.score += dropped;
-    }
-    return true;
-  }
-
-  private rotate(dir: 1 | -1): boolean {
-    if (this.state !== SimState.ACTIVE || !this.activePiece) return false;
-
-    const newRot = (this.activePiece.rot + dir + 4) % 4;
-
-    // Basic rotation
-    if (this.canMove(0, 0, newRot)) {
-      this.activePiece.rot = newRot;
-      this.lockTimer = 0;
-      return true;
-    }
-
-    // Wall kicks (must match client exactly)
-    const kicks = [
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: -1 },
-      { x: 1, y: -1 },
-      { x: -1, y: -1 },
-    ];
-
-    for (const k of kicks) {
-      if (this.canMove(k.x, k.y, newRot)) {
-        this.activePiece.x += k.x;
-        this.activePiece.y += k.y;
-        this.activePiece.rot = newRot;
-        this.lockTimer = 0;
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  addGarbage(amount: number) {
-    this.nuisanceTray += amount * 70;
-    this.stats.garbageReceived += amount;
-  }
-
-  // ═══ State Machine ═══
-
-  private spawnPiece() {
-    this.garbageFellThisTurn = false;
-
-    if (!this.activePiece) {
-      const next = this.nextPieces.shift()!;
-      this.fillNextQueue();
-
-      // Death check: grid[2][0] blocked (topmost row — allows 2 hidden buffer rows)
-      const DEATH_COL = 2;
-      const DEATH_ROW = 0;
-      if (this.board.grid[DEATH_COL][DEATH_ROW] !== PuyoColor.None) {
-        this.changeState(SimState.GAMEOVER);
-        this.onSimGameOver?.();
-        return;
-      }
-
-      this.activePiece = {
-        x: 2,
-        y: -1, // Spawn above board
-        rot: 0,
-        mainColor: next.main,
-        subColor: next.sub,
-      };
-
-      // V3: Record piece spawn
-      this.spawnedPieces.push(next.main, next.sub);
-      this.onPieceSpawn?.(next.main, next.sub);
-
-      this.stats.chainCount = 0;
-      this.lockTimer = 0;
-      this.dropTimer = 0;
-      this.changeState(SimState.ACTIVE);
-
-      // Soft drop protection
-      if (this.softDropProtection && this._softDrop) {
-        this.softDropLocked = true;
-      } else {
-        this.softDropLocked = false;
-      }
-    }
-  }
-
-  private handleActiveState() {
-    if (!this.activePiece) return;
-
-    let delay = this.currentDropDelay;
-
-    // Unlock soft drop on release
-    if (this.softDropLocked && !this._softDrop) {
-      this.softDropLocked = false;
-    }
-
-    if (this._softDrop && !this.softDropLocked) {
-      delay = Math.max(1, Math.floor(this.currentDropDelay / this.sdf));
-      if (this.sdf >= 40) delay = 0;
-    }
-
-    this.dropTimer += 1;
-
-    if (delay === 0) {
-      // Sonic/instant soft drop
-      while (this.canMove(0, 1)) {
-        this.activePiece.y += 1;
-        this.lockTimer = 0;
-      }
-    } else if (this.dropTimer >= delay) {
-      this.dropTimer = 0;
-      if (this.canMove(0, 1)) {
-        this.activePiece.y += 1;
-        this.lockTimer = 0;
-      }
-    }
-
-    if (this.isTouchingGround()) {
-      const intentToLock = this._softDrop && !this.softDropLocked;
-      if (intentToLock) {
-        this.lockPiece();
-        return;
-      }
-
-      let shouldIncrement = true;
-      if (this.softDropLocked) shouldIncrement = false;
-      // Glide buffer: pause the lock timer while a horizontal key is held, on
-      // the inference that the player is sliding into a gap rather than
-      // placing. Fed by HH/HU inputs so this matches the client exactly.
-      if (this.horizontalMoveHeld) shouldIncrement = false;
-
-      if (shouldIncrement) {
-        this.lockTimer += 1;
-      }
-
-      if (this.lockTimer > this.lockDelay) {
-        this.lockPiece();
-      }
-    }
-  }
-
-  private getSubPos(x: number, y: number, rot: number) {
-    const offsets = [
-      { x: 0, y: -1 },
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
-      { x: -1, y: 0 },
-    ];
-    return { x: x + offsets[rot].x, y: y + offsets[rot].y };
-  }
-
-  private lockPiece() {
-    if (!this.activePiece) return;
-    const { x, y, rot, mainColor, subColor } = this.activePiece;
-    const sub = this.getSubPos(x, y, rot);
-
-    // Drop bonus (matches client lockPiece)
-    const dropBonus = Math.max(0, y + 1);
-    this.stats.score += 10 + dropBonus;
-
-    // Validate bounds — out-of-bounds lock = death
-    if (!this.board.isValid(x, y) || !this.board.isValid(sub.x, sub.y)) {
-      this.changeState(SimState.GAMEOVER);
-      this.onSimGameOver?.();
-      return;
-    }
-
-    this.board.grid[x][y] = mainColor;
-    this.board.grid[sub.x][sub.y] = subColor;
-
-    // V3: Record piece lock
-    this.onPieceLock?.(x, y, rot, mainColor, subColor);
-
-    this.activePiece = null;
-    this._softDrop = false;
-    this.softDropLocked = false;
-
-    this.dropTimer = 0;
-    this.changeState(SimState.FALLING);
-  }
-
-  private handleFallingState() {
-    if (this.stateTimer === 0) {
-      const destinations = this.board.getFallingDestinations();
-      if (destinations.length === 0) {
-        this.changeState(SimState.CHECK_MATCH);
-        return;
-      }
-    }
-
-    this.stateTimer += 1;
-    const scaledDelay = this.getChainScaledDuration(this.FALL_STEP_DELAY);
-
-    if (this.stateTimer > scaledDelay) {
-      this.stateTimer = 0;
-      this.board.applyGravity();
-      this.changeState(SimState.CHECK_MATCH);
-    }
-  }
-
-  private handlePopAnim() {
-    this.stateTimer += 1;
-    const scaledDuration = this.getChainScaledDuration(this.POP_ANIM_DURATION);
-
-    if (this.stateTimer >= scaledDuration) {
-      // Remove matched puyos from board
-      for (const group of this.matchedPuyos) {
-        for (const p of group) {
-          this.board.grid[p.c][p.r] = PuyoColor.None;
-        }
-      }
-      this.matchedPuyos = [];
-      this.stateTimer = 0;
-      this.changeState(SimState.FALLING);
-    }
-  }
-
-  private handleCheckMatch() {
-    const matches = this.board.findMatches();
-
-    if (matches.length > 0) {
-      const garbage = this.board.findNeighborGarbage(matches);
-      this.calculateScore(matches);
-
-      // V3: Record match event before garbage is added to list
-      this.onMatchFound?.(matches, this.stats.chainCount + 1);
-
-      // Include garbage puyos in removal list
-      if (garbage.length > 0) {
-        matches.push(garbage);
-      }
-
-      this.matchedPuyos = matches;
-      this.stats.chainCount++;
-
-      this.changeState(SimState.POP_ANIM);
-    } else {
-      // Chain ended — all clear check
-      if (this.stats.chainCount > 0) {
-        // V3: Record chain end event
-        this.onChainEnd?.(this.stats.maxChain, this.stats.score, this.stats.puyosCleared);
-
-        let boardEmpty = true;
-        outer: for (let c = 0; c < COLS; c++) {
-          for (let r = 0; r < TOTAL_ROWS; r++) {
-            if (this.board.grid[c][r] !== PuyoColor.None) {
-              boardEmpty = false;
-              break outer;
-            }
-          }
-        }
-        // All clear bonus could be handled here if needed
-        void boardEmpty;
-      }
-
-      // Convert nuisance tray to committed garbage queue
-      if (this.nuisanceTray > 0) {
-        const rocks = Math.floor(this.nuisanceTray / 70);
-        if (rocks > 0) {
-          this.garbageQueue += rocks;
-          this.nuisanceTray -= rocks * 70;
-        }
-      }
-
-      if (this.garbageQueue > 0 && !this.garbageFellThisTurn) {
-        this.changeState(SimState.GARBAGE_FALL);
-      } else {
-        this.changeState(SimState.SPAWN);
-        this.spawnPiece();
-      }
-    }
-  }
-
-  private handleGarbageFall() {
-    this.garbageFellThisTurn = true;
-
-    const totalRocks = this.garbageQueue;
-    const MAX_ROCKS_PER_TURN = COLS * 4; // 24
-    const amount = Math.min(totalRocks, MAX_ROCKS_PER_TURN);
-
-    if (amount <= 0) {
-      this.changeState(SimState.SPAWN);
-      this.spawnPiece();
-      return;
-    }
-
-    // Distribute garbage across columns (must match client RNG usage)
-    const fullRows = Math.floor(amount / COLS);
-    const remainder = amount % COLS;
-    const dropsPerCol = new Array(COLS).fill(fullRows);
-
-    const cols = [0, 1, 2, 3, 4, 5];
-    for (let i = cols.length - 1; i > 0; i--) {
-      const j = Math.floor(this.random() * (i + 1));
-      [cols[i], cols[j]] = [cols[j], cols[i]];
-    }
-    for (let i = 0; i < remainder; i++) {
-      dropsPerCol[cols[i]]++;
-    }
-
-    // V3: Record garbage column order and log it
-    this.garbageColumnLog.push([...cols]);
-    this.onGarbageDrop?.([...cols], amount);
-
-    this.garbageQueue -= amount;
-
-    // Create falling garbage entries (animation timing must match client)
-    this.fallingGarbage = [];
-    for (let c = 0; c < COLS; c++) {
-      const count = dropsPerCol[c];
-      if (count === 0) continue;
-
-      let r = TOTAL_ROWS - 1;
-      let placed = 0;
-      const dests: number[] = [];
-
-      while (r >= 0 && placed < count) {
-        if (this.board.grid[c][r] === PuyoColor.None) {
-          dests.push(r);
-          placed++;
-        }
-        r--;
-      }
-
-      for (let i = 0; i < dests.length; i++) {
-        this.fallingGarbage.push({
-          c: c,
-          r: -2 - i * 1,
-          destR: dests[i],
-          delay: 0,
-        });
-      }
-    }
-  }
-
-  private handleGarbageAnimation() {
-    const speed = 1.5; // rows per frame — must match client
-    let allDone = true;
-
-    for (const garb of this.fallingGarbage) {
-      if (garb.delay > 0) {
-        garb.delay -= 1;
-        allDone = false;
-        continue;
-      }
-      if (garb.r < garb.destR) {
-        garb.r += speed;
-        allDone = false;
-        if (garb.r >= garb.destR) {
-          garb.r = garb.destR;
-        }
-      }
-    }
-
-    if (allDone) {
-      // Commit garbage to board
-      for (const garb of this.fallingGarbage) {
-        this.board.grid[garb.c][garb.destR] = PuyoColor.Garbage;
-      }
-      this.fallingGarbage = [];
-      this.changeState(SimState.FALLING);
-    }
-  }
-
-  // ═══ Scoring & Garbage ═══
-
-  private calculateScore(matches: { c: number; r: number }[][]) {
-    let puyoCount = 0;
-    const colorList = new Set<number>();
-    let groupBonus = 0;
-
-    for (const group of matches) {
-      puyoCount += group.length;
-      if (group.length > 0) {
-        colorList.add(this.board.grid[group[0].c][group[0].r]);
-      }
-      if (group.length > 4) groupBonus += group.length - 3;
-    }
-
-    const cp = this.getChainPower(this.stats.chainCount);
-    const cb = this.getColorBonus(colorList.size);
-    const multiplier = Math.max(1, cp + cb + groupBonus);
-    const stepScore = puyoCount * 10 * multiplier;
-
-    this.stats.score += stepScore;
-    this.stats.puyosCleared += puyoCount;
-
-    if (this.stats.chainCount + 1 > this.stats.maxChain) {
-      this.stats.maxChain = this.stats.chainCount + 1;
-    }
-
-    // Garbage calculation: 70 points = 1 rock
-    let generatedPoints = stepScore + this.scoreRemainder;
-
-    // Offset against incoming nuisance
-    if (this.nuisanceTray > 0) {
-      const offsetAmount = Math.min(generatedPoints, this.nuisanceTray);
-      this.nuisanceTray -= offsetAmount;
-      generatedPoints -= offsetAmount;
-
-      if (offsetAmount >= 70) {
-        this.onGarbageOffset?.(Math.floor(offsetAmount / 70));
-      }
-    }
-
-    const rocksToSend = Math.floor(generatedPoints / 70);
-    this.scoreRemainder = generatedPoints % 70;
-
-    if (rocksToSend > 0) {
-      this.stats.garbageSent += rocksToSend;
-      this.onGarbageGenerated?.(rocksToSend);
-    }
-  }
-
-  private getChainPower(chain: number): number {
-    const table = [
-      0, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768,
-      65536,
-    ];
-    return table[Math.min(chain, table.length - 1)] || 0;
-  }
-
-  private getColorBonus(colors: number): number {
-    if (colors <= 1) return 0;
-    return (colors - 1) * 3;
-  }
-
-  private getChainScaledDuration(baseDuration: number): number {
-    if (this.stats.chainCount <= 1) return baseDuration * 2;
-    const multiplier =
-      1 + 0.3 * Math.pow(1.3, this.stats.chainCount - 1);
-    return Math.floor(baseDuration * multiplier);
-  }
-
-  // ═══ Helpers ═══
-
-  private canMove(dx: number, dy: number, newRot?: number): boolean {
-    if (!this.activePiece) return false;
-    const rot = newRot ?? this.activePiece.rot;
-    const nx = this.activePiece.x + dx;
-    const ny = this.activePiece.y + dy;
-
-    if (!this.isValidPos(nx, ny)) return false;
-    const sub = this.getSubPos(nx, ny, rot);
-    if (!this.isValidPos(sub.x, sub.y)) return false;
-
-    return true;
-  }
-
-  private isValidPos(c: number, r: number): boolean {
-    if (c < 0 || c >= COLS) return false;
-    if (r < 0) return true; // Above board = valid (Tetrio-style sky logic)
-    if (r >= TOTAL_ROWS) return false;
-    return this.board.grid[c][r] === PuyoColor.None;
-  }
-
-  private isTouchingGround(): boolean {
-    if (!this.activePiece) return false;
-    return !this.canMove(0, 1);
-  }
-
-  private changeState(newState: SimState) {
-    this.state = newState;
-    this.stateTimer = 0;
-  }
-
-  get isGameOver(): boolean {
-    return this.state === SimState.GAMEOVER;
-  }
-
-  // ═══ V3: Board Hash (FNV-1a) for periodic state validation ═══
-  // Must produce identical output to client GameEngine.computeBoardHash()
-  computeBoardHash(): string {
-    let hash = 0x811c9dc5; // FNV offset basis
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r < TOTAL_ROWS; r++) {
-        hash ^= this.board.grid[c][r];
-        hash = Math.imul(hash, 0x01000193); // FNV prime
-      }
-    }
-    // Include score and garbage state for full validation
-    hash ^= this.stats.score;
-    hash = Math.imul(hash, 0x01000193);
-    hash ^= this.garbageQueue;
-    hash = Math.imul(hash, 0x01000193);
-    hash ^= this.nuisanceTray;
-    hash = Math.imul(hash, 0x01000193);
-    return (hash >>> 0).toString(16).padStart(8, '0');
-  }
-
-  /** Expose current PRNG state for debugging */
-  getSeed(): number {
-    return this.seed;
+  /**
+   * Attach to the engine's recording hooks.
+   *
+   * Done once in the constructor rather than lazily, because two of these
+   * (`spawnedPieces`, `garbageColumnLog`) accumulate whether or not the server
+   * has attached a listener -- server/index.ts reads them off the simulator
+   * directly at match end.
+   *
+   * The engine's own hooks are read here and re-emitted through this object's,
+   * which is what lets the server keep the signatures it already records with:
+   * the engine reports "a piece spawned", the server wants "a piece spawned,
+   * and these were its colours".
+   */
+  private wireRecording(): void {
+    const e = this.engine;
+
+    e.onBagGenerated = (bag) => this.onBagGenerated?.(bag);
+
+    e.onPieceSpawn = () => {
+      // Fires after the engine has set activePiece from the queue, so the
+      // colours are readable here and need not be threaded through the hook.
+      const p = e.activePiece;
+      if (!p) return;
+      this.spawnedPieces.push(p.mainColor, p.subColor);
+      this.onPieceSpawn?.(p.mainColor, p.subColor);
+    };
+
+    e.onPieceLock = () => {
+      // Fires after the piece is written to the grid but before activePiece is
+      // cleared, so position and rotation are still readable. The engine passes
+      // the landed cells; the server records the piece instead.
+      const p = e.activePiece;
+      if (!p) return;
+      this.onPieceLock?.(p.x, p.y, p.rot, p.mainColor, p.subColor);
+    };
+
+    e.onMatchFound = (groups, chainStep) => this.onMatchFound?.(groups, chainStep);
+    e.onChainEnd = (maxChain, score, cleared) => this.onChainEnd?.(maxChain, score, cleared);
+
+    e.onGarbageDrop = (columnOrder, amount) => {
+      this.garbageColumnLog.push([...columnOrder]);
+      this.onGarbageDrop?.([...columnOrder], amount);
+    };
+
+    e.onStateChange = (state) => {
+      // The engine reaches GAMEOVER from exactly two places, a blocked spawn
+      // and an out-of-bounds lock, and both go through changeState. Watching
+      // the transition therefore covers both without a dedicated hook.
+      if (state === GameState.GAMEOVER) this.onSimGameOver?.();
+    };
+
+    e.onGarbageGenerated = (amount) => this.onGarbageGenerated?.(amount);
+    e.onGarbageOffset = (amount) => this.onGarbageOffset?.(amount);
   }
 }

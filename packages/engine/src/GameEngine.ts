@@ -1,5 +1,5 @@
-import { Board } from '../game/Board';
-import { COLS, TOTAL_ROWS, PuyoColor } from './Constants';
+import { Board } from './Board.js';
+import { COLS, TOTAL_ROWS, PuyoColor } from './Constants.js';
 
 export const GameState = {
     SPAWN: 0,
@@ -47,6 +47,33 @@ export interface GameStats {
     garbageReceived: number;
 }
 
+/**
+ * A pair of puyos: the falling unit, and the unit the queue and the bag hold.
+ *
+ * `main` is the axis puyo -- the one the pair rotates around, and the one that
+ * lands against the stack at rotation 0. `sub` orbits it, and at rotation 0
+ * sits ABOVE main.
+ *
+ * The queue used to spell these `{ main, sub }` while the active piece spelled
+ * the same two values `{ mainColor, subColor }`, so `nextPieces[0].main` and
+ * `activePiece.mainColor` were the same concept under two names, and every
+ * spawn had to translate between them. One spelling, declared once.
+ *
+ * See README "Vocabulary" -> Piece.
+ */
+export interface PuyoPair {
+    mainColor: PuyoColor;
+    subColor: PuyoColor;
+}
+
+/** The falling pair, plus where it is and how it is turned. */
+export interface ActivePiece extends PuyoPair {
+    x: number;
+    y: number;
+    /** 0-3. Sub offsets are [{0,-1}, {1,0}, {0,1}, {-1,0}]. */
+    rot: number;
+}
+
 export class GameEngine {
     public board: Board;
     public state: GameState = GameState.SPAWN;
@@ -54,15 +81,9 @@ export class GameEngine {
     private seed: number; // Random Seed
 
     // Game State Data
-    public activePiece: {
-        x: number;
-        y: number;
-        rot: number;
-        mainColor: PuyoColor; // Axis puyo
-        subColor: PuyoColor;  // Orbiting puyo
-    } | null = null;
+    public activePiece: ActivePiece | null = null;
 
-    public nextPieces: { main: PuyoColor, sub: PuyoColor }[] = [];
+    public nextPieces: PuyoPair[] = [];
     public stats: GameStats = {
         score: 0,
         chainCount: 0,
@@ -92,7 +113,7 @@ export class GameEngine {
     private dropTimer = 0;
     // ── Frame timing ─────────────────────────────────────────────────────────
     // All values are ENGINE FRAMES at 60 logical fps. The engine is advanced
-    // exactly once per logical frame (see GameScene and MatchClock).
+    // exactly once per logical frame by its caller.
     //
     // These were previously written as if the engine ran at 60 fps while a
     // double-advance bug in the scene layer ran it at ~120, so every value
@@ -139,6 +160,32 @@ export class GameEngine {
     public onActivePieceUpdate?: () => void; // For multiplayer sync
     public onPieceSpawn?: () => void;
 
+    // ── Recording hooks ──────────────────────────────────────────────────────
+    // The events above exist for the renderer. These exist for the RECORDER:
+    // the game server stamps each one into the replay's deterministic event log
+    // with the frame it fired on, so both the ordering and the frame are part
+    // of the stored replay format rather than an implementation detail.
+    //
+    // They live here rather than in the server adapter because the moments they
+    // describe are inside the state machine and cannot be observed from
+    // outside: the colour order of a freshly shuffled bag and the column order
+    // of a garbage drop are consumed immediately and never exposed again.
+    //
+    // Every one is optional and unset by default, so a client engine that
+    // ignores them behaves exactly as it did before they existed.
+    // See docs/adr/0006-shared-engine-package.md.
+
+    /** A shuffled bag was produced. Fires before any piece is drawn from it. */
+    public onBagGenerated?: (bag: PuyoPair[]) => void;
+    /** Colour groups matched this chain step. Fires BEFORE adjacent garbage is
+     *  appended to the clear list, so `groups` is colour matches only. */
+    public onMatchFound?: (groups: { c: number, r: number }[][], chainStep: number) => void;
+    /** A chain sequence ended. Reports the run's totals, not this step's. */
+    public onChainEnd?: (maxChain: number, score: number, puyosCleared: number) => void;
+    /** Garbage is about to fall. `columnOrder` is the shuffle result, which is
+     *  the only record of where the rocks land. */
+    public onGarbageDrop?: (columnOrder: number[], amount: number) => void;
+
     // Animation queue for dropping garbage
     public fallingGarbage: { c: number, r: number, destR: number, delay: number }[] = [];
     public fallingDestinations: { c: number, r: number, destR: number }[] = []; // For normal gravity
@@ -172,7 +219,7 @@ export class GameEngine {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
-    private currentBag: { main: PuyoColor, sub: PuyoColor }[] = [];
+    private currentBag: PuyoPair[] = [];
 
     // Record an action (Legacy/Unused in V2 client-side, handled by NetworkManager)
     private recordAction(_type: string, _data?: any) {
@@ -181,8 +228,8 @@ export class GameEngine {
     }
 
     // isStartBag: restricts to 3 colors for first batch
-    private generateBag(isStartBag: boolean = false): { main: PuyoColor, sub: PuyoColor }[] {
-        const bag: { main: PuyoColor, sub: PuyoColor }[] = [];
+    private generateBag(isStartBag: boolean = false): PuyoPair[] {
+        const bag: PuyoPair[] = [];
 
         let colors: PuyoColor[] = [PuyoColor.Red, PuyoColor.Green, PuyoColor.Blue, PuyoColor.Yellow, PuyoColor.Purple]; // Added Purple
 
@@ -231,8 +278,13 @@ export class GameEngine {
                     }
                 }
 
-                bag.push({ main: m, sub: s });
+                bag.push({ mainColor: m, subColor: s });
             }
+            // The start bag is built from the constructor, before any caller can
+            // attach a listener, so this call is unobservable in practice. It is
+            // made anyway so the hook means "a bag was generated" without an
+            // exception for the first one.
+            this.onBagGenerated?.(bag);
             return bag;
         }
 
@@ -249,13 +301,13 @@ export class GameEngine {
         // This ensures every color combo appears.
 
         if (!isStartBag) {
-            const deck: { main: PuyoColor, sub: PuyoColor }[] = [];
+            const deck: PuyoPair[] = [];
             const variants = colors;
 
             // 4 copies of every possible pair combination (25 * 4 = 100 pairs for 5 colors)
             for (let m of variants) {
                 for (let s of variants) {
-                    for (let k = 0; k < 4; k++) deck.push({ main: m, sub: s });
+                    for (let k = 0; k < 4; k++) deck.push({ mainColor: m, subColor: s });
                 }
             }
 
@@ -264,6 +316,7 @@ export class GameEngine {
                 const j = Math.floor(this.random() * (i + 1));
                 [deck[i], deck[j]] = [deck[j], deck[i]];
             }
+            this.onBagGenerated?.(deck);
             return deck;
         }
 
@@ -449,8 +502,8 @@ export class GameEngine {
                 x: 2,
                 y: -1, // Spawn "Invisibly Above"
                 rot: 0,
-                mainColor: next.main,
-                subColor: next.sub
+                mainColor: next.mainColor,
+                subColor: next.subColor
             };
 
             this.onPieceSpawn?.();
@@ -759,6 +812,11 @@ export class GameEngine {
             dropsPerCol[cols[i]]++;
         }
 
+        // The shuffle result is consumed immediately below and never exposed
+        // again, so this is the only chance to record where the rocks land.
+        // Copied, because `cols` is not otherwise defensive.
+        this.onGarbageDrop?.([...cols], amount);
+
         // Deduct rocks from queue
         this.garbageQueue -= amount;
 
@@ -850,6 +908,12 @@ export class GameEngine {
 
             this.calculateScore(matches); // Pass only color matches
 
+            // Recorded here, before the garbage group is appended below, so the
+            // event describes the colour matches that actually triggered the
+            // step. `chainCount` has not been incremented yet, so the step
+            // number is one ahead of it.
+            this.onMatchFound?.(matches, this.stats.chainCount + 1);
+
             // Add garbage to list for removal animation
             if (garbage.length > 0) {
                 matches.push(garbage);
@@ -865,6 +929,8 @@ export class GameEngine {
         } else {
             // Chain End — check for All Clear (board empty)
             if (this.stats.chainCount > 0) {
+                this.onChainEnd?.(this.stats.maxChain, this.stats.score, this.stats.puyosCleared);
+
                 let boardEmpty = true;
                 for (let c = 0; c < COLS && boardEmpty; c++) {
                     for (let r = 0; r < TOTAL_ROWS; r++) {
@@ -1050,7 +1116,9 @@ export class GameEngine {
     }
 
     // ═══ V3 Replay: Board Hash (FNV-1a) for periodic state validation ═══
-    // Must produce identical output to server PuyoSimulator.computeBoardHash()
+    // The server hashes with this same method, through the same engine, so
+    // client and server hashes agree by construction rather than by matching
+    // two hand-written copies of the algorithm.
     computeBoardHash(): string {
         let hash = 0x811c9dc5; // FNV offset basis
         for (let c = 0; c < COLS; c++) {

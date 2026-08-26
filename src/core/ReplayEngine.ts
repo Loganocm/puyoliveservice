@@ -3,131 +3,33 @@ import { ReplaySimulator } from './ReplaySimulator';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Replay V3 Data Model
-// Records ALL sources of randomness, ALL game-affecting settings,
-// ALL state-changing events, frame-accurate player inputs, periodic state
-// hashes, and engine version for 1:1 ultra-accurate deterministic replays.
+//
+// The format itself is declared once, in @puyolive/engine, because the game
+// server writes these files and the client reads them -- so a difference of
+// opinion about the shape is a corrupt replay, not a type error. It used to be
+// declared here AND in server/GameRoom.ts as two hand-maintained copies.
+//
+// Re-exported from this module so existing importers keep working: ReplayEngine
+// remains the client's door to the replay format, it just no longer owns the
+// definition. See docs/adr/0006-shared-engine-package.md.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Current engine version. Bump this whenever game logic changes that affect determinism. */
-export const ENGINE_VERSION = '1.0.0';
+export { ENGINE_VERSION } from '@puyolive/engine';
 
-// --- Input Types (must match server) ---
+export type {
+    InputType,
+    ReplayInput,
+    ReplayPlayer,
+    ReplayPlayerSettings,
+    ReplayRoomSettings,
+    DeterministicEventType,
+    DeterministicEvent,
+    StateHash,
+    ReplayFileV3,
+    ReplayFileV2,
+} from '@puyolive/engine';
 
-export type InputType =
-    | 'L' | 'R'      // move left / right
-    | 'CW' | 'CC'    // rotate clockwise / counter-clockwise
-    | 'SD' | 'SU'    // soft drop pressed / released
-    | 'HD'           // hard drop
-    | 'HH' | 'HU'    // horizontal key held / released (drives the glide buffer)
-    | 'G';           // garbage received (server-recorded)
-
-export interface ReplayInput {
-    f: number;      // Frame number
-    p: 0 | 1;       // Player index
-    i: InputType;   // Input type
-    a?: number;     // Amount (for Garbage 'G')
-}
-
-// --- Player Info ---
-
-export interface ReplayPlayer {
-    id: string;
-    username: string;
-    userId?: number;
-    elo?: number;
-}
-
-// --- Per-Player Settings (game-affecting, recorded at match start) ---
-
-export interface ReplayPlayerSettings {
-    sdf: number;                    // Soft Drop Factor
-    softDropProtection: boolean;    // Require fresh press on spawn
-}
-
-// --- Room Settings (game-affecting) ---
-
-export interface ReplayRoomSettings {
-    garbageMultiplier: number;
-    marginTime: number;
-}
-
-// --- Deterministic Event Log ---
-// Every state-changing event is recorded so replays can be audited
-// and debugged without relying solely on PRNG determinism.
-
-export type DeterministicEventType =
-    | 'spawn'           // Piece spawned (records colors)
-    | 'lock'            // Piece locked (records position)
-    | 'match'           // Match found (records groups)
-    | 'garbage_drop'    // Garbage fell (records column order)
-    | 'chain_end'       // Chain sequence ended (records stats)
-    | 'gameover'        // Game over triggered
-    | 'bag_gen';        // New piece bag generated
-
-export interface DeterministicEvent {
-    f: number;                      // Frame number
-    p: 0 | 1;                      // Player index
-    t: DeterministicEventType;     // Event type
-    d?: any;                        // Event-specific data
-}
-
-// --- State Hash (for periodic validation & desync detection) ---
-
-export interface StateHash {
-    f: number;              // Frame number
-    p: 0 | 1;               // Player index
-    h: string;              // Board hash
-}
-
-// --- V3 Replay File Format ---
-// The definitive format for 1:1 accurate replays.
-
-export interface ReplayFileV3 {
-    version: 3;
-    engineVersion: string;                              // Logic fingerprint (e.g. "1.0.0")
-    seed: number;                                       // Initial PRNG seed
-    players: ReplayPlayer[];
-    winner: 0 | 1 | null;
-    duration: number;                                   // Total frames
-    fps: number;                                        // Frames per second (60)
-    inputs: ReplayInput[];                              // Frame-accurate player inputs
-
-    // Per-player game-affecting settings (each player may have different SDF)
-    playerSettings: [ReplayPlayerSettings, ReplayPlayerSettings];
-
-    // Room-level game-affecting settings
-    roomSettings: ReplayRoomSettings;
-
-    // Explicit piece sequences — immune to PRNG changes
-    // Flattened: [main0, sub0, main1, sub1, ...] per player
-    pieceSequences: [number[], number[]];
-
-    // Garbage column shuffle results per garbage drop event per player
-    // Each inner array is the column order used for that garbage drop
-    garbageColumns: [number[][], number[][]];
-
-    // All state-changing events for auditing and debugging
-    events: DeterministicEvent[];
-
-    // Periodic board state hashes for validation
-    stateHashes: StateHash[];
-}
-
-// --- Legacy V2 Format (kept for type reference only — NOT playable) ---
-
-export interface ReplayFileV2 {
-    version: 2;
-    seed: number;
-    players: ReplayPlayer[];
-    winner: 0 | 1 | null;
-    duration: number;
-    fps: number;
-    inputs: ReplayInput[];
-    settings?: {
-        sdf: number;
-        softDropProtection: boolean;
-    };
-}
+import type { ReplayFileV2, ReplayFileV3, ReplayPlayer } from '@puyolive/engine';
 
 // --- Type alias: the engine only accepts V3 for playback ---
 export type ReplayFile = ReplayFileV3;

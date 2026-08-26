@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GameEngine } from '../../src/core/GameEngine';
+import { GameEngine } from '@puyolive/engine';
 import {
   runScripted,
   runHeuristic,
@@ -63,8 +63,8 @@ describe('piece sequence', () => {
   });
 
   it('differs between seeds', () => {
-    const a = new GameEngine(1).nextPieces.map((p) => `${p.main}${p.sub}`).join('');
-    const b = new GameEngine(2).nextPieces.map((p) => `${p.main}${p.sub}`).join('');
+    const a = new GameEngine(1).nextPieces.map((p) => `${p.mainColor}${p.subColor}`).join('');
+    const b = new GameEngine(2).nextPieces.map((p) => `${p.mainColor}${p.subColor}`).join('');
     expect(a).not.toBe(b);
   });
 
@@ -75,8 +75,8 @@ describe('piece sequence', () => {
       const engine = new GameEngine(seed);
       const first = engine.nextPieces[0];
       const second = engine.nextPieces[1];
-      expect(first.main, `seed ${seed} hand 1`).not.toBe(first.sub);
-      expect(second.main, `seed ${seed} hand 2`).not.toBe(second.sub);
+      expect(first.mainColor, `seed ${seed} hand 1`).not.toBe(first.subColor);
+      expect(second.mainColor, `seed ${seed} hand 2`).not.toBe(second.subColor);
     }
   });
 });

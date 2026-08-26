@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { GameEngine } from '../../src/core/GameEngine';
 import { ReplaySimulator } from '../../src/core/ReplaySimulator';
 import type { ReplayFileV3, ReplayInput } from '../../src/core/ReplayEngine';
 import { ENGINE_VERSION } from '../../src/core/ReplayEngine';
-import { COLS, TOTAL_ROWS, PuyoColor } from '../../src/core/Constants';
+import { COLS, TOTAL_ROWS, PuyoColor, GameEngine } from '@puyolive/engine';
 import { GOLDEN_SEEDS, applyTestConfig } from '../helpers/scriptedRun';
 
 /**
