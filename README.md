@@ -506,8 +506,17 @@ Each pair is one concept with two spellings, pending unification:
 | `ReplayFileV3`, `StateHash`, `DeterministicEvent` | same names, redeclared |
 | `ENGINE_VERSION` | same name, redeclared |
 
-`CELL_SIZE` and `PUYO_COLORS` live in `Constants.ts` but are **render-only** and
-must not move into a shared engine package.
+Simulation constants and presentation constants are now separate files:
+
+| File | Holds | May be imported by |
+|---|---|---|
+| `src/core/Constants.ts` | The rules: `COLS`, `ROWS`, `HIDDEN_ROWS`, `TOTAL_ROWS`, `PuyoColor` | Anything, including the server |
+| `src/core/RenderConstants.ts` | How it looks: `CELL_SIZE`, `PUYO_COLORS` | Scenes only |
+
+`Constants.ts`, `Board.ts` and `GameEngine.ts` form a closed dependency island
+— `Constants` imports nothing, `Board` imports only `Constants`, `GameEngine`
+imports only those two, and none touch the DOM. That set is what moves into a
+shared engine package.
 
 ---
 

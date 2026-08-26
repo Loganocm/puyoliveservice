@@ -2,7 +2,8 @@ import { Container, Graphics, Sprite, AnimatedSprite, Text, TextStyle, Texture }
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
 import { Board } from '../game/Board';
-import { CELL_SIZE, COLS, TOTAL_ROWS, PuyoColor, PUYO_COLORS, HIDDEN_ROWS } from '../core/Constants';
+import { COLS, TOTAL_ROWS, PuyoColor, HIDDEN_ROWS } from '../core/Constants';
+import { CELL_SIZE, PUYO_COLORS } from '../core/RenderConstants';
 import { Input } from '../core/Input';
 import { ResourceManager } from '../core/ResourceManager';
 import { SettingsManager } from '../core/SettingsManager';

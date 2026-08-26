@@ -2,7 +2,8 @@ import { Container, Graphics, Sprite, Text, TextStyle, Texture, Assets } from 'p
 import type { IScene } from '../core/SceneManager';
 import { ReplayEngine, type ReplayFile } from '../core/ReplayEngine';
 import type { BoardSnapshot } from '../core/ReplaySimulator';
-import { CELL_SIZE, COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor, PUYO_COLORS } from '../core/Constants';
+import { COLS, TOTAL_ROWS, HIDDEN_ROWS, PuyoColor } from '../core/Constants';
+import { CELL_SIZE, PUYO_COLORS } from '../core/RenderConstants';
 import { GameState } from '../core/GameEngine';
 import { ResourceManager } from '../core/ResourceManager';
 import { GameEvents } from '../core/GameEvents';
