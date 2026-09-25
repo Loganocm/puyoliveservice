@@ -250,26 +250,9 @@ export class QuickPlayScene implements IScene {
         NetworkManager.on('mines_ko', onKO);
         this.networkListeners.push({ event: 'mines_ko', cb: onKO });
 
-        // Server-authoritative death — forces GAMEOVER regardless of local engine state
-        const onServerDeath = (data: { depth: number, score: number, kos: number }) => {
-            if (this.container.destroyed) return;
-            if (this.alive) {
-                this.alive = false;
-                // Force local engine to GAMEOVER if it hasn't caught up
-                if (this.engine.state !== GameState.GAMEOVER) {
-                    (this.engine as any).state = GameState.GAMEOVER;
-                }
-                this.depth = data.depth;
-                this.kos = data.kos;
-                GameEvents.emit('mines_died', {
-                    depth: data.depth,
-                    kos: data.kos,
-                    score: data.score,
-                });
-            }
-        };
-        NetworkManager.on('mines_server_death', onServerDeath);
-        this.networkListeners.push({ event: 'mines_server_death', cb: onServerDeath });
+        // Death is reported by the client (mines_player_lost); the server's own
+        // death detection is disabled (server/index.ts, onPlayerDiedServer), so
+        // there is no server death event to listen for.
 
         // Server state sync — reconcile score/depth drift, enforce death
         const onStateSync = (data: { score: number, depth: number, alive: boolean, garbageQueue: number, nuisanceTray: number }) => {
@@ -329,7 +312,7 @@ export class QuickPlayScene implements IScene {
                 if (this.engineAccumulator > 5) this.engineAccumulator = 0;
 
                 if (prevState !== this.engine.state && this.engine.state === GameState.GARBAGE_FALL) {
-                    const amount = Math.min(this.engine.garbageQueue, 30);
+                    const amount = Math.min(this.engine.garbageQueue, 24); // the engine's per-turn cap
                     this.board.shake(Math.log(amount + 1) * 5);
                     SoundManager.play('drop');
                 }

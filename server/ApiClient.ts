@@ -2,6 +2,8 @@
  * API Client for the game server to communicate with the Puyo Live REST API
  */
 
+import type { RecordedMatch } from './matchResult.js';
+
 // 8080 is the API's own default (api/src/config/index.ts) and its port in
 // docker-compose.yml. This fallback was left at 3001 when the API moved off
 // that port, so an unconfigured local game server could not reach the API:
@@ -24,12 +26,7 @@ interface RecordMatchParams {
   replay_data?: any;
 }
 
-interface MatchResult {
-  id: number;
-  player1_elo_after: number;
-  player2_elo_after: number;
-  elo_change: number;
-}
+type MatchResult = RecordedMatch;
 
 interface UserProfile {
   id: number;

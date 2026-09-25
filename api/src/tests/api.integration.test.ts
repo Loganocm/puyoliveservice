@@ -296,6 +296,9 @@ describe('API Integration Tests', () => {
         expect(res.body.id).toBeDefined();
         expect(res.body.winner_id).toBe(testUserId);
         expect(res.body.elo_change).toBeGreaterThan(0);
+        // Each player's progression, which the game server forwards (NET-14).
+        expect(res.body.player1_stats).toMatchObject({ xp_gained: expect.any(Number), level: expect.any(Number), new_elo: expect.any(Number) });
+        expect(res.body.player2_stats.elo_change).toBe(-res.body.player1_stats.elo_change);
       });
 
       it('should reject without authentication', async () => {

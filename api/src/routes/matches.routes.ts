@@ -57,8 +57,11 @@ router.post('/', internalOnly, asyncHandler(async (req: Request, res: Response) 
       replay_data
     });
 
-    // Return the match object to be backward compatible with HTTP clients
-    res.status(201).json(result.match);
+    // The match row, as before, plus each player's progression (XP gained,
+    // new level, rating change), which the game server forwards to the
+    // players. It used to be computed and then dropped here, so nobody ever
+    // saw their XP after a ranked match (NET-14).
+    res.status(201).json({ ...result.match, player1_stats: result.player1_stats, player2_stats: result.player2_stats });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to record match';
     res.status(400).json({ error: message });

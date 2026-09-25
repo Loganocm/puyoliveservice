@@ -686,9 +686,10 @@ export class GameScene implements IScene {
                 if (prevState !== this.engine.state) {
                     console.log(`⏩ [STATE] Frame ${this.engine.currentFrame}: ${prevState} → ${this.engine.state}`);
 
-                    // Shake on garbage fall, on a log scale of the amount (at most 30 a turn).
+                    // Shake on garbage fall, on a log scale of the amount
+                    // (the engine drops at most 24, four rows, a turn).
                     if (this.engine.state === GameState.GARBAGE_FALL) {
-                        const amount = Math.min(this.engine.garbageQueue, 30);
+                        const amount = Math.min(this.engine.garbageQueue, 24);
                         this.board.shake(Math.log(amount + 1) * 5);
                         SoundManager.play('drop');
                     }

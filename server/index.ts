@@ -5,6 +5,8 @@ import { Server, Socket } from 'socket.io';
 import { roomManager } from './RoomManager.js';
 import { minesRoom, MinesRoom } from './MinesRoom.js';
 import { recordMatch, verifyToken, checkApiHealth } from './ApiClient.js';
+import { matchResultEvents } from './matchResult.js';
+import { targetBoardOf } from './minesTarget.js';
 import { PuyoSimulator } from './PuyoSimulator.js';
 import type { PuyoPair } from '@puyolive/engine';
 
@@ -310,9 +312,13 @@ minesRoom.onPlayerDiedServer = (deadSocketId: string) => {
 // Server-authoritative state sync — periodically sends score/depth/garbage to each client
 minesRoom.onStateSync = (socketId: string, state: { score: number; depth: number; alive: boolean; garbageQueue: number; nuisanceTray: number }) => {
   const sock = io.sockets.sockets.get(socketId);
-  if (sock) {
-    sock.emit('mines_state_sync', state);
-  }
+  if (!sock) return;
+  sock.emit('mines_state_sync', state);
+  // The board of the player being attacked, for the client's target view.
+  // The client always listened for this and the server never sent it, so the
+  // target view stayed empty (NET-15).
+  const target = targetBoardOf(minesRoom.players, socketId);
+  if (target) sock.emit('mines_target_board', target);
 };
 
 /**
@@ -1062,6 +1068,13 @@ io.on('connection', (socket: Socket) => {
                   new_elo: isPlayer1Winner ? matchResult.player2_elo_after : matchResult.player1_elo_after,
                   change: -matchResult.elo_change
                 });
+              }
+
+              // Each player's XP, level and rating after the match (NET-14).
+              const results = matchResultEvents(matchResult, isPlayer1Winner);
+              if (results) {
+                winnerSocket?.emit('match_result', results.winner);
+                loserSocket?.emit('match_result', results.loser);
               }
 
               io.emit('leaderboard_update');
