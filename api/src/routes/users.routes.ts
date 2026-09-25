@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { asyncHandler, authenticate, optionalAuth } from '../middleware/index.js';
 import { prisma } from '../db/prisma.js';
+import { avatarUrl, decodeAvatar } from '../services/avatar.js';
 
 const router = Router();
 
@@ -22,13 +23,15 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
     where: { username: { startsWith: q, mode: 'insensitive' } },
     select: {
       id: true, username: true, elo_rating: true, level: true,
-      avatar_url: true, games_played: true, games_won: true,
+      avatar_updated_at: true, games_played: true, games_won: true,
     },
     orderBy: { elo_rating: 'desc' },
     take: limit,
   });
 
-  res.json({ users });
+  res.json({
+    users: users.map(({ avatar_updated_at, ...u }) => ({ ...u, avatar_url: avatarUrl(u.id, avatar_updated_at) })),
+  });
 }));
 
 /**
@@ -43,7 +46,7 @@ router.get('/all', asyncHandler(async (req: Request, res: Response) => {
     prisma.user.findMany({
       select: {
         id: true, username: true, elo_rating: true, level: true,
-        avatar_url: true, games_played: true, games_won: true,
+        avatar_updated_at: true, games_played: true, games_won: true,
         created_at: true,
       },
       orderBy: [{ created_at: 'desc' }],
@@ -54,8 +57,9 @@ router.get('/all', asyncHandler(async (req: Request, res: Response) => {
   ]);
 
   res.json({
-    players: users.map((u, i) => ({
+    players: users.map(({ avatar_updated_at, ...u }) => ({
       ...u,
+      avatar_url: avatarUrl(u.id, avatar_updated_at),
       win_rate: u.games_played > 0
         ? Math.round((u.games_won / u.games_played) * 100)
         : 0,
@@ -67,6 +71,37 @@ router.get('/all', asyncHandler(async (req: Request, res: Response) => {
       hasMore: offset + limit < total,
     },
   });
+}));
+
+/**
+ * GET /users/:id/avatar
+ * The avatar image itself. URLs handed out by the API carry ?v=<version>, so
+ * a versioned request is cacheable for a year; the ETag answers revalidation.
+ */
+router.get('/:id/avatar', asyncHandler(async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Invalid user id' });
+    return;
+  }
+  const user = await prisma.user.findUnique({ where: { id }, select: { avatar_url: true, avatar_updated_at: true } });
+  const image = user?.avatar_url ? decodeAvatar(user.avatar_url) : null;
+  if (!user || !image) {
+    res.status(404).json({ error: 'No avatar' });
+    return;
+  }
+  const etag = `"${(user.avatar_updated_at?.getTime() ?? 0).toString(36)}-${image.bytes.length}"`;
+  res.set({
+    ETag: etag,
+    'Cache-Control': req.query.v ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+    // The game is served from another origin; helmet's default would block the image there.
+    'Cross-Origin-Resource-Policy': 'cross-origin',
+  });
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.type(image.mime).send(image.bytes);
 }));
 
 /**

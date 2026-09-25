@@ -5,6 +5,7 @@ import { BackButton } from "@/components/BackButton";
 import { useMenuInput } from "@/hooks/useMenuInput";
 import { AuthManager } from "@/core/AuthManager";
 import { APIClient } from "@/api/client";
+import { PersonalBests } from "@/core/PersonalBests";
 
 interface SinglePlayerModeSelectProps {
   onSelectMode: (mode: "3min" | "5min" | "10min" | "practice") => void;
@@ -28,6 +29,10 @@ export function SinglePlayerModeSelect({
         .catch(() => {});
     }
   }, [user]);
+
+  const [bests] = useState(() => new PersonalBests());
+  const records = bests.all();
+  const lastMode = bests.lastMode;
 
   const modes = [
     { id: "3min" as const, label: "3 MINUTES", icon: Clock },
@@ -129,7 +134,9 @@ export function SinglePlayerModeSelect({
           {modes.map((mode, index) => (
             <motion.button
               key={mode.id}
-              className="w-full px-8 py-6 bg-white/5 border border-white/10 rounded-xl text-white font-black text-xl tracking-wider hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer group shadow-lg backdrop-blur-sm"
+              autoFocus={mode.id === lastMode}
+              className="w-full px-6 sm:px-8 py-5 sm:py-6 bg-white/5 border border-white/10 rounded-xl text-white font-black text-xl tracking-wider hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer group shadow-lg backdrop-blur-sm"
+              style={{ outlineColor: "var(--pl-accent-secondary)" }}
               onClick={() => onSelectMode(mode.id)}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -137,12 +144,24 @@ export function SinglePlayerModeSelect({
               whileTap={{ scale: 0.98 }}
             >
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/5 rounded-lg group-hover:bg-[#FF5733]/20 group-hover:text-[#FF5733] transition-colors">
+                <div className="p-3 bg-white/5 rounded-lg transition-colors group-hover:text-[var(--pl-accent-primary)]">
                   <mode.icon className="w-6 h-6" />
                 </div>
-                <span className="group-hover:text-[#FF5733] transition-colors">
+                <span className="transition-colors group-hover:text-[var(--pl-accent-primary)]">
                   {mode.label}
                 </span>
+              </div>
+              <div className="flex flex-col items-end gap-1 text-right">
+                {mode.id === lastMode && (
+                  <span className="text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full" style={{ color: "var(--pl-accent-secondary)", background: "color-mix(in srgb, var(--pl-accent-secondary) 15%, transparent)" }}>
+                    LAST PLAYED
+                  </span>
+                )}
+                {records[mode.id] && (
+                  <span className="text-xs font-semibold tabular-nums text-white/55 tracking-normal">
+                    Best {records[mode.id]!.score.toLocaleString()}
+                  </span>
+                )}
               </div>
             </motion.button>
           ))}

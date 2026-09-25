@@ -28,18 +28,17 @@ export function getAudioContext(): AudioContext {
 }
 
 /**
- * Connects an HTMLAudioElement to the shared AudioContext so its output
- * flows through the Web Audio graph (and is capturable by screen share).
- * 
- * IMPORTANT: Once connected, the element's `volume` property still works
- * but the audio ONLY outputs through the AudioContext destination.
- * This is the desired behavior — it ensures capture tools see the audio.
- * 
- * Returns the MediaElementAudioSourceNode for optional further processing.
+ * Route an HTMLAudioElement through the shared AudioContext (so capture tools
+ * hear it) via a gain node, and return the gain node.
+ *
+ * Set volume and fades on the returned gain, not on `audio.volume`: once an
+ * element feeds the Web Audio graph, browsers disagree about whether its own
+ * volume still applies, so it is left at 1.
  */
-export function connectToContext(audio: HTMLAudioElement): MediaElementAudioSourceNode {
+export function routeElement(audio: HTMLAudioElement): GainNode {
     const ctx = getAudioContext();
     const source = ctx.createMediaElementSource(audio);
-    source.connect(ctx.destination);
-    return source;
+    const gain = ctx.createGain();
+    source.connect(gain).connect(ctx.destination);
+    return gain;
 }

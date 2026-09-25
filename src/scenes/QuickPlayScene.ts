@@ -18,7 +18,6 @@ import { Container, Text } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
 import { Board, COLS, TOTAL_ROWS, PuyoColor } from '@puyolive/engine';
-import { BOARD_LEFT, BOARD_TOP, SIDE_GAP, OPPONENT_SCALE } from '../core/RenderConstants';
 import { Input } from '../core/Input';
 import { SettingsManager } from '../core/SettingsManager';
 import { SoundManager } from '../core/SoundManager';
@@ -31,8 +30,10 @@ import type { HandlingHooks } from '../input/Handling';
 import { BoardView, engineFrame, gridFrame } from '../render/BoardView';
 import type { BoardFrame } from '../render/BoardView';
 import { Backdrop } from '../render/Backdrop';
+import { FrameRateMonitor } from '../core/FrameRateMonitor';
 import { NextQueueView } from '../render/NextQueueView';
 import { StatPanel } from '../render/StatPanel';
+import { layoutMatch } from '../render/MatchLayout';
 import { FONTS, getTheme } from '../theme/tokens';
 
 /** Depth = score / 100 */
@@ -91,6 +92,8 @@ export class QuickPlayScene implements IScene {
         record: code => this.recordInputForServer(code),
         sound: sound => SoundManager.play(sound),
     };
+    /** Watches for a device too slow to play smoothly (CLI-20). */
+    private readonly frameRate = new FrameRateMonitor();
     /** Real time carried between rendered frames, in logical frames. */
     private engineAccumulator = 0;
 
@@ -115,7 +118,6 @@ export class QuickPlayScene implements IScene {
         this.board = new BoardView();
         this.nextQueue = new NextQueueView();
         this.targetView = new BoardView({ effects: 'lite', ghost: false, tray: false });
-        this.targetView.container.scale.set(OPPONENT_SCALE);
         this.targetFrame = gridFrame(() => this.targetBoard.grid);
         this.targetLabel = new Text({
             text: 'TARGET',
@@ -147,9 +149,8 @@ export class QuickPlayScene implements IScene {
         };
 
         this.engine.onStateChange = (state) => {
-            if (state === GameState.POP_ANIM) {
-                SoundManager.play('pop');
-            }
+            // No sound here for a pop: the engine's 'chain' sound plays at
+            // the same moment, pitched to the link.
 
             if (state === GameState.GAMEOVER) {
                 // Authoritative death — client tells server it died
@@ -296,6 +297,11 @@ export class QuickPlayScene implements IScene {
     update(delta: number): void {
         if (this.container.destroyed) return;
 
+        if (this.frameRate.sample(delta)) {
+            this.board.setEffects('lite');
+            GameEvents.emit('perf_warning', { fps: this.frameRate.fps });
+        }
+
         try {
             // Escape to leave
             if (Input.isPressed('Escape')) {
@@ -360,24 +366,14 @@ export class QuickPlayScene implements IScene {
     // ── Layout ──
 
     updateLayout() {
-        const screenW = SceneManager.screenWidth;
-        const screenH = SceneManager.screenHeight;
-        const baseW = SceneManager.BASE_WIDTH;
-        const baseH = SceneManager.BASE_HEIGHT;
-        const scale = Math.min(screenW / baseW, screenH / baseH);
-        this.gameContentWrapper.position.set(Math.round((screenW - baseW * scale) / 2), Math.round((screenH - baseH * scale) / 2));
-        this.gameContentWrapper.scale.set(scale);
-
-        const rightX = BOARD_LEFT + BoardView.WIDTH + SIDE_GAP;
-        this.board.container.position.set(BOARD_LEFT, BOARD_TOP);
-        this.stats.container.position.set(BOARD_LEFT - SIDE_GAP - StatPanel.WIDTH, BOARD_TOP);
-        this.nextQueue.container.position.set(rightX, BOARD_TOP);
-        const w = BoardView.WIDTH * OPPONENT_SCALE;
-        const x = rightX + (NextQueueView.WIDTH - w) / 2;
-        const y = BOARD_TOP + NextQueueView.HEIGHT + 96;
-        this.targetView.container.position.set(x, y);
-        this.targetLabel.position.set(x + w / 2, y - 76);
-        this.backdrop.resize(screenW, screenH);
+        layoutMatch({
+            wrapper: this.gameContentWrapper,
+            board: this.board,
+            next: this.nextQueue,
+            stats: this.stats,
+            side: { view: this.targetView, label: this.targetLabel },
+        }, SceneManager.screenWidth, SceneManager.screenHeight);
+        this.backdrop.resize(SceneManager.screenWidth, SceneManager.screenHeight);
     }
 
     onResize(_width: number, _height: number): void {

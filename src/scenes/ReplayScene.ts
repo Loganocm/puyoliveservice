@@ -210,7 +210,8 @@ export class ReplayScene implements IScene {
         if (side.prevState !== board.state) {
             // Sounds for what the snapshot shows starting, only while playing.
             if (side.prevState !== -1 && dt > 0) {
-                if (board.state === GameState.POP_ANIM && board.matchedPuyos.length > 0) SoundManager.play('pop');
+                // Replays have no engine hooks, so the chain sound comes from the snapshot.
+                if (board.state === GameState.POP_ANIM && board.matchedPuyos.length > 0) SoundManager.playCombo(board.chainCount);
                 if (board.state === GameState.GARBAGE_FALL) SoundManager.play('drop');
             }
             side.prevState = board.state;

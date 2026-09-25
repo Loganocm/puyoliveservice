@@ -14,7 +14,8 @@ model User {
   id               Int      @id @default(autoincrement())
   username         String   @unique
   email            String?  @unique
-  avatar_url       String?  // Base64 data URI
+  avatar_url       String?  // Base64 data URI; served by GET /api/users/:id/avatar, never inline
+  avatar_updated_at DateTime? // Version for the avatar URL, so it can be cached forever
   password_hash    String
   elo_rating       Int      @default(1000)
   games_played     Int      @default(0)

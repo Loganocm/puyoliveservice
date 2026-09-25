@@ -260,6 +260,15 @@ export class BoardView {
         this.shakeAmount = 0;
     }
 
+    /** Switch effects level, e.g. down to 'lite' on a device that cannot keep up. */
+    setEffects(level: 'full' | 'lite'): void {
+        this.options.effects = level;
+        if (level === 'lite') {
+            this.particles.length = 0;
+            this.shakeAmount = 0;
+        }
+    }
+
     /** Shake the board, scaled by the player's setting; nothing under reduced motion. */
     shake(strength: number): void {
         if (this.reduced || this.options.effects === 'lite') return;

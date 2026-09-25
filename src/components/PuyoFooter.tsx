@@ -1,10 +1,30 @@
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Sparkles } from "lucide-react";
+import { MusicChip } from "@/components/BGMPlayer";
+import { NetworkManager } from "@/core/NetworkManager";
+
+/** Whether the game server connection is up, following connects and drops. */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(NetworkManager.isConnected);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    NetworkManager.on("connect", up);
+    NetworkManager.on("disconnect", down);
+    return () => {
+      NetworkManager.off("connect", up);
+      NetworkManager.off("disconnect", down);
+    };
+  }, []);
+  return online;
+}
 
 export function PuyoFooter() {
+  const online = useOnline();
   return (
     <motion.footer
-      className="relative z-10 px-8 py-5 flex items-center justify-between bg-black"
+      className="relative z-10 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3 bg-black/80"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.6 }}
@@ -28,9 +48,9 @@ export function PuyoFooter() {
           transition={{ duration: 0.2 }}
         >
           <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="text-xs font-bold text-white/70">v0.1.1</span>
+          <span className="text-xs font-bold text-white/70">v{__APP_VERSION__}</span>
         </motion.div>
-        <span className="text-xs text-white/40">© 2026 PUYO LIVE</span>
+        <span className="hidden sm:inline text-xs text-white/40">© 2026 PUYO LIVE</span>
       </div>
 
       {/* Center - Social/Links */}
@@ -79,26 +99,20 @@ export function PuyoFooter() {
         </motion.a>
       </div>
 
-      {/* Right side - Status */}
-      <div className="flex items-center gap-2">
-        <motion.div
-          className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-          animate={{
-            scale: [1, 1.3, 1],
-            opacity: [1, 0.6, 1],
-          }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-          style={{
-            boxShadow: "0 0 6px rgba(16, 185, 129, 0.6)",
-          }}
-        />
-        <span className="text-xs font-bold text-white/60">
-          All systems operational
-        </span>
+      {/* Right side - music and the real connection state (this used to be
+          a hard-coded "All systems operational" that was always green). */}
+      <div className="flex items-center gap-3 min-w-0">
+        <MusicChip />
+        <div className="flex items-center gap-2" role="status" aria-live="polite">
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{
+              background: online ? "var(--pl-state-success, #3DDC97)" : "var(--pl-state-danger, #FF5A5A)",
+              boxShadow: `0 0 6px ${online ? "rgba(61,220,151,0.6)" : "rgba(255,90,90,0.6)"}`,
+            }}
+          />
+          <span className="text-xs font-bold text-white/60">{online ? "Online" : "Offline"}</span>
+        </div>
       </div>
     </motion.footer>
   );

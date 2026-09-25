@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db/prisma.js';
+import { avatarUrl } from './avatar.js';
 import { config } from '../config/index.js';
 import type { User, UserProfile, CreateUserInput, LoginInput, AuthResponse } from '../types/user.js';
 import { Prisma } from '@prisma/client';
@@ -395,9 +396,9 @@ export class AuthService {
       created_at: user.created_at,
       rank,
       win_rate: winRate,
-      avatar_url: (user as any).avatar_url,
-      level: (user as any).level || 1,         // Added level
-      current_xp: (user as any).current_xp || 0, // Added xp
+      avatar_url: avatarUrl(user.id, user.avatar_updated_at),
+      level: user.level || 1,
+      current_xp: user.current_xp || 0,
       is_admin: user.is_admin || false         // Admin flair
     };
   }
@@ -440,9 +441,7 @@ export class AuthService {
 
     await prisma.user.update({
       where: { id: userId },
-      data: {
-        avatar_url: avatarData // Removed ts-ignore as schema should have it now
-      } as any
+      data: { avatar_url: avatarData, avatar_updated_at: new Date() },
     });
   }
 

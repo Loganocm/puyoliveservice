@@ -39,6 +39,8 @@ export class InputManager {
   private readonly playLatch = new Set<string>();
   private readonly playPressed = new Set<PlayAction>();
   private readonly playHeld = new Set<PlayAction>();
+  /** Actions held on on-screen buttons. */
+  private readonly virtualHeld = new Set<GameAction>();
   private readonly playInput: FrameInput = { pressed: this.playPressed, held: this.playHeld };
 
   constructor() {
@@ -95,12 +97,36 @@ export class InputManager {
 
   isActionDown(action: GameAction): boolean {
     return this.isDown(ControlsManager.getKey(action)) ||
-      this.isDown(ControlsManager.getControllerKey(action));
+      this.isDown(ControlsManager.getControllerKey(action)) ||
+      this.virtualHeld.has(action);
   }
 
   isActionPressed(action: GameAction): boolean {
     return this.isPressed(ControlsManager.getKey(action)) ||
-      this.isPressed(ControlsManager.getControllerKey(action));
+      this.isPressed(ControlsManager.getControllerKey(action)) ||
+      this.frameLatch.has(virtualCode(action));
+  }
+
+  // --- Virtual buttons (touch controls) ---
+
+  /**
+   * Press an action from an on-screen button. Latched exactly like a key, so
+   * a quick tap is never lost, and held until releaseVirtual().
+   */
+  pressVirtual(action: GameAction): void {
+    if (this.virtualHeld.has(action)) return;
+    this.virtualHeld.add(action);
+    this.frameLatch.add(virtualCode(action));
+    this.playLatch.add(virtualCode(action));
+  }
+
+  releaseVirtual(action: GameAction): void {
+    this.virtualHeld.delete(action);
+  }
+
+  /** Release every on-screen button, e.g. when the controls unmount. */
+  releaseAllVirtual(): void {
+    this.virtualHeld.clear();
   }
 
   getActionDuration(action: GameAction): number {
@@ -142,8 +168,8 @@ export class InputManager {
     for (const action of PLAY_ACTIONS) {
       const key = ControlsManager.getKey(action);
       const pad = ControlsManager.getControllerKey(action);
-      if (this.playLatch.has(key) || this.playLatch.has(pad)) this.playPressed.add(action);
-      if (this.keys[key] || this.padKeys[pad]) this.playHeld.add(action);
+      if (this.playLatch.has(key) || this.playLatch.has(pad) || this.playLatch.has(virtualCode(action))) this.playPressed.add(action);
+      if (this.keys[key] || this.padKeys[pad] || this.virtualHeld.has(action)) this.playHeld.add(action);
     }
     this.playLatch.clear();
     return this.playInput;
@@ -234,6 +260,11 @@ export class InputManager {
     }
     return null;
   }
+}
+
+/** The latch code for an on-screen button; cannot collide with a KeyboardEvent.code or a GP_ code. */
+function virtualCode(action: GameAction): string {
+  return `VK_${action}`;
 }
 
 export const Input = new InputManager();

@@ -894,6 +894,8 @@ io.on('connection', (socket: Socket) => {
     const frame = Math.floor(data.f);
     const amount = data.a ? Math.floor(data.a) : undefined;
     room.recordInput(playerIndex, data.input as any, frame, amount);
+    // An input is proof of life as much as a board state is (NET-13).
+    room.markAlive(socket.id);
 
     // Relay to the opponent so they can simulate this player's board locally
     // instead of receiving rate-limited grid snapshots. One input stream now
@@ -960,9 +962,8 @@ io.on('connection', (socket: Socket) => {
     const room = roomManager.getRoom(data.roomId);
     if (!room || !room.players.has(socket.id)) return;
     if (!room.matchStats || room.matchConcluded) return;
-    // Update heartbeat timestamp — proves player is actively playing
-    const boardPlayer = room.players.get(socket.id)!;
-    boardPlayer.lastBoardUpdate = Date.now();
+    // Update heartbeat timestamp — proves the player's client is running
+    room.markAlive(socket.id);
 
     // Relay to opponent for display (cosmetic only — server sim is authoritative)
     socket.broadcast.to(data.roomId).emit('receive_board_state', { grid: data.grid, playerId: socket.id });
@@ -1571,9 +1572,12 @@ io.on('connection', (socket: Socket) => {
     io.emit('room_list_update', publicRooms);
   }, STALE_ROOM_INTERVAL);
 
-  // ── Board state heartbeat — auto-abort players who stall / background ──
-  // If a player doesn't send a board state for 7 seconds during an active match (e.g. background tab),
-  // the game is safely aborted. This prevents ELO inflation or deflation from network desyncs.
+  // ── Liveness heartbeat — auto-abort players who stall / background ──
+  // If a player sends neither a board state nor an input for 7 seconds during
+  // an active match (e.g. background tab), the game is safely aborted. This
+  // prevents ELO inflation or deflation from network desyncs. Clients send a
+  // board state at least every 2 s while their game loop runs, so thinking
+  // about a piece for a long time is not mistaken for leaving (NET-13).
   const HEARTBEAT_INTERVAL = 3_000; // Check every 3 seconds
   // 7 seconds without board update = disconnected. HEARTBEAT_TIMEOUT_MS
   // overrides it outside production, for slow software-rendered test
@@ -1586,40 +1590,29 @@ io.on('connection', (socket: Socket) => {
 
   setInterval(() => {
     const now = Date.now();
-    const rooms = roomManager.getAllRooms();
-    for (const room of rooms) {
-      if (!room.matchStats || room.matchConcluded) continue;
-      const matchAge = now - room.matchStats.startedAt.getTime();
-      if (matchAge < HEARTBEAT_GRACE) continue; // Still in grace period
+    for (const room of roomManager.getAllRooms()) {
+      const stalled = room.findStalledPlayer(now, HEARTBEAT_TIMEOUT, HEARTBEAT_GRACE);
+      if (!stalled) continue;
+      const player = room.players.get(stalled.socketId);
+      console.log(`[Heartbeat] Player ${player?.name} (${stalled.socketId}) in room ${room.id}: silent for ${Math.round(stalled.silentMs / 1000)}s. Auto-aborting match.`);
 
-      for (const [socketId, player] of room.players) {
-        const lastUpdate = player.lastBoardUpdate || 0;
+      if (!room.concludeMatch(stalled.socketId)) continue; // Already concluded
 
-        // Check: No board state sent for 7 seconds (AFK / disconnected / background tab)
-        if (now - lastUpdate > HEARTBEAT_TIMEOUT) {
-          const reason = `no board state for ${Math.round((now - lastUpdate) / 1000)}s`;
-          console.log(`[Heartbeat] Player ${player.name} (${socketId}) in room ${room.id}: ${reason}. Auto-aborting match.`);
-          
-          if (!room.concludeMatch(socketId)) continue; // Already concluded
+      // Emit game_ended with aborted reason
+      io.to(room.id).emit('game_ended', {
+        roomId: room.id,
+        reason: 'aborted',
+        message: 'Opponent Disconnected (Match Aborted)'
+      });
 
-          // Emit game_ended with aborted reason
-          io.to(room.id).emit('game_ended', { 
-            roomId: room.id, 
-            reason: 'aborted',
-            message: 'Opponent Disconnected (Match Aborted)'
-          });
-
-          // Clean up after delay
-          setTimeout(() => {
-            for (const pid of room.players.keys()) {
-              const ps = io.sockets.sockets.get(pid);
-              if (ps) ps.leave(room.id);
-            }
-            roomManager.deleteRoom(room.id);
-          }, 1000);
-          break; // Only one player can forfeit per check cycle
+      // Clean up after delay
+      setTimeout(() => {
+        for (const pid of room.players.keys()) {
+          const ps = io.sockets.sockets.get(pid);
+          if (ps) ps.leave(room.id);
         }
-      }
+        roomManager.deleteRoom(room.id);
+      }, 1000);
     }
   }, HEARTBEAT_INTERVAL);
 

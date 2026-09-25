@@ -197,6 +197,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
         </div>
         <button
           onClick={handleExit}
+          aria-label="Close replay"
           className="bg-white/10 hover:bg-white/20 p-2 rounded-full text-white transition-colors"
         >
           <X size={32} />
@@ -299,6 +300,7 @@ export const ReplayOverlay: React.FC<ReplayOverlayProps> = ({ onExit }) => {
 
               <button
                 onClick={togglePlay}
+                aria-label={isPlaying ? "Pause replay" : "Play replay"}
                 className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.4)]"
               >
                 {isPlaying ? (

@@ -194,6 +194,7 @@ export const ProfileScreen: React.FC<{
                       <button
                         onClick={cancelEditingName}
                         disabled={nameSaving}
+                        aria-label="Cancel name change"
                         className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 transition-colors disabled:opacity-50"
                       >
                         <X size={18} />

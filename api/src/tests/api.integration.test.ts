@@ -189,6 +189,73 @@ describe('API Integration Tests', () => {
           .expect(404);
       });
     });
+
+    describe('Avatars', () => {
+      // A 1x1 transparent PNG.
+      const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+      let url: string;
+
+      it('are listed as a versioned URL, never inline', async () => {
+        await request(app)
+          .post(`/api/users/${testUserId}/avatar`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ avatar: PNG })
+          .expect(200);
+
+        const profile = await request(app).get(`/api/users/${testUserId}`).expect(200);
+        url = profile.body.avatar_url;
+        expect(url).toMatch(new RegExp(`/api/users/${testUserId}/avatar\\?v=[0-9a-z]+$`));
+
+        const search = await request(app).get(`/api/users/search?q=${testUser.username}`).expect(200);
+        const hit = search.body.users.find((u: { id: number }) => u.id === testUserId);
+        expect(hit.avatar_url).toBe(url);
+        expect(JSON.stringify(search.body)).not.toContain('base64');
+      });
+
+      it('are served as images that can be cached and revalidated', async () => {
+        const path = url.slice(url.indexOf('/api/'));
+        const res = await request(app).get(path).expect(200);
+        expect(res.headers['content-type']).toBe('image/png');
+        expect(res.headers['cache-control']).toContain('immutable');
+        expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+        expect(res.body.length).toBeGreaterThan(0);
+
+        await request(app).get(path).set('If-None-Match', res.headers['etag']).expect(304);
+      });
+
+      it('404 for a user without one', async () => {
+        await request(app).get('/api/users/99999999/avatar').expect(404);
+      });
+    });
+  });
+
+  describe('Compression', () => {
+    beforeAll(async () => {
+      // Enough players that a page of them is well over compression's 1 KB threshold.
+      await prisma.user.createMany({
+        data: Array.from({ length: 30 }, (_, i) => ({
+          username: `apitest_${timestamp}_bulk${i}`,
+          password_hash: 'not-a-real-hash',
+        })),
+      });
+    });
+
+    it('gzips JSON for clients that accept it', async () => {
+      const res = await request(app)
+        .get('/api/users/all?limit=50')
+        .set('Accept-Encoding', 'gzip')
+        .expect(200);
+      expect(res.headers['content-encoding']).toBe('gzip');
+      expect(res.body.players.length).toBeGreaterThanOrEqual(30);
+    });
+
+    it('sends plain JSON to clients that do not', async () => {
+      const res = await request(app)
+        .get('/api/users/all?limit=50')
+        .set('Accept-Encoding', 'identity')
+        .expect(200);
+      expect(res.headers['content-encoding']).toBeUndefined();
+    });
   });
 
   describe('Match Routes', () => {

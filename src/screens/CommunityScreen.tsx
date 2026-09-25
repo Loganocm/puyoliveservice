@@ -352,6 +352,7 @@ export const CommunityScreen: React.FC<{
           </div>
           <button
             onClick={onClose}
+            aria-label="Close community"
             className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
           >
             <X size={20} />

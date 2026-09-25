@@ -22,6 +22,9 @@
     --pl-text-muted: #8C95AB;
     --pl-accent-primary: #FF4F7B;
     --pl-accent-secondary: #35D0E6;
+    --pl-state-danger: #FF5A5A;
+    --pl-state-success: #3DDC97;
+    --pl-line-subtle: rgba(255, 255, 255, 0.06);
     color-scheme: dark;
 }
 

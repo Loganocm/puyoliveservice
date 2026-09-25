@@ -2,12 +2,10 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { IScene } from '../core/SceneManager';
 import { SceneManager } from '../core/SceneManager';
 import { Board } from '@puyolive/engine';
-import { BOARD_LEFT, BOARD_TOP, SIDE_GAP, OPPONENT_SCALE } from '../core/RenderConstants';
 import { Input } from '../core/Input';
 import { HandlingController } from '../input/Handling';
 import type { HandlingHooks } from '../input/Handling';
 import { SettingsManager } from '../core/SettingsManager';
-import { MenuScene } from './MenuScene'; // needed for Back button
 import { SoundManager } from '../core/SoundManager';
 import { GameEngine, GameState } from '@puyolive/engine';
 import { NetworkManager } from '../core/NetworkManager';
@@ -20,8 +18,10 @@ import type { LabController } from '../lab/LabDriver';
 import { BoardView, engineFrame, pendingGarbage } from '../render/BoardView';
 import type { BoardFrame } from '../render/BoardView';
 import { Backdrop } from '../render/Backdrop';
+import { FrameRateMonitor } from '../core/FrameRateMonitor';
 import { NextQueueView } from '../render/NextQueueView';
 import { StatPanel } from '../render/StatPanel';
+import { layoutMatch } from '../render/MatchLayout';
 import type { StatRow } from '../render/StatPanel';
 import { FONTS, getTheme } from '../theme/tokens';
 
@@ -56,9 +56,16 @@ export class GameScene implements IScene {
     /** Cap on engine steps per rendered frame, so a stall cannot spiral. */
     private static readonly MAX_CATCHUP_STEPS = 5;
 
-    /** Board-state heartbeat cadence. Must stay well under the server's 7s
-     *  AFK timeout while sending far less than the 10/s the server allows. */
+    /** Board-state cadence on change. Well under the 10/s the server allows. */
     private static readonly BOARD_SYNC_INTERVAL_MS = 500;
+    /**
+     * Longest gap between board states even when nothing changes. The server
+     * aborts a match after 7 s without one; the board used to be sent only on
+     * change, so a player who took a long time over one piece was treated as
+     * disconnected (NET-13). A backgrounded tab stops the game loop and so
+     * still stops the heartbeat, which is what the check is for.
+     */
+    private static readonly HEARTBEAT_INTERVAL_MS = 2000;
     private lastBoardSendMs = 0;
     private opponentGarbage: number = 0; // Track opponent's garbage tray
 
@@ -72,6 +79,9 @@ export class GameScene implements IScene {
     private timeLimit: number = 0; // 0 = no limit, otherwise seconds
     private elapsedTime: number = 0; // in seconds (real time)
     private accumulator: number = 0; // accumulates delta time for timer
+
+    /** Watches for a device too slow to play smoothly (CLI-20). */
+    private readonly frameRate = new FrameRateMonitor();
 
     /** DAS, ARR, rotation and drops, applied once per logical frame. */
     private readonly handling = new HandlingController();
@@ -151,7 +161,6 @@ export class GameScene implements IScene {
 
         if (roomId) {
             this.opponentBoardView = new BoardView({ effects: 'lite' });
-            this.opponentBoardView.container.scale.set(OPPONENT_SCALE);
             this.opponentLabel = new Text({
                 text: 'OPPONENT',
                 resolution: 2,
@@ -427,9 +436,8 @@ export class GameScene implements IScene {
         };
 
         this.engine.onStateChange = (state) => {
-            if (state === GameState.POP_ANIM) {
-                SoundManager.play('pop');
-            }
+            // No sound here for a pop: the engine's 'chain' sound plays at
+            // the same moment, pitched to the link.
 
             if (state === GameState.GAMEOVER) {
                 console.log(`[GameScene] Transition to GAMEOVER. Msg: '${this.gameMessage}', Room: ${this.roomId}`);
@@ -451,7 +459,8 @@ export class GameScene implements IScene {
                     maxChain: this.engine.stats.maxChain,
                     puyosCleared: this.engine.stats.puyosCleared,
                     timeLimit: this.timeLimit,
-                    isMultiplayer: !!this.roomId
+                    isMultiplayer: !!this.roomId,
+                    durationSeconds: this.engine.currentFrame / 60,
                 });
             }
         };
@@ -509,32 +518,16 @@ export class GameScene implements IScene {
         this.lab?.attach(this.engine);
     }
 
-    // Responsive layout positioning - centers game content on screen
+    // Responsive layout: see src/render/MatchLayout.ts.
     updateLayout() {
-        const screenW = SceneManager.screenWidth;
-        const screenH = SceneManager.screenHeight;
-        const baseW = SceneManager.BASE_WIDTH;
-        const baseH = SceneManager.BASE_HEIGHT;
-
-        // Scale to fit while maintaining aspect ratio, and centre.
-        const scale = Math.min(screenW / baseW, screenH / baseH);
-        this.gameContentWrapper.position.set(Math.round((screenW - baseW * scale) / 2), Math.round((screenH - baseH * scale) / 2));
-        this.gameContentWrapper.scale.set(scale);
-
-        // Stats | board | queue, with the opponent under the queue.
-        const rightX = BOARD_LEFT + BoardView.WIDTH + SIDE_GAP;
-        this.board.container.position.set(BOARD_LEFT, BOARD_TOP);
-        this.stats.container.position.set(BOARD_LEFT - SIDE_GAP - StatPanel.WIDTH, BOARD_TOP);
-        this.nextQueue.container.position.set(rightX, BOARD_TOP);
-        if (this.opponentBoardView) {
-            const w = BoardView.WIDTH * OPPONENT_SCALE;
-            const x = rightX + (NextQueueView.WIDTH - w) / 2;
-            const y = BOARD_TOP + NextQueueView.HEIGHT + 96;
-            this.opponentBoardView.container.position.set(x, y);
-            this.opponentLabel?.position.set(x + w / 2, y - 76);
-        }
-
-        this.backdrop.resize(screenW, screenH);
+        layoutMatch({
+            wrapper: this.gameContentWrapper,
+            board: this.board,
+            next: this.nextQueue,
+            stats: this.stats,
+            side: this.opponentBoardView && this.opponentLabel ? { view: this.opponentBoardView, label: this.opponentLabel } : undefined,
+        }, SceneManager.screenWidth, SceneManager.screenHeight);
+        this.backdrop.resize(SceneManager.screenWidth, SceneManager.screenHeight);
     }
 
     // Called by SceneManager when window resizes
@@ -568,6 +561,11 @@ export class GameScene implements IScene {
 
     update(delta: number): void {
         if (this.container.destroyed) return;
+
+        if (!this.lab && this.frameRate.sample(delta)) {
+            this.board.setEffects('lite');
+            GameEvents.emit('perf_warning', { fps: this.frameRate.fps });
+        }
 
         // In the lab, one rendered frame is exactly one logical frame, and
         // everything freezes while the recorder captures a keyframe.
@@ -612,13 +610,9 @@ export class GameScene implements IScene {
             }
 
             if (this.engine.state === GameState.GAMEOVER) {
-                if (Input.isPressed('Enter')) {
-                    if (!this.roomId) {
-                        this.setupEngine();
-                    } else {
-                        SceneManager.changeScene(new MenuScene());
-                    }
-                }
+                // Restart and exit are the results overlay's keys (Enter / R /
+                // Escape). The scene used to restart itself on Enter here,
+                // under the overlay, which then stayed on screen.
             } else {
                 // Handling settings are read from the engine's own config, so
                 // keep it in step with the player's preferences -- they can be
@@ -734,6 +728,7 @@ export class GameScene implements IScene {
                 }
             }
 
+            this.heartbeat();
             this.renderViews(delta);
             this.drawForfeitUI(); // Draw progress bar if holding
         } catch (e: any) {
@@ -853,6 +848,15 @@ export class GameScene implements IScene {
             NetworkManager.recordHash(this.roomId, this.engine.currentFrame, this.engine.computeBoardHash());
         }
         this.handling.frame(this.engine, Input.consumePlay(), SettingsManager, this.handlingHooks);
+    }
+
+    /** Send the board if nothing has been sent for a while: the liveness heartbeat. */
+    private heartbeat(): void {
+        if (!this.roomId || this.engine.state === GameState.GAMEOVER) return;
+        const now = performance.now();
+        if (now - this.lastBoardSendMs < GameScene.HEARTBEAT_INTERVAL_MS) return;
+        this.lastBoardSendMs = now;
+        NetworkManager.sendBoardState(this.roomId, this.engine.board.getSerializedData(), pendingGarbage(this.engine));
     }
 
     /** Draw every view for this frame, advancing their animations by `dt` frames. */

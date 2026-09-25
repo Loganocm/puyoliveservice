@@ -130,11 +130,58 @@ let current: Theme = THEMES[storedThemeId()];
 
 export const getTheme = (): Theme => current;
 
-/** Switch theme for this and future sessions. Callers re-render what they drew. */
+/**
+ * Themes offered in settings. Daybreak (light) is defined but not offered yet:
+ * the menus still hard-code light text in places, and it would be unreadable
+ * there. It is listed once they read every colour from these tokens.
+ */
+export const SELECTABLE_THEMES: readonly Theme['id'][] = ['midnight', 'contrast'];
+
+const listeners = new Set<() => void>();
+
+/** Be told when the theme, piece symbols or motion preference change. Returns an unsubscribe. */
+export function onThemeChange(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+}
+
+function changed(): void {
+    applyThemeToDocument();
+    for (const listener of listeners) listener();
+}
+
+/** Switch theme for this and future sessions. */
 export function setTheme(id: Theme['id']): void {
     current = THEMES[id];
     try { localStorage.setItem(STORAGE_KEY, id); } catch { /* not persisted */ }
-    applyThemeToDocument();
+    changed();
+}
+
+/**
+ * The symbol embossed in each piece, which tells colours apart without
+ * colour. 'bold' is for players who rely on it; 'off' for those who do not
+ * want it. See design/visual-identity.md.
+ */
+export type GlyphStyle = 'subtle' | 'bold' | 'off';
+const GLYPH_KEY = 'puyolive_glyphs';
+
+export function getGlyphStyle(): GlyphStyle {
+    try {
+        const v = localStorage.getItem(GLYPH_KEY);
+        if (v === 'bold' || v === 'off' || v === 'subtle') return v;
+    } catch { /* default */ }
+    return 'subtle';
+}
+
+export function setGlyphStyle(style: GlyphStyle): void {
+    try { localStorage.setItem(GLYPH_KEY, style); } catch { /* not persisted */ }
+    changed();
+}
+
+/** Turn the game's own reduced-motion setting on or off (the OS setting always applies). */
+export function setReducedMotion(on: boolean): void {
+    try { localStorage.setItem('puyolive_reduced_motion', on ? '1' : '0'); } catch { /* not persisted */ }
+    changed();
 }
 
 /** Expose the tokens to CSS as custom properties (--pl-bg-base, --pl-accent-primary, ...). */
@@ -151,6 +198,7 @@ export function applyThemeToDocument(theme: Theme = current): void {
     set('accent-secondary', theme.accent.secondary);
     set('state-danger', theme.state.danger);
     set('state-success', theme.state.success);
+    set('state-warning', theme.state.warning);
     theme.ambient.forEach((c, i) => set(`ambient-${i}`, c));
     document.documentElement.dataset.theme = theme.id;
 }

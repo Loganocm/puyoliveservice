@@ -271,6 +271,27 @@ export class GameRoom {
         this.recordReplayEvent('game_start', undefined, { seed: this.seed });
     }
 
+    /** Note that a player's client is alive: it sent a board state or an input. */
+    markAlive(socketId: string, now: number = Date.now()): void {
+        const player = this.players.get(socketId);
+        if (player) player.lastBoardUpdate = now;
+    }
+
+    /**
+     * The first player whose client has gone silent for longer than
+     * `timeoutMs`, or null. Nobody is stalled in the first `graceMs` of a
+     * match (loading), or once the match is over. See NET-13.
+     */
+    findStalledPlayer(now: number, timeoutMs: number, graceMs: number): { socketId: string; silentMs: number } | null {
+        if (!this.matchStats || this.matchConcluded) return null;
+        if (now - this.matchStats.startedAt.getTime() < graceMs) return null;
+        for (const [socketId, player] of this.players) {
+            const silentMs = now - (player.lastBoardUpdate || 0);
+            if (silentMs > timeoutMs) return { socketId, silentMs };
+        }
+        return null;
+    }
+
     // V3.1 Replay: Record explicit frame-based input from client
     recordInput(playerIndex: 0 | 1, inputType: InputType, frame: number, amount?: number) {
         this.replayInputs.push({

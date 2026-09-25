@@ -21,6 +21,19 @@ export class SceneManager {
   public static readonly BASE_WIDTH = 1000;
   public static readonly BASE_HEIGHT = 1000;
 
+  /**
+   * Screen pixels at the bottom covered by on-screen controls, which scenes
+   * keep clear. Set by the touch controls while they are shown.
+   */
+  public static reservedBottom = 0;
+
+  public static setReservedBottom(px: number) {
+    const value = Math.max(0, Math.round(px));
+    if (value === this.reservedBottom) return;
+    this.reservedBottom = value;
+    this.resize();
+  }
+
   public static async init(_width: number, _height: number, el: HTMLElement) {
     this.app = new Application();
 

@@ -1,9 +1,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 export default defineConfig({
     plugins: [react()],
+    // The version players see (footer, bug reports) comes from package.json,
+    // which the release process bumps (see CHANGELOG.md).
+    define: {
+        __APP_VERSION__: JSON.stringify(pkg.version),
+    },
     resolve: {
         extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
         alias: {

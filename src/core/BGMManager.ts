@@ -1,6 +1,6 @@
 import { SettingsManager } from './SettingsManager';
 import { GameEvents } from './GameEvents';
-import { connectToContext } from './AudioContext';
+import { getAudioContext, routeElement } from './AudioContext';
 
 export type BGMContext = 'menu' | 'game' | 'none';
 
@@ -8,6 +8,8 @@ export class BGMManager {
   private static tracks: Map<string, string[]> = new Map();
   private static currentIndices: Map<string, number> = new Map();
   private static currentAudio: HTMLAudioElement | null = null;
+  /** The current track's volume. Fades are ramps on this, not timers on the element. */
+  private static currentGain: GainNode | null = null;
   private static currentContext: BGMContext = 'none';
   private static currentUrl: string | null = null;
   private static _initialized = false;
@@ -87,9 +89,10 @@ export class BGMManager {
 
   static stop(fadeDurationMs = 800) {
     this.currentContext = 'none';
-    if (this.currentAudio) {
-      this.fadeOut(this.currentAudio, fadeDurationMs);
+    if (this.currentAudio && this.currentGain) {
+      this.fadeOut(this.currentAudio, this.currentGain, fadeDurationMs);
       this.currentAudio = null;
+      this.currentGain = null;
     }
     this.emitState();
   }
@@ -103,18 +106,19 @@ export class BGMManager {
 
   static resume() {
     if (this.currentAudio && this.currentAudio.paused && this.currentContext !== 'none') {
-      const targetVol = Math.max(0, Math.min(1, this.getEffectiveVolume()));
-      this.currentAudio.volume = targetVol;
+      getAudioContext(); // resumes the context after the first gesture
+      this.updateVolume();
       this.currentAudio.play().catch(() => {});
       this.emitState();
     }
   }
 
   static updateVolume() {
+    if (!this.currentGain) return;
     const vol = Math.max(0, Math.min(1, this.getEffectiveVolume()));
-    if (this.currentAudio) {
-      this.currentAudio.volume = vol;
-    }
+    const g = this.currentGain.gain;
+    g.cancelScheduledValues(0);
+    g.value = vol;
   }
 
   private static emitState() {
@@ -146,70 +150,53 @@ export class BGMManager {
   }
 
   private static crossfadeTo(url: string, context: BGMContext, fadeDurationMs = 600) {
-    if (this.currentAudio) {
+    if (this.currentAudio && this.currentGain) {
       // Remove old ended listener
       this.currentAudio.onended = null;
-      this.fadeOut(this.currentAudio, fadeDurationMs);
+      this.fadeOut(this.currentAudio, this.currentGain, fadeDurationMs);
     }
 
     const audio = new Audio(url);
     // Don't loop a single track, we want rotation
     audio.loop = false;
-    audio.volume = 0;
+    // Stream: a track starts playing long before it has finished downloading.
     audio.preload = 'auto';
     // Route through shared AudioContext for Discord/OBS screen share capture
-    connectToContext(audio);
+    const gain = routeElement(audio);
+    gain.gain.value = 0;
 
     audio.onended = () => {
       this.next();
     };
 
     this.currentAudio = audio;
+    this.currentGain = gain;
     this.currentContext = context;
     this.currentUrl = url;
 
-    const targetVol = Math.max(0, Math.min(1, this.getEffectiveVolume()));
-
     audio.play().then(() => {
       this.emitState();
-      
-      const steps = 20;
-      const stepMs = fadeDurationMs / steps;
-      let step = 0;
-      const interval = setInterval(() => {
-        step++;
-        if (step >= steps || this.currentAudio !== audio) {
-          clearInterval(interval);
-          if (this.currentAudio === audio) audio.volume = targetVol;
-          return;
-        }
-        audio.volume = targetVol * (step / steps);
-      }, stepMs);
+      if (this.currentGain !== gain) return;
+      const ctx = getAudioContext();
+      const target = Math.max(0, Math.min(1, this.getEffectiveVolume()));
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(target, ctx.currentTime + fadeDurationMs / 1000);
     }).catch(e => {
       console.warn('[BGM] Play failed:', e);
     });
   }
 
-  private static fadeOut(audio: HTMLAudioElement, durationMs = 600) {
-    const startVol = audio.volume;
-    if (startVol <= 0) { audio.pause(); return; }
-
-    const steps = 15;
-    const stepMs = durationMs / steps;
-    let step = 0;
-
-    const interval = setInterval(() => {
-      step++;
-      if (step >= steps) {
-        clearInterval(interval);
-        audio.volume = 0;
-        audio.pause();
-        audio.removeAttribute('src');
-        audio.load();
-        return;
-      }
-      audio.volume = startVol * (1 - step / steps);
-    }, stepMs);
+  private static fadeOut(audio: HTMLAudioElement, gain: GainNode, durationMs = 600) {
+    const ctx = getAudioContext();
+    const g = gain.gain;
+    g.cancelScheduledValues(ctx.currentTime);
+    g.setValueAtTime(g.value, ctx.currentTime);
+    g.linearRampToValueAtTime(0, ctx.currentTime + durationMs / 1000);
+    setTimeout(() => {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      gain.disconnect();
+    }, durationMs + 50);
   }
 }
-

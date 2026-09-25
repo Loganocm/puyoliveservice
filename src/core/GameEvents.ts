@@ -12,8 +12,12 @@ type GameEventMap = {
         maxChain?: number;
         puyosCleared?: number;
         timeLimit?: number;
-        result?: 'win' | 'loss' | 'forfeit';
+        result?: 'win' | 'loss' | 'forfeit' | 'tie';
+        isMultiplayer?: boolean;
+        durationSeconds?: number;
     };
+    /** The device cannot hold a playable frame rate; effects were reduced. */
+    'perf_warning': { fps: number };
     'game_pause': { timeLimit: number };
     'game_resume': void;
     'pause_toggle': { paused: boolean };

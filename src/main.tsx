@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "@fontsource-variable/fredoka";
 import "./index.css";
 import { applyThemeToDocument, FONTS } from './theme/tokens';
@@ -14,7 +15,7 @@ import { NetworkManager } from './core/NetworkManager';
 import { BGMManager } from './core/BGMManager';
 
 // BGM Imports
-import menuBgmUrl from './resources/bgm/menu/melatonin2.wav';
+import menuBgmUrl from './resources/bgm/menu/melatonin2.m4a';
 import gameBgm1 from './resources/bgm/gameplay/abc123.mp3';
 import gameBgm2 from './resources/bgm/gameplay/dnbfart.mp3';
 import gameBgm3 from './resources/bgm/gameplay/flemnco.mp3';
@@ -67,7 +68,8 @@ const initGame = async () => {
     ]).catch(() => undefined);
     await SceneManager.init(1000, 900, appDiv);
     await ResourceManager.load();
-    await SoundManager.load();
+    // Sound effects load in the background; the first screen does not wait.
+    void SoundManager.load();
 
     if (labId) {
       const { labScenarioFromUrl, createLabDriver } = await import('./lab/LabDriver');
@@ -122,7 +124,7 @@ const initGame = async () => {
 applyThemeToDocument();
 
 // Render React UI
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<ErrorBoundary><App /></ErrorBoundary>);
 
 // Initialize Game Engine (Background)
 initGame();

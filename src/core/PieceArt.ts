@@ -19,7 +19,7 @@
  */
 
 import { PuyoColor } from '@puyolive/engine';
-import type { Glyph, PieceStyle, Theme } from '../theme/tokens';
+import type { Glyph, GlyphStyle, PieceStyle, Theme } from '../theme/tokens';
 
 export const ATLAS_COLUMNS = 16;
 export const ORB_ROWS: readonly number[] = [
@@ -37,7 +37,7 @@ export const GHOST_ROW = 8;
 const TAU = Math.PI * 2;
 
 /** Paint the whole atlas. `cell` is the pixel size of one texture. */
-export function paintAtlas(theme: Theme, cell: number): HTMLCanvasElement {
+export function paintAtlas(theme: Theme, cell: number, glyphs: GlyphStyle = 'subtle'): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     canvas.width = cell * ATLAS_COLUMNS;
     canvas.height = cell * (GHOST_ROW + 1);
@@ -49,7 +49,7 @@ export function paintAtlas(theme: Theme, cell: number): HTMLCanvasElement {
             ctx.save();
             ctx.translate(mask * cell, row * cell);
             // Garbage never connects visually: it is always drawn alone.
-            drawOrb(ctx, cell, style, color === PuyoColor.Garbage ? 0 : mask, color === PuyoColor.Garbage);
+            drawOrb(ctx, cell, style, color === PuyoColor.Garbage ? 0 : mask, color === PuyoColor.Garbage, glyphs);
             ctx.restore();
         }
     });
@@ -105,7 +105,7 @@ function orbPath(s: number, radius: number, bridge: number, mask: number): Path2
     return p;
 }
 
-function drawOrb(ctx: CanvasRenderingContext2D, s: number, style: PieceStyle, mask: number, garbage: boolean): void {
+function drawOrb(ctx: CanvasRenderingContext2D, s: number, style: PieceStyle, mask: number, garbage: boolean, glyphs: GlyphStyle): void {
     const c = s / 2;
     const r = s * 0.44;
     const rim = s * 0.045;
@@ -155,7 +155,17 @@ function drawOrb(ctx: CanvasRenderingContext2D, s: number, style: PieceStyle, ma
     ctx.fill();
     ctx.restore();
 
-    if (style.glyph) {
+    if (style.glyph && glyphs === 'bold') {
+        // High contrast: a large white symbol with a dark outline, readable at a glance.
+        const size = r * 0.72;
+        glyphPath(ctx, style.glyph, c, c + r * 0.06, size);
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = s * 0.05;
+        ctx.strokeStyle = hexWithAlpha(style.dark, 0.95);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.96)';
+        ctx.fill();
+    } else if (style.glyph && glyphs === 'subtle') {
         const size = r * 0.44;
         // Embossed: a light edge offset below, the dark shape on top.
         ctx.fillStyle = 'rgba(255,255,255,0.35)';

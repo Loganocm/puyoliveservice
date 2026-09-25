@@ -44,6 +44,12 @@ export const config = {
   // CORS
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
 
+  // Where browsers reach this API: the base of URLs the API hands out, such
+  // as avatar images. Set API_PUBLIC_URL when deploying anywhere else.
+  publicUrl: (process.env.API_PUBLIC_URL || (process.env.NODE_ENV === 'production'
+    ? 'https://api.puyo.live'
+    : `http://localhost:${process.env.PORT || '8080'}`)).replace(/\/$/, ''),
+
   // Internal API key for server-to-server calls (match recording)
   internalApiKey: (() => {
     const key = process.env.INTERNAL_API_KEY;

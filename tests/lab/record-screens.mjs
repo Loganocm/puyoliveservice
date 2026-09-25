@@ -2,7 +2,7 @@
 // Record every screen and menu flow as a video with a screenshot per step, for
 // the UI part of the animation catalogue (transitions, hovers, overlays).
 //
-//   node tests/lab/record-screens.mjs --label baseline [--phone]
+//   node tests/lab/record-screens.mjs --label baseline [--phone] [--only menu,settings]
 //
 // Needs the client and the API running (menus call the API). Output:
 // artifacts/screens/<label>/<flow>.webm, <flow>/NN-step.png, index.json.
@@ -18,6 +18,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
 const base = (args.base || 'http://localhost:5173').replace(/\/$/, '');
 const phone = args.phone === 'true';
 const label = args.label || 'screens';
+const only = args.only ? new Set(args.only.split(',')) : null;
 const out = resolve(args.out || join('artifacts', 'screens', label + (phone ? '-phone' : '')));
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
@@ -84,7 +85,9 @@ const FLOWS = [
             const slider = p.locator('input[type=range]').first();
             if (await slider.count()) { await slider.focus(); for (let i = 0; i < 5; i++) await key('ArrowLeft')(p); }
         }],
-        ['effects-tab', click(/^EFFECTS$/)],
+        ['effects-tab', click(/^(EFFECTS|AUDIO & FX)$/)],
+        // Added in 0.3.0; absent from earlier builds (the step then warns).
+        ['display-tab', click(/^DISPLAY$/)],
         ['controls', click(/^CONTROLS$/)],
         ['controls-back', back],
         ['settings-back', back],
@@ -109,14 +112,20 @@ const FLOWS = [
     ]],
     ['profile', [
         ...toMenu,
-        ['open-profile', async p => { await p.locator('button:has(svg.lucide-user)').last().click({ timeout: 5000 }); }],
+        ['open-menu', async p => {
+            // 0.3.0 made the avatar a labelled button; before it was an unlabelled div (CLI-04).
+            const labelled = p.getByRole('button', { name: 'Account menu' });
+            if (await labelled.count()) await labelled.click({ timeout: 5000 });
+            else await p.locator('div.cursor-pointer:has(svg.lucide-user)').first().click({ timeout: 5000 });
+        }],
+        ['open-profile', click(/^My Profile$/)],
         ['loaded', wait(1200)],
         ['close', key('Escape')],
     ]],
 ];
 
 const index = [];
-for (const [name, steps] of FLOWS) {
+for (const [name, steps] of FLOWS.filter(([name]) => !only || only.has(name))) {
     const dir = join(out, name);
     mkdirSync(dir, { recursive: true });
     const context = await browser.newContext({ ...device, ignoreHTTPSErrors: true, recordVideo: { dir: out, size: device.viewport } });

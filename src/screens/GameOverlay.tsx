@@ -7,6 +7,8 @@ import { SceneManager } from '../core/SceneManager';
 import { GameScene } from '../scenes/GameScene';
 import { XpCalculator } from '../core/XpCalculator';
 import { AuthManager } from '../core/AuthManager';
+import { PersonalBests, modeForTimeLimit } from '../core/PersonalBests';
+import type { Submission } from '../core/PersonalBests';
 
 interface GameOverlayProps {
     onBack: () => void;
@@ -22,6 +24,9 @@ interface GameOverState {
     timeLimit: number;
     isMultiplayer: boolean;
     xpGained?: number;
+    durationSeconds: number;
+    /** Single player only: how this game compares with the player's best. */
+    personal?: Submission;
 }
 
 export function GameOverlay({ onBack, onQueueAgain }: GameOverlayProps) {
@@ -44,9 +49,16 @@ export function GameOverlay({ onBack, onQueueAgain }: GameOverlayProps) {
             puyosCleared?: number;
             timeLimit?: number;
             isMultiplayer?: boolean;
+            durationSeconds?: number;
         }) => {
             setIsPaused(false);
+            const personal = data.isMultiplayer ? undefined : new PersonalBests().submit(
+                modeForTimeLimit(data.timeLimit || 0),
+                { score: data.score, maxChain: data.maxChain || 0, puyosCleared: data.puyosCleared || 0 },
+            );
             setGameOverState({
+                durationSeconds: data.durationSeconds || 0,
+                personal,
                 score: data.score,
                 message: data.message,
                 isTimeTrial: data.isTimeTrial || false,
@@ -148,6 +160,8 @@ export function GameOverlay({ onBack, onQueueAgain }: GameOverlayProps) {
                     onExit={handleExit}
                     isMultiplayer={gameOverState.isMultiplayer}
                     xpGained={gameOverState.xpGained}
+                    durationSeconds={gameOverState.durationSeconds}
+                    personal={gameOverState.personal}
                 />
             )}
             {isPaused && !gameOverState && (

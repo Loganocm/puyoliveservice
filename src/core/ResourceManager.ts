@@ -6,7 +6,7 @@ import {
     RING_COLUMN, GHOST_ROW,
 } from './PieceArt';
 import type { GarbageIcon } from './PieceArt';
-import { getTheme } from '../theme/tokens';
+import { getGlyphStyle, getTheme } from '../theme/tokens';
 
 /**
  * Textures for the board, generated rather than downloaded.
@@ -34,7 +34,7 @@ export class ResourceManager {
         const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
         // Two texels per board pixel at DPR 1 keeps orbs crisp when the scene is scaled up.
         this.cellPx = Math.round(CELL_SIZE * Math.max(2, dpr * 1.5));
-        const canvas = paintAtlas(getTheme(), this.cellPx);
+        const canvas = paintAtlas(getTheme(), this.cellPx, getGlyphStyle());
         this.atlas?.destroy(true);
         this.atlas = Texture.from(canvas);
         this.cache.clear();

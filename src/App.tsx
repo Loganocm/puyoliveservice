@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Gamepad2,
@@ -10,6 +10,9 @@ import {
   Shield,
 } from "lucide-react";
 import { Wordmark } from "@/components/Wordmark";
+import { TouchControls, wantsTouchControls } from "@/components/TouchControls";
+import { PersonalBests } from "@/core/PersonalBests";
+import { PerfNotice } from "@/components/PerfNotice";
 import { PuyoFooter } from "@/components/PuyoFooter";
 import { WaterFillButton } from "@/components/WaterFillButton";
 import { PlayerStatsPanel } from "@/components/PlayerStatsPanel";
@@ -22,14 +25,8 @@ import { BGMPlayer } from "@/components/BGMPlayer";
 import { BGMManager } from "@/core/BGMManager";
 
 import { SinglePlayerModeSelect } from "@/screens/SinglePlayerModeSelect";
-import { MultiplayerLobby } from "@/screens/MultiplayerLobby";
-import { LeaderboardScreen } from "@/screens/LeaderboardScreen";
-import { SettingsScreen } from "@/screens/SettingsScreen";
-import { ControlsScreen } from "@/screens/ControlsScreen";
 import { OnboardingScreen } from "@/screens/OnboardingScreen";
 import { GameOverlay } from "@/screens/GameOverlay";
-import { ReplayOverlay } from "@/screens/ReplayOverlay";
-import { QuickPlayScreen } from "@/screens/QuickPlayScreen";
 import { TransitionParticles } from "@/components/TransitionParticles";
 import { SceneManager } from "@/core/SceneManager";
 import { ResourceManager } from "@/core/ResourceManager";
@@ -37,9 +34,42 @@ import { GameScene } from "@/scenes/GameScene";
 import { QuickPlayScene } from "@/scenes/QuickPlayScene";
 import { MenuScene } from "@/scenes/MenuScene";
 import { NetworkManager } from "@/core/NetworkManager";
-import { ProfileScreen } from "@/screens/ProfileScreen";
-import { CommunityScreen } from "@/screens/CommunityScreen";
-import { AdminScreen } from "@/screens/AdminScreen";
+
+/*
+ * Screens off the first path (onboarding -> menu -> play) load on demand, so
+ * the first paint does not wait for the admin panel or the community hub.
+ * They are prefetched once the menu is idle, so opening one is still instant.
+ */
+const screenLoaders = {
+  multiplayer: () => import("@/screens/MultiplayerLobby"),
+  leaderboard: () => import("@/screens/LeaderboardScreen"),
+  settings: () => import("@/screens/SettingsScreen"),
+  controls: () => import("@/screens/ControlsScreen"),
+  replay: () => import("@/screens/ReplayOverlay"),
+  quickplay: () => import("@/screens/QuickPlayScreen"),
+  profile: () => import("@/screens/ProfileScreen"),
+  community: () => import("@/screens/CommunityScreen"),
+  admin: () => import("@/screens/AdminScreen"),
+};
+const MultiplayerLobby = lazy(() => screenLoaders.multiplayer().then(m => ({ default: m.MultiplayerLobby })));
+const LeaderboardScreen = lazy(() => screenLoaders.leaderboard().then(m => ({ default: m.LeaderboardScreen })));
+const SettingsScreen = lazy(() => screenLoaders.settings().then(m => ({ default: m.SettingsScreen })));
+const ControlsScreen = lazy(() => screenLoaders.controls().then(m => ({ default: m.ControlsScreen })));
+const ReplayOverlay = lazy(() => screenLoaders.replay().then(m => ({ default: m.ReplayOverlay })));
+const QuickPlayScreen = lazy(() => screenLoaders.quickplay().then(m => ({ default: m.QuickPlayScreen })));
+const ProfileScreen = lazy(() => screenLoaders.profile().then(m => ({ default: m.ProfileScreen })));
+const CommunityScreen = lazy(() => screenLoaders.community().then(m => ({ default: m.CommunityScreen })));
+const AdminScreen = lazy(() => screenLoaders.admin().then(m => ({ default: m.AdminScreen })));
+
+let prefetched = false;
+/** Warm every lazy screen in the background, once, when the browser is idle. */
+function prefetchScreens() {
+  if (prefetched) return;
+  prefetched = true;
+  const run = () => Object.values(screenLoaders).forEach(load => { load().catch(() => undefined); });
+  if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 4000 });
+  else setTimeout(run, 1500);
+}
 
 type Screen =
   | "menu"
@@ -71,6 +101,10 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
+  /** Whether the running game is single player (it can pause; a match cannot). */
+  const [soloGame, setSoloGame] = useState(true);
+  // Read on every render (cheap), so changing the setting applies at once.
+  const touch = !IS_LAB && wantsTouchControls();
 
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
@@ -106,6 +140,7 @@ export default function App() {
     if (screen === "menu") {
       hasVisitedMenu.current = true;
       BGMManager.play('menu');
+      prefetchScreens();
     }
 
     if (screen === "transition") {
@@ -261,6 +296,7 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen bg-transparent overflow-hidden font-sans text-white z-50 pointer-events-none">
+      <Suspense fallback={null}>
       <AnimatePresence mode="wait">
         {screen === "menu" && (
           <motion.div
@@ -290,12 +326,16 @@ export default function App() {
 
                 {/* User Avatar with Dropdown */}
                 <div className="relative" ref={userMenuRef}>
-                  <motion.div
-                    className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center border border-white/20 shadow-lg shadow-indigo-500/20 bg-cover bg-center cursor-pointer"
+                  <motion.button
+                    type="button"
+                    aria-label="Account menu"
+                    aria-haspopup="menu"
+                    aria-expanded={showUserMenu}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center border border-white/20 shadow-lg bg-cover bg-center cursor-pointer"
                     style={{
-                      backgroundImage: user?.avatar_url
-                        ? `url(${user.avatar_url})`
-                        : undefined,
+                      background: user?.avatar_url
+                        ? `center / cover no-repeat url(${user.avatar_url})`
+                        : "linear-gradient(135deg, var(--pl-accent-primary), var(--pl-accent-secondary))",
                     }}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -304,7 +344,7 @@ export default function App() {
                     {!user?.avatar_url && (
                       <User className="text-white w-6 h-6" />
                     )}
-                  </motion.div>
+                  </motion.button>
 
                   {/* Dropdown Menu */}
                   <AnimatePresence>
@@ -378,7 +418,8 @@ export default function App() {
               whileHover={{ scale: 1.03, x: 4 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setShowCommunity(true)}
-              className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 px-3 py-6 bg-indigo-600/80 hover:bg-indigo-500/90 border border-white/10 rounded-r-2xl shadow-lg shadow-indigo-500/20 backdrop-blur-sm transition-colors cursor-pointer"
+              aria-label="Community"
+              className="fixed left-0 top-1/2 -translate-y-1/2 z-30 hidden sm:flex flex-col items-center gap-2 px-3 py-6 bg-indigo-600/80 hover:bg-indigo-500/90 border border-white/10 rounded-r-2xl shadow-lg shadow-indigo-500/20 backdrop-blur-sm transition-colors cursor-pointer"
             >
               <Users className="w-5 h-5 text-white" />
               <span className="text-[11px] font-bold tracking-widest text-white/90 [writing-mode:vertical-lr] rotate-180">
@@ -416,14 +457,14 @@ export default function App() {
                 duration: hasVisitedMenu.current ? 0 : 0.6,
                 ease: [0.16, 1, 0.3, 1],
               }}
-              className="flex justify-center px-8 pt-4 pb-4 z-10"
+              className="flex justify-center px-4 sm:px-8 pt-2 sm:pt-4 pb-3 sm:pb-4 z-10"
             >
               <Wordmark size={84} />
             </motion.div>
 
             {/* Main Menu */}
-            <div className="relative z-10 flex flex-1 items-center justify-center px-8">
-              <div className="w-full max-w-4xl space-y-6">
+            <div className="relative z-10 flex flex-1 min-h-0 items-center justify-center px-4 sm:px-8 overflow-y-auto">
+              <div className="w-full max-w-4xl space-y-3 sm:space-y-6 py-2">
                 {menuItems.map((item, index) => (
                   <motion.div
                     key={item.label}
@@ -448,6 +489,21 @@ export default function App() {
                     />
                   </motion.div>
                 ))}
+                {/* On phones the side tab would cover these buttons, so
+                    Community is a menu item there instead. */}
+                <div className="sm:hidden">
+                  <WaterFillButton
+                    icon={Users}
+                    label="Community"
+                    subtitle="Players, rankings & replays"
+                    color="#35D0E6"
+                    accentColor="#FF4F7B"
+                    isHovered={hoveredIndex === menuItems.length}
+                    onHoverStart={() => setHoveredIndex(menuItems.length)}
+                    onHoverEnd={() => setHoveredIndex(null)}
+                    onTap={() => setShowCommunity(true)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -469,6 +525,7 @@ export default function App() {
               onBack={() => setScreen("menu")}
               onSelectMode={(mode) => {
                 console.log("Selected Mode:", mode);
+                new PersonalBests().lastMode = mode;
                 // Map mode strings to seconds
                 let timeLimit = 0;
                 if (mode === "3min") timeLimit = 180;
@@ -476,6 +533,7 @@ export default function App() {
                 else if (mode === "10min") timeLimit = 600;
 
                 SceneManager.changeScene(new GameScene(undefined, timeLimit)); // No Room ID = Single Player
+                setSoloGame(true);
                 setScreen("game");
               }}
             />
@@ -522,6 +580,7 @@ export default function App() {
                 // But MultiplayerLobby sets up the room. GameScene needs the roomId.
                 // Does MultiplayerLobby pass roomId back?
                 // I need to check MultiplayerLobby.tsx.
+                setSoloGame(false);
                 setScreen("game");
               }}
             />
@@ -697,8 +756,18 @@ export default function App() {
         </div>
       )}
 
-      {!IS_LAB && <VolumeHUD />}
-      {!IS_LAB && <BGMPlayer />}
+      </Suspense>
+
+      {touch && (screen === "game" || screen === "quickplay") && (
+        <TouchControls canPause={screen === "game" && soloGame} />
+      )}
+
+      {/* The music widgets share the bottom corner with the touch controls. */}
+      {!IS_LAB && !(touch && (screen === "game" || screen === "quickplay")) && <VolumeHUD />}
+      {!IS_LAB && <PerfNotice />}
+
+      {/* On the menu the music control is docked in the footer instead. */}
+      {!IS_LAB && screen !== "menu" && !(touch && (screen === "game" || screen === "quickplay")) && <BGMPlayer />}
     </div>
   );
 }

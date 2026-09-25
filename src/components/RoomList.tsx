@@ -31,6 +31,7 @@ export function RoomList({ rooms, onJoin, onRefresh, isLoading = false }: RoomLi
         <button 
           onClick={onRefresh}
           disabled={isLoading}
+          aria-label="Refresh rooms"
           className="p-2 hovered:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />

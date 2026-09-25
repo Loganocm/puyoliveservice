@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 
@@ -86,6 +87,10 @@ app.use(cors({
   },
   credentials: true
 }));
+
+// Compress responses (JSON lists shrink five- to tenfold). Images are
+// skipped by compression's default filter; they are compressed already.
+app.use(compression());
 
 // Body parsing
 app.use(express.json({ limit: '1mb' }));
