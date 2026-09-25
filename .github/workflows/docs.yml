@@ -1,0 +1,54 @@
+name: Docs
+
+# Publishes the documentation site to GitHub Pages from main. Opt-in: set the
+# repository variable DOCS_DEPLOY_ENABLED to "true" once Pages is configured
+# (Settings > Pages > Source: GitHub Actions), so a repository without Pages
+# keeps a green main. The site's public address comes from DOCS_SITE_URL.
+#
+# See website/src/content/docs/reference/ci-cd.md.
+
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', 'docs/**', 'CHANGELOG.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: vars.DOCS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install site dependencies
+        working-directory: ./website
+        run: npm ci
+      - name: Build
+        working-directory: ./website
+        env:
+          DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

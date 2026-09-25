@@ -9,7 +9,7 @@ import path from 'path';
 // localStorage or Audio, something has re-coupled the engine to the browser --
 // fix that rather than switching this back to jsdom.
 //
-// See README §"Testing".
+// See website/src/content/docs/reference/testing.md.
 
 export default defineConfig({
   resolve: {

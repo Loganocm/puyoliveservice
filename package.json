@@ -1,7 +1,7 @@
 {
   "name": "puyolive",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.3.0",
   "type": "module",
   "workspaces": [
     "packages/*",
@@ -17,7 +17,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build:engine": "npm run build --workspace @puyolive/engine"
+    "build:engine": "npm run build --workspace @puyolive/engine",
+    "docs:dev": "npm run dev --prefix website",
+    "docs:build": "npm run build --prefix website",
+    "docs:check": "tsx scripts/docs-check.ts",
+    "typecheck:scripts": "tsc -p scripts",
+    "icons": "node scripts/render-icons.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

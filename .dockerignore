@@ -40,7 +40,10 @@ src
 index.html
 *.log
 
-# Docs and tests: not part of any runtime artifact
+# Docs, the documentation site, tooling and tests: not part of any runtime artifact
 docs
+website
+scripts
+artifacts
 tests
-README.md
+*.md

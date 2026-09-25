@@ -4,7 +4,7 @@ name: CI
 # The same pipeline gates deploy.yml, so a green CI here means the commit
 # is publishable.
 #
-# See README §"Continuous integration".
+# See website/src/content/docs/reference/ci-cd.md.
 
 on:
   push:
@@ -20,3 +20,26 @@ jobs:
   verify:
     name: Verify
     uses: ./.github/workflows/verify.yml
+
+  # The documentation contract (docs/adr/0007-documentation-system.md): a pull
+  # request that changes code must change the pages that describe it, add a
+  # changelog entry, and record engine behaviour changes. Waivers go in the PR
+  # description as "Docs-Impact: none - <reason>" or "Changelog: skip - <reason>".
+  docs-governance:
+    name: Docs governance
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm ci
+      - name: Check documentation is in step with the code
+        env:
+          # Passed through the environment, never interpolated into the script.
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: npx tsx scripts/docs-check.ts --base "origin/${{ github.base_ref }}"

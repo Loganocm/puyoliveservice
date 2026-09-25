@@ -1,0 +1,29 @@
+# Weekly dependency updates, grouped so they arrive as a few reviewable PRs.
+# Dependency bumps are exempt from the documentation check (ci.yml) but still
+# need a green build and test run.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /api
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /website
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

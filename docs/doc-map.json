@@ -1,0 +1,216 @@
+{
+  "$comment": "Which pages describe which code. scripts/docs-check.ts fails a change that touches a rule's paths without touching one of its pages. Keep it current: a new area of code needs a rule. See website/src/content/docs/start/documentation-system.md.",
+  "docOnly": [
+    "website/**",
+    "docs/**",
+    "**/*.md",
+    ".github/ISSUE_TEMPLATE/**",
+    "LICENSE"
+  ],
+  "goldens": [
+    "tests/**/__snapshots__/**"
+  ],
+  "sourceRoots": [
+    "src/*",
+    "server",
+    "api/src/*",
+    "api/prisma",
+    "packages/*/src",
+    "scripts",
+    "tests/*"
+  ],
+  "unmapped": [
+    {
+      "path": "tests/*",
+      "reason": "Tests document themselves. How the suites are organised and run is in website/src/content/docs/reference/testing.md; the animation lab has its own rule."
+    }
+  ],
+  "rules": [
+    {
+      "name": "Engine (rules, timing, replay format)",
+      "paths": [
+        "packages/engine/src/**"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/rules.md",
+        "website/src/content/docs/reference/frame-timing.md",
+        "website/src/content/docs/reference/replay-format.md",
+        "website/src/content/docs/review/rules-fidelity.md",
+        "website/src/content/docs/review/engine.md",
+        "website/src/content/docs/architecture/engine-v2.md"
+      ]
+    },
+    {
+      "name": "Handling and input",
+      "paths": [
+        "src/input/**",
+        "src/core/Input.ts",
+        "src/core/ControlsManager.ts",
+        "src/core/SettingsManager.ts",
+        "src/components/TouchControls.tsx",
+        "src/hooks/**"
+      ],
+      "docs": [
+        "website/src/content/docs/design/game-feel.md",
+        "website/src/content/docs/reference/frame-timing.md"
+      ]
+    },
+    {
+      "name": "Rendering and visual identity",
+      "paths": [
+        "src/render/**",
+        "src/theme/**",
+        "src/core/PieceArt.ts",
+        "src/core/ResourceManager.ts",
+        "src/core/RenderConstants.ts",
+        "src/core/SceneManager.ts",
+        "src/resources/**",
+        "src/index.css",
+        "public/**",
+        "scripts/render-icons.mjs"
+      ],
+      "docs": [
+        "website/src/content/docs/design/visual-identity.md",
+        "website/src/content/docs/reference/animation-catalogue.md",
+        "website/src/content/docs/architecture/client-platform.md"
+      ]
+    },
+    {
+      "name": "Game scenes",
+      "paths": [
+        "src/scenes/**"
+      ],
+      "docs": [
+        "website/src/content/docs/architecture/client-platform.md",
+        "website/src/content/docs/reference/animation-catalogue.md",
+        "website/src/content/docs/reference/frame-timing.md",
+        "website/src/content/docs/design/game-feel.md"
+      ]
+    },
+    {
+      "name": "Animation lab",
+      "paths": [
+        "src/lab/**",
+        "tests/lab/**"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/animation-catalogue.md",
+        "website/src/content/docs/reference/testing.md"
+      ]
+    },
+    {
+      "name": "Client netcode",
+      "paths": [
+        "src/core/NetworkManager.ts",
+        "src/core/MatchClock.ts",
+        "src/core/OpponentView.ts"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/wire-protocol.md",
+        "website/src/content/docs/architecture/netcode.md"
+      ]
+    },
+    {
+      "name": "Replays",
+      "paths": [
+        "src/core/ReplayEngine.ts",
+        "src/core/ReplaySimulator.ts"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/replay-format.md"
+      ]
+    },
+    {
+      "name": "Game server",
+      "paths": [
+        "server/**"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/wire-protocol.md",
+        "website/src/content/docs/architecture/netcode.md",
+        "website/src/content/docs/reference/configuration.md"
+      ]
+    },
+    {
+      "name": "Community",
+      "paths": [
+        "src/community/**",
+        "src/screens/CommunityScreen.tsx",
+        "api/src/routes/forum.routes.ts",
+        "api/src/services/forum.service.ts"
+      ],
+      "docs": [
+        "website/src/content/docs/architecture/community.md",
+        "website/src/content/docs/reference/api.md"
+      ]
+    },
+    {
+      "name": "REST API and database",
+      "paths": [
+        "api/src/**",
+        "api/prisma/**",
+        "src/api/**",
+        "!api/src/routes/forum.routes.ts",
+        "!api/src/services/forum.service.ts"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/api.md",
+        "website/src/content/docs/reference/configuration.md",
+        "website/src/content/docs/architecture/platform.md"
+      ]
+    },
+    {
+      "name": "Menus and client services",
+      "paths": [
+        "src/screens/**",
+        "src/components/**",
+        "src/App.tsx",
+        "src/main.tsx",
+        "src/utils/**",
+        "src/env.d.ts",
+        "src/core/AudioContext.ts",
+        "src/core/BGMManager.ts",
+        "src/core/SoundManager.ts",
+        "src/core/AuthManager.ts",
+        "src/core/GameEvents.ts",
+        "src/core/XpCalculator.ts",
+        "src/core/PersonalBests.ts",
+        "src/core/FrameRateMonitor.ts",
+        "!src/screens/CommunityScreen.tsx",
+        "!src/components/TouchControls.tsx"
+      ],
+      "docs": [
+        "website/src/content/docs/architecture/client-platform.md",
+        "website/src/content/docs/design/game-feel.md",
+        "website/src/content/docs/design/visual-identity.md"
+      ]
+    },
+    {
+      "name": "Documentation governance",
+      "paths": [
+        "scripts/docs-check.ts",
+        "scripts/lib/**"
+      ],
+      "docs": [
+        "website/src/content/docs/start/documentation-system.md"
+      ]
+    },
+    {
+      "name": "CI, deployment and hosting",
+      "paths": [
+        ".github/workflows/**",
+        ".github/dependabot.yml",
+        "Dockerfile",
+        "**/Dockerfile",
+        "docker-compose.yml",
+        "vercel.json",
+        ".vercelignore",
+        ".dockerignore"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/ci-cd.md",
+        "website/src/content/docs/reference/configuration.md"
+      ]
+    }
+  ]
+}

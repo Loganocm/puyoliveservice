@@ -7,7 +7,7 @@ name: Build & Push Docker Images
 # GATE: every job below requires `verify` to pass first. A commit that does
 # not type-check or build cannot be published.
 #
-# See README §"Deployment pipeline".
+# See website/src/content/docs/reference/ci-cd.md.
 
 on:
   push:

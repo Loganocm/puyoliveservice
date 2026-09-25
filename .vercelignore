@@ -13,6 +13,10 @@
 # tolerates a workspace path that is not present, installs the rest, and still
 # links packages/engine for the client. Verified rather than assumed.
 
+# The documentation site is built and published separately (docs.yml)
+/website/
+/artifacts/
+
 # Docker files
 Dockerfile
 Dockerfile.server

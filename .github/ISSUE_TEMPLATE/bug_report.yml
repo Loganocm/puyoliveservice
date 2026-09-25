@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in the game, the site or the API does not work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: Steps from the main menu. A replay link or a seed helps a lot.
+      placeholder: |
+        1. Single Player, Practice
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Gameplay (board, pieces, chains, garbage)
+        - Controls and handling
+        - Multiplayer or matchmaking
+        - Puyo Mines
+        - Replays
+        - Menus, settings or profile
+        - Community and forums
+        - Documentation site
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom left of the main menu.
+      placeholder: v0.3.0
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: Windows 11, Chrome 140 / iPhone 15, Safari
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, console errors, how often it happens.

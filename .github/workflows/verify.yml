@@ -7,7 +7,7 @@ name: Verify
 # Nothing reaches production without passing every job here. Watchtower
 # auto-deploys published images within ~5 minutes, so this is the only gate.
 #
-# See README §"Continuous integration".
+# See website/src/content/docs/reference/ci-cd.md.
 
 on:
   workflow_call:
@@ -51,6 +51,8 @@ jobs:
       - name: Type check game server
         working-directory: ./server
         run: npx tsc --noEmit -p tsconfig.json
+      - name: Type check tooling scripts
+        run: npx tsc -p scripts
 
   engine-tests:
     name: Engine tests
@@ -79,6 +81,70 @@ jobs:
             exit 1
           fi
           echo "goldens stable"
+
+  api-tests:
+    name: API tests
+    runs-on: ubuntu-latest
+    needs: typecheck
+    # The API suite runs against a real PostgreSQL: migrations, constraints and
+    # transactions are part of what it tests. It used to run nowhere, which is
+    # how two of its tests stayed broken unnoticed (API-01).
+    services:
+      postgres:
+        # The same major version production runs (docker-compose.yml).
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: puyo_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/puyo_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install API dependencies
+        working-directory: ./api
+        run: npm ci
+      # Applying every migration to an empty database is itself a test: a
+      # migration that only works on a db-push schema fails here.
+      - name: Apply migrations
+        working-directory: ./api
+        run: npx prisma migrate deploy
+      - name: Fail if the schema and migrations disagree
+        working-directory: ./api
+        run: |
+          diff=$(npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script)
+          if [ -n "$(echo "$diff" | grep -v '^[[:space:]]*$' | grep -v '^-- This is an empty migration.$')" ]; then
+            echo "::error::prisma/schema.prisma has changes no migration applies:"; echo "$diff"; exit 1
+          fi
+          echo "migrations match the schema"
+      - name: Run API suite
+        working-directory: ./api
+        run: npm test
+
+  docs-site:
+    name: Docs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install site dependencies
+        working-directory: ./website
+        run: npm ci
+      # The build validates every internal link (starlight-links-validator), so
+      # a renamed page or a link to a page that does not exist fails here.
+      - name: Build the documentation site
+        working-directory: ./website
+        run: npm run build
 
   build:
     name: Build artifacts
