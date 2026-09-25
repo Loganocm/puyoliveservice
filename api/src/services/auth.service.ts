@@ -71,6 +71,19 @@ function clearLoginFailures(username: string): void {
   loginAttempts.delete(getAccountLockKey(username));
 }
 
+/** The user's ban that is currently in force (permanent or not yet expired), if any. */
+function findActiveBan(userId: number) {
+  return prisma.ban.findFirst({
+    where: {
+      user_id: userId,
+      OR: [
+        { expires_at: null },
+        { expires_at: { gt: new Date() } }
+      ]
+    }
+  });
+}
+
 export class AuthService {
   /**
    * Validate username format
@@ -227,31 +240,28 @@ export class AuthService {
       throw new Error('Invalid username or password');
     }
 
-    // Check if user is banned
-    try {
-        const activeBan = await (prisma as any).ban.findFirst({
-          where: {
-            user_id: user.id,
-            OR: [
-              { expires_at: null },
-              { expires_at: { gt: new Date() } }
-            ]
-          }
-        });
-        
-        if (activeBan) {
-          throw new Error(`Account suspended: ${activeBan.reason}`);
-        }
-    } catch(e) {} // Catch if ban model not migrated yet
+    // Check if user is banned.
+    //
+    // This used to sit inside a catch-all "in case the ban model is not
+    // migrated yet" -- which also caught the "Account suspended" error thrown
+    // below, so banned users logged in normally. The bans table now has a
+    // migration (20260925000000_add_moderation_tables), so the guard is gone:
+    // a missing table should fail loudly, not disable moderation.
+    // See website/src/content/docs/review/findings.md (API-01).
+    const activeBan = await findActiveBan(user.id);
+    if (activeBan) {
+      throw new Error(`Account suspended: ${activeBan.reason}`);
+    }
 
     // Verify password
     const isValid = await bcrypt.compare(input.password, user.password_hash);
     
-    // Log attempt if ip is tracked
+    // Log attempt if ip is tracked. Fire-and-forget so logging can never block
+    // a login, but a failure is reported rather than swallowed.
     if (input.ipAddress) {
-        (prisma as any).loginLog.create({
+        prisma.loginLog.create({
             data: { user_id: user.id, ip_address: input.ipAddress, success: isValid }
-        }).catch(() => {});
+        }).catch((err: unknown) => console.error('[auth] failed to write login log:', err));
     }
 
     if (!isValid) {
@@ -342,19 +352,8 @@ export class AuthService {
       const user = await this.getUserById(payload.userId);
       if (!user) return null;
 
-      // Check if user is banned, effectively invalidating existing tokens
-      try {
-          const activeBan = await (prisma as any).ban.findFirst({
-            where: {
-              user_id: user.id,
-              OR: [
-                { expires_at: null },
-                { expires_at: { gt: new Date() } }
-              ]
-            }
-          });
-          if (activeBan) return null;
-      } catch(e) {} // Catch if ban model not migrated yet
+      // A ban invalidates tokens that were issued before it.
+      if (await findActiveBan(user.id)) return null;
 
       return user;
     } catch {

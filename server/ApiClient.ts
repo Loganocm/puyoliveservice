@@ -2,7 +2,12 @@
  * API Client for the game server to communicate with the Puyo Live REST API
  */
 
-const API_URL = process.env.API_URL || 'http://localhost:3001';
+// 8080 is the API's own default (api/src/config/index.ts) and its port in
+// docker-compose.yml. This fallback was left at 3001 when the API moved off
+// that port, so an unconfigured local game server could not reach the API:
+// token verification failed and ranked results were never recorded.
+// See website/src/content/docs/review/findings.md (OPS-07).
+const API_URL = process.env.API_URL || 'http://localhost:8080';
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
 interface RecordMatchParams {

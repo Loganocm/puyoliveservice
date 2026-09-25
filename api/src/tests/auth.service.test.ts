@@ -186,6 +186,49 @@ describe('AuthService', () => {
         password: ''
       })).rejects.toThrow('Username and password are required');
     });
+
+    // Regression for API-01: the ban check used to be wrapped in a catch-all
+    // that also swallowed its own "Account suspended" error, so a banned user
+    // logged in normally.
+    describe('when the user is banned', () => {
+      const banUser = async (expires_at: Date | null) => {
+        const user = await prisma.user.findFirstOrThrow({ where: { username: testUser.username } });
+        await prisma.ban.create({ data: { user_id: user.id, reason: 'test ban', expires_at } });
+        return user;
+      };
+
+      afterEach(async () => {
+        await prisma.ban.deleteMany({ where: { reason: 'test ban' } });
+      });
+
+      it('rejects login while a permanent ban is in force', async () => {
+        await banUser(null);
+        await expect(AuthService.login({
+          username: testUser.username,
+          password: testUser.password
+        })).rejects.toThrow('Account suspended: test ban');
+      });
+
+      it('allows login once a temporary ban has expired', async () => {
+        await banUser(new Date(Date.now() - 60_000));
+        const result = await AuthService.login({
+          username: testUser.username,
+          password: testUser.password
+        });
+        expect(result.user.username).toBe(testUser.username);
+      });
+
+      it('invalidates tokens issued before the ban', async () => {
+        const { token } = await AuthService.login({
+          username: testUser.username,
+          password: testUser.password
+        });
+        expect(await AuthService.verifyToken(token)).not.toBeNull();
+
+        await banUser(null);
+        expect(await AuthService.verifyToken(token)).toBeNull();
+      });
+    });
   });
 
   describe('verifyToken', () => {

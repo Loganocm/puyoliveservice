@@ -84,6 +84,16 @@ export interface ReplayEventLegacy {
     data?: any;
 }
 
+/**
+ * Return a copy of `map` with `oldKey` renamed to `newKey` at the SAME
+ * insertion position. A delete-then-set would move the entry to the end, and
+ * GameRoom derives player index from insertion order.
+ */
+function rekeyInPlace<V>(map: Map<string, V>, oldKey: string, newKey: string): Map<string, V> {
+    if (!map.has(oldKey)) return map;
+    return new Map(Array.from(map, ([k, v]): [string, V] => [k === oldKey ? newKey : k, v]));
+}
+
 export class GameRoom {
     id: string;
     players: Map<string, Player> = new Map();
@@ -191,14 +201,28 @@ export class GameRoom {
 
     // Reconnect: Find player by userId and swap their socket ID
     // Returns the old socket ID if found, null if not found
+    //
+    // The swap must keep the player in the SAME POSITION. Player index is
+    // derived from Map insertion order (getPlayerIndex), and it is what stamps
+    // `p` on every recorded input, decides who is host, and attributes garbage
+    // and chain stats. A delete-then-set moved a reconnecting player to the end
+    // of the Map, so player 0 became player 1 mid-match: their later inputs
+    // were recorded under the opponent's index and the replay was corrupted.
+    //
+    // Every other map keyed by socket id must follow the player too. The
+    // simulator and the recorded handling settings used to stay under the dead
+    // socket id, so the server stopped simulating the reconnected player and
+    // the replay fell back to default SDF for them.
+    // See website/src/content/docs/review/findings.md (NET-07).
     reconnectPlayer(userId: number, newSocketId: string, newAuthToken?: string): string | null {
         for (const [oldSocketId, player] of this.players.entries()) {
             if (player.userId === userId) {
-                // Swap socket ID
-                this.players.delete(oldSocketId);
                 player.id = newSocketId;
                 if (newAuthToken) player.authToken = newAuthToken;
-                this.players.set(newSocketId, player);
+                this.players = rekeyInPlace(this.players, oldSocketId, newSocketId);
+                this.simulators = rekeyInPlace(this.simulators, oldSocketId, newSocketId);
+                this.playerSettingsMap = rekeyInPlace(this.playerSettingsMap, oldSocketId, newSocketId);
+                this.seriesScore = rekeyInPlace(this.seriesScore, oldSocketId, newSocketId);
                 console.log(`[Room ${this.id}] Player ${player.name} (userId ${userId}) reconnected: ${oldSocketId} -> ${newSocketId}`);
                 return oldSocketId;
             }

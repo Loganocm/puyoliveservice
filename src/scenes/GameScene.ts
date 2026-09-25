@@ -921,22 +921,32 @@ export class GameScene implements IScene {
                         }
 
                         // SPAWN-FRAME INSTANT MOVEMENT
+                        //
+                        // Every successful move here is recorded, exactly as in
+                        // handleInput(). These moves used to be applied to the
+                        // engine without being recorded, so whenever DAS was
+                        // charged as a piece spawned, the replay, the opponent's
+                        // view and the server simulation all missed the move and
+                        // diverged -- silently patched over by the opponent
+                        // view's snapshot reconcile(). An engine mutation that
+                        // is not in the input log is a desync by construction.
+                        // See website/src/content/docs/review/findings.md (NET-06).
                         if (prevState !== GameState.ACTIVE && state === GameState.ACTIVE && this.engine.activePiece) {
                             const leftHeld = Input.isActionDown('moveLeft');
                             const rightHeld = Input.isActionDown('moveRight');
 
                             if (leftHeld && !rightHeld && this.currentFrame >= this.dasFrameLeft && this.dasFrameLeft > 0) {
                                 if (SettingsManager.arr === 0) {
-                                    while (this.engine.movePiece(-1)) { };
-                                } else {
-                                    this.engine.movePiece(-1);
+                                    while (this.engine.movePiece(-1)) this.recordInputForReplay('L');
+                                } else if (this.engine.movePiece(-1)) {
+                                    this.recordInputForReplay('L');
                                 }
                                 this.lastMoveFrameLeft = this.currentFrame;
                             } else if (rightHeld && !leftHeld && this.currentFrame >= this.dasFrameRight && this.dasFrameRight > 0) {
                                 if (SettingsManager.arr === 0) {
-                                    while (this.engine.movePiece(1)) { };
-                                } else {
-                                    this.engine.movePiece(1);
+                                    while (this.engine.movePiece(1)) this.recordInputForReplay('R');
+                                } else if (this.engine.movePiece(1)) {
+                                    this.recordInputForReplay('R');
                                 }
                                 this.lastMoveFrameRight = this.currentFrame;
                             }

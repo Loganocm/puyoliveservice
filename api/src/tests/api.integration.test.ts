@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import request from 'supertest';
 import { app } from '../index.js';
 import { prisma } from '../db/prisma.js';
+import { config } from '../config/index.js';
 
 describe('API Integration Tests', () => {
   // Test user data
@@ -21,6 +22,12 @@ describe('API Integration Tests', () => {
       // Delete test users (cascade delete matches if schema configured, otherwise delete matches first)
       // Since schema doesn't explicitly have cascade in the relation field, we should delete matches manually or rely on DB FK cascade if set (Prisma default is NoAction/SetNull usually).
       // Safest to delete matches.
+      // login_logs references users with ON DELETE RESTRICT, and logging in
+      // over HTTP writes a row, so those go first.
+      await prisma.loginLog.deleteMany({
+        where: { user: { username: { startsWith: 'apitest_' } } }
+      });
+
       await prisma.match.deleteMany({
         where: {
           OR: [
@@ -202,10 +209,14 @@ describe('API Integration Tests', () => {
     });
 
     describe('POST /api/matches', () => {
+      // Match results are recorded server-to-server by the game server with
+      // the shared X-Internal-Key, never by a player. These tests used to send
+      // a user JWT and had been failing since the endpoint was locked down;
+      // the API suite did not run in CI, so nothing noticed.
       it('should record a match result', async () => {
         const res = await request(app)
           .post('/api/matches')
-          .set('Authorization', `Bearer ${authToken}`)
+          .set('X-Internal-Key', config.internalApiKey)
           .send({
             player1_id: testUserId,
             player2_id: secondUserId,
@@ -231,10 +242,34 @@ describe('API Integration Tests', () => {
           .expect(401);
       });
 
-      it('should reject invalid winner_id', async () => {
+      it('should reject a player JWT (players cannot record their own results)', async () => {
         await request(app)
           .post('/api/matches')
           .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            player1_id: testUserId,
+            player2_id: secondUserId,
+            winner_id: testUserId
+          })
+          .expect(401);
+      });
+
+      it('should reject a wrong internal key', async () => {
+        await request(app)
+          .post('/api/matches')
+          .set('X-Internal-Key', 'x'.repeat(config.internalApiKey.length))
+          .send({
+            player1_id: testUserId,
+            player2_id: secondUserId,
+            winner_id: testUserId
+          })
+          .expect(403);
+      });
+
+      it('should reject invalid winner_id', async () => {
+        await request(app)
+          .post('/api/matches')
+          .set('X-Internal-Key', config.internalApiKey)
           .send({
             player1_id: testUserId,
             player2_id: secondUserId,
