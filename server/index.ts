@@ -341,6 +341,27 @@ if (SIMULATED_LATENCY_MS > 0) {
   console.log(`[Dev] Injecting ${SIMULATED_LATENCY_MS}ms artificial latency on outbound events`);
 }
 
+/**
+ * Dev-only fixed match seed. Every match uses this seed instead of a fresh
+ * one, so recorded multiplayer sessions and end-to-end tests are reproducible
+ * (tests/lab/record-multiplayer.mjs). Ignored in production.
+ */
+const DEV_FIXED_SEED = (() => {
+  if (process.env.NODE_ENV === 'production' || !process.env.DEV_FIXED_SEED) return null;
+  const seed = Number(process.env.DEV_FIXED_SEED);
+  return Number.isSafeInteger(seed) ? seed : null;
+})();
+
+if (DEV_FIXED_SEED !== null) {
+  console.log(`[Dev] Every match uses fixed seed ${DEV_FIXED_SEED}`);
+}
+
+/** Start a room's match, honouring the dev seed. The one place a match begins. */
+function beginMatch(room: ReturnType<typeof roomManager.createRoom>) {
+  room.startMatch();
+  if (DEV_FIXED_SEED !== null) room.seed = DEV_FIXED_SEED;
+}
+
 /** Broadcast to everyone in a room EXCEPT the sender, honouring dev latency. */
 function relayToRoom(from: Socket, roomId: string, event: string, payload?: any) {
   if (SIMULATED_LATENCY_MS > 0) {
@@ -571,7 +592,7 @@ io.on('connection', (socket: Socket) => {
         // own packet landed, so the two frame counters were offset by network
         // jitter and frame N meant a different moment on each machine. Now the
         // start time is announced up front and both clients count down to it.
-        room.startMatch();
+        beginMatch(room);
         room.startAtMs = Date.now() + MATCH_COUNTDOWN_MS;
         setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
         emitToRoom(room.id, 'game_start', {
@@ -683,7 +704,7 @@ io.on('connection', (socket: Socket) => {
         }
 
         console.log(`Starting game in room ${roomId}`);
-        room.startMatch();
+        beginMatch(room);
         room.startAtMs = Date.now() + MATCH_COUNTDOWN_MS;
         setupSimulators(room, (loserSocketId) => handleMatchEnd(room.id, loserSocketId, 'lost'));
         emitToRoom(roomId, 'game_start', {
@@ -1201,7 +1222,7 @@ io.on('connection', (socket: Socket) => {
 
         io.to(newRoom.id).emit('player_joined', { id: p2, count: 2 });
 
-        newRoom.startMatch();
+        beginMatch(newRoom);
         newRoom.startAtMs = Date.now() + MATCH_COUNTDOWN_MS;
         setupSimulators(newRoom, (loserSocketId) => handleMatchEnd(newRoom.id, loserSocketId, 'lost'));
         emitToRoom(newRoom.id, 'game_start', {
@@ -1554,7 +1575,13 @@ io.on('connection', (socket: Socket) => {
   // If a player doesn't send a board state for 7 seconds during an active match (e.g. background tab),
   // the game is safely aborted. This prevents ELO inflation or deflation from network desyncs.
   const HEARTBEAT_INTERVAL = 3_000; // Check every 3 seconds
-  const HEARTBEAT_TIMEOUT = 7_000; // 7 seconds without board update = disconnected
+  // 7 seconds without board update = disconnected. HEARTBEAT_TIMEOUT_MS
+  // overrides it outside production, for slow software-rendered test
+  // browsers (tests/lab/record-multiplayer.mjs).
+  const HEARTBEAT_TIMEOUT =
+    process.env.NODE_ENV !== 'production' && Number(process.env.HEARTBEAT_TIMEOUT_MS) > 0
+      ? Number(process.env.HEARTBEAT_TIMEOUT_MS)
+      : 7_000;
   const HEARTBEAT_GRACE = 7_000;   // Don't check until 7s after match start (loading grace)
 
   setInterval(() => {

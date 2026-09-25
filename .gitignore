@@ -36,3 +36,6 @@ api/.env
 postgres_data/
 data/
 setup.txt
+
+# Generated test and recording output (animation catalogue, reports)
+artifacts/

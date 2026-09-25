@@ -38,6 +38,13 @@ if (!debugEnabled) {
   }
 }
 
+/**
+ * /?lab=<scenario> plays one animation-catalogue scenario in the real game
+ * scene for the recorder, with no network, menus or music. The lab module is
+ * only fetched when asked for. See src/lab/LabDriver.ts.
+ */
+const labId = new URLSearchParams(window.location.search).get('lab');
+
 const initGame = async () => {
   const appDiv = document.getElementById('app');
   if (!appDiv) {
@@ -48,10 +55,27 @@ const initGame = async () => {
   // console.log("Initializing Game Engine...");
   
   try {
-    NetworkManager.connect(); // Connect to server
+    if (!labId) NetworkManager.connect(); // Connect to server
     await SceneManager.init(1000, 900, appDiv);
     await ResourceManager.load();
     await SoundManager.load();
+
+    if (labId) {
+      const { labScenarioFromUrl, createLabDriver } = await import('./lab/LabDriver');
+      const { GameScene } = await import('./scenes/GameScene');
+      const scenario = labScenarioFromUrl();
+      if (!scenario) {
+        console.error(`[lab] unknown scenario "${labId}"`);
+        return;
+      }
+      const driver = createLabDriver(scenario);
+      SceneManager.changeScene(new GameScene(undefined, 0, scenario.seed, undefined, driver));
+      SceneManager.appInstance?.ticker.add((ticker) => {
+        SceneManager.update(ticker.deltaTime);
+        Input.update();
+      });
+      return;
+    }
 
     // Setup BGM
     BGMManager.init();

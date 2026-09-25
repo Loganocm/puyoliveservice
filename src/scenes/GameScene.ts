@@ -18,6 +18,7 @@ import { SettingsOverlay } from '../ui/SettingsOverlay';
 import { backgroundManager } from '../core/BackgroundManager';
 import { Assets } from 'pixi.js';
 import { BGMManager } from '../core/BGMManager';
+import type { LabController } from '../lab/LabDriver';
 
 interface Particle {
     x: number; y: number;
@@ -130,11 +131,25 @@ export class GameScene implements IScene {
     private forfeitBar: Graphics;
 
     // Bound handlers for GameEvents (for cleanup on destroy)
-    private handleGameResume = () => { this.isPaused = false; };
+    private handleGameResume = () => {
+        if (this.isPaused) this.lab?.note('pauseClose');
+        this.isPaused = false;
+    };
 
-    constructor(roomId?: string, timeLimit: number = 0, seed?: number, opponentId?: string) {
+    /**
+     * Set only at /?lab=<scenario>: plays a catalogue scenario frame by frame
+     * for the animation recorder. See src/lab/LabDriver.ts.
+     */
+    private readonly lab: LabController | null;
+    /** Whether the lab advanced the engine this rendered frame. */
+    private labStepped = false;
+    /** Pieces spawned in this game (read by end-to-end tests). */
+    private spawnCount = 0;
+
+    constructor(roomId?: string, timeLimit: number = 0, seed?: number, opponentId?: string, lab?: LabController) {
         this.roomId = roomId;
-        this.timeLimit = timeLimit;
+        this.lab = lab ?? null;
+        this.timeLimit = lab ? lab.timeLimit : timeLimit;
         this.seed = seed;
         this.opponentId = opponentId;
 
@@ -240,6 +255,22 @@ export class GameScene implements IScene {
 
         // Initialize Engine
         this.setupEngine();
+
+        // End-to-end tests (/?e2e=1) read game state through this handle to
+        // plan moves and assert outcomes. Read-only by convention; absent
+        // unless the URL asks for it. See tests/lab/record-multiplayer.mjs.
+        if (new URLSearchParams(window.location.search).has('e2e')) {
+            const scene = this;
+            (window as unknown as { __puyoGame: unknown }).__puyoGame = {
+                get engine() { return scene.engine; },
+                /** Pieces spawned so far: lets a test act once per piece. */
+                get spawns() { return scene.spawnCount; },
+                get opponentBoard() { return scene.opponentBoard.grid; },
+                get opponentGarbage() { return scene.opponentGarbage; },
+                get roomId() { return scene.roomId; },
+                get message() { return scene.gameMessage; },
+            };
+        }
 
         // Bind Engine Events for FX
         // Moved to setupEngine
@@ -518,6 +549,7 @@ export class GameScene implements IScene {
         };
 
         this.engine.onPieceSpawn = () => {
+            this.spawnCount++;
             this.nextQueueAnimation = 1.0;
             this.spawnAnim = 0; // Start spawn scale-up animation
         };
@@ -672,6 +704,10 @@ export class GameScene implements IScene {
         if (this.roomId) {
             this.engine.onBoardChange?.();
         }
+
+        // The lab wraps the hooks set above rather than replacing them, so the
+        // scene renders exactly as it does in real play.
+        this.lab?.attach(this.engine);
     }
 
     // Responsive layout positioning - centers game content on screen
@@ -751,6 +787,7 @@ export class GameScene implements IScene {
         if (this.roomId) return; // Cannot pause MP
 
         this.isPaused = !this.isPaused;
+        this.lab?.note(this.isPaused ? 'pauseOpen' : 'pauseClose');
         if (this.isPaused) {
             GameEvents.emit('game_pause', { timeLimit: this.timeLimit });
             SoundManager.play('menu_select');
@@ -770,6 +807,14 @@ export class GameScene implements IScene {
 
     update(delta: number): void {
         if (this.container.destroyed) return;
+
+        // In the lab, one rendered frame is exactly one logical frame, and
+        // everything freezes while the recorder captures a keyframe.
+        if (this.lab) {
+            this.lab.beginFrame();
+            delta = this.lab.running ? 1 : 0;
+        }
+        this.labStepped = false;
 
         try {
             // Toggle Settings Overlay
@@ -858,6 +903,10 @@ export class GameScene implements IScene {
                         // start instant has not landed). Hold at frame 0 rather
                         // than starting on a private timeline.
                     }
+                } else if (this.lab) {
+                    // LAB: the driver steps exactly one frame and applies the
+                    // scenario's inputs for it.
+                    this.labStepped = this.lab.stepFrame(this.engine);
                 } else {
                     // SINGLE PLAYER: accumulate real time and step the engine
                     // once per logical frame. The engine takes no delta, so
@@ -915,8 +964,11 @@ export class GameScene implements IScene {
                             NetworkManager.recordHash(this.roomId, this.engine.currentFrame, this.engine.computeBoardHash());
                         }
 
-                        // Only handle input if NOT paused (Menu closed)
-                        if (!this.isPaused) {
+                        // Only handle input if NOT paused (Menu closed). In the
+                        // lab, the keyboard is read only by keyboard-driven
+                        // scenarios, and only on frames the lab advanced.
+                        const readKeyboard = !this.lab || (this.lab.drivesKeyboard && this.labStepped);
+                        if (!this.isPaused && readKeyboard) {
                             this.handleInput();
                         }
 
@@ -931,7 +983,7 @@ export class GameScene implements IScene {
                         // view's snapshot reconcile(). An engine mutation that
                         // is not in the input log is a desync by construction.
                         // See website/src/content/docs/review/findings.md (NET-06).
-                        if (prevState !== GameState.ACTIVE && state === GameState.ACTIVE && this.engine.activePiece) {
+                        if (readKeyboard && prevState !== GameState.ACTIVE && state === GameState.ACTIVE && this.engine.activePiece) {
                             const leftHeld = Input.isActionDown('moveLeft');
                             const rightHeld = Input.isActionDown('moveRight');
 
@@ -976,6 +1028,7 @@ export class GameScene implements IScene {
                         if (this.elapsedTime >= this.timeLimit) {
                             this.gameMessage = "TIME'S UP!";
                             this.engine.state = GameState.GAMEOVER;
+                            this.lab?.note('timeUp');
                             // Emit event for React overlay (time trial results)
                             GameEvents.emit('game_over', {
                                 score: this.engine.stats.score,

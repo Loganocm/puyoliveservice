@@ -55,8 +55,12 @@ type Screen =
   | "replay"
   | "transition";
 
+/** Set when the page is the animation lab (/?lab=<scenario>): straight to the game, no menus. */
+const IS_LAB = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("lab");
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("onboarding"); // Default to onboarding until auth check
+  // Default to onboarding until auth check (the lab goes straight to the game)
+  const [screen, setScreen] = useState<Screen>(IS_LAB ? "game" : "onboarding");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -209,6 +213,7 @@ export default function App() {
 
   // Restore Auth Check
   useEffect(() => {
+    if (IS_LAB) return;
     const initAuth = async () => {
       const isValid = await AuthManager.init();
       if (isValid) {
@@ -735,8 +740,8 @@ export default function App() {
         </div>
       )}
 
-      <VolumeHUD />
-      <BGMPlayer />
+      {!IS_LAB && <VolumeHUD />}
+      {!IS_LAB && <BGMPlayer />}
     </div>
   );
 }
