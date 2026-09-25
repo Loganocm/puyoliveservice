@@ -358,7 +358,7 @@ export const SCENARIOS: Scenario[] = [
     {
         id: 'garbage-small',
         title: 'A few garbage fall into random columns',
-        notes: 'Three garbage arrive, fill the damage meter, and fall after the next placement into three different columns.',
+        notes: 'Three garbage arrive, show as three small icons in the tray, and fall after the next placement into three different columns.',
         covers: ['garbage.receive', 'garbage.fall-partial'],
         seed: 1022,
         queue: ['GY', 'BP', 'RG'],
@@ -378,9 +378,9 @@ export const SCENARIOS: Scenario[] = [
     },
     {
         id: 'garbage-capped-danger',
-        title: 'A 40-garbage attack: danger meter and a capped drop',
-        notes: 'The meter passes 39 and flashes. Only 24 fall after the first placement (RUL-11); the remaining 16 fall after the next.',
-        covers: ['garbage.meter-danger', 'garbage.fall-capped', 'garbage.fall-rows'],
+        title: 'A 40-garbage attack: a rock in the tray and a capped drop',
+        notes: 'The tray shows a rock (30), a big (6) and four small. Only 24 fall after the first placement (RUL-11); the remaining 16 fall after the next.',
+        covers: ['garbage.tray-rock', 'garbage.fall-capped', 'garbage.fall-rows'],
         seed: 1024,
         queue: ['GY', 'BP', 'RG', 'YB'],
         script: [{ f: 2, i: 'G', a: 40 }, { f: 20, i: 'HD' }, { piece: 2, on: 'spawn', plus: 20, i: 'HD' }],

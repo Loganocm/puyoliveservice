@@ -31,6 +31,16 @@ const click = re => async page => { await page.getByText(re).first().click({ tim
 const hover = re => async page => { await page.getByText(re).first().hover({ timeout: 5000 }); };
 const key = k => async page => { await page.keyboard.down(k); await page.waitForTimeout(150); await page.keyboard.up(k); };
 const wait = ms => async page => { await page.waitForTimeout(ms); };
+/** The first visible match among candidate locators. */
+const visible = async (...locators) => {
+    for (const loc of locators) {
+        for (let i = 0; i < await loc.count(); i++) if (await loc.nth(i).isVisible()) return loc.nth(i);
+    }
+    throw new Error('no visible match');
+};
+// Community is a side tab on wide screens and a menu item on phones.
+const community = p => visible(p.getByRole('button', { name: 'Community', exact: true }), p.getByText('Community', { exact: true }), p.getByText('COMMUNITY', { exact: true }));
+const tab = name => async p => { await (await visible(p.getByRole('tab', { name }), p.getByText(name, { exact: true }))).click({ timeout: 5000 }); };
 const toMenu = [['guest', click(/Play as Guest/i)], ['transition', wait(900)], ['menu', wait(2600)]];
 const back = async page => {
     const b = page.getByText(/^back$/i).first();
@@ -52,7 +62,7 @@ const FLOWS = [
         ['hover-multi', hover(/^Multiplayer$/)],
         ['hover-leaderboard', hover(/^Leaderboard$/)],
         ['hover-settings', hover(/^Settings$/)],
-        ['hover-community', hover(/COMMUNITY/)],
+        ['hover-community', async p => { await (await community(p)).hover({ timeout: 5000 }); }],
         ['keyboard-down', key('ArrowDown')],
         ['keyboard-down-2', key('ArrowDown')],
     ]],
@@ -95,10 +105,13 @@ const FLOWS = [
     ['leaderboard', [...toMenu, ['open', click(/^Leaderboard$/)], ['loaded', wait(1200)], ['back', back]]],
     ['community', [
         ...toMenu,
-        ['open', click(/COMMUNITY/)],
-        ['rankings', click(/^Rankings$/)],
-        ['players', click(/^Players$/)],
-        ['activity', click(/^Activity$/)],
+        ['open', async p => { await (await community(p)).click({ timeout: 5000 }); }],
+        ['loaded', wait(1200)],
+        // 0.3.0 renamed Activity to Home and added Forums.
+        ['forums', tab('Forums')],
+        ['rankings', tab('Rankings')],
+        ['players', tab('Players')],
+        ['home', tab('Home')],
         ['close', key('Escape')],
     ]],
     ['multiplayer-lobby', [
@@ -118,7 +131,9 @@ const FLOWS = [
             if (await labelled.count()) await labelled.click({ timeout: 5000 });
             else await p.locator('div.cursor-pointer:has(svg.lucide-user)').first().click({ timeout: 5000 });
         }],
-        ['open-profile', click(/^My Profile$/)],
+        // The item holds an icon and a text node, which an anchored text
+        // match never found (the baseline recording missed it too).
+        ['open-profile', async p => { await (await visible(p.getByRole('button', { name: 'My Profile' }), p.getByText('My Profile'))).click({ timeout: 5000 }); }],
         ['loaded', wait(1200)],
         ['close', key('Escape')],
     ]],

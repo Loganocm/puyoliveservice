@@ -14,7 +14,7 @@
  *     // (browser only) dispatch `keys` as real keyboard events
  *
  * Inputs stamped frame N are applied AFTER the update of frame N, exactly as
- * live play and ReplaySimulator order them (README "The ordering invariant",
+ * live play and ReplaySimulator order them (website/src/content/docs/reference/replay-format.md, "The ordering invariant",
  * now website/src/content/docs/reference/replay-format.md).
  */
 
@@ -380,7 +380,7 @@ export const WITNESS: Record<string, (trace: TraceEvent[], engine: GameEngine) =
     'clear.hidden-row-pop': t => has(t, 'chainStep', e => e.hiddenRow),
 
     'garbage.receive': t => has(t, 'input', e => e.i === 'G'),
-    'garbage.meter-danger': t => has(t, 'meter', e => e.rocks >= 39),
+    'garbage.tray-rock': t => has(t, 'meter', e => e.rocks >= 30),
     'garbage.fall-partial': t => has(t, 'garbageDrop', e => e.amount < 6),
     'garbage.fall-rows': t => has(t, 'garbageDrop', e => e.amount >= 6 && e.amount % 6 === 0),
     'garbage.fall-capped': t => has(t, 'garbageDrop', e => e.amount === 24 && e.remaining > 0),
