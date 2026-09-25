@@ -59,10 +59,15 @@ packages/engine/     THE SIMULATION, shared by client and game server
   src/replay.ts        replay format and ENGINE_VERSION, declared once
   src/env.d.ts         the engine's entire dependency on its host
 src/
-  core/              clock, opponent view, replay, network, audio, settings
+  core/              clock, opponent view, replay, network, input, audio, settings
+  input/             HandlingController: DAS, ARR, rotation and drops per logical frame
+  render/            BoardView (the only board renderer), backdrop, next queue, stat panel, layout
+  theme/             colour, type and theme tokens
   scenes/            Pixi scenes: game, menu, quick play, replay
   screens/           React overlays and menus
-  components/        shared React components
+  components/        shared React components (touch controls, music player, footer)
+  community/         community hub routes and the safe Markdown renderer
+  lab/               the animation lab: inventory, scenarios, driver
 server/
   index.ts           socket handlers, matchmaking, rooms
   GameRoom.ts        per-room state, replay assembly
@@ -70,18 +75,21 @@ server/
   MinesRoom.ts       persistent free-for-all mode
 api/
   src/routes/        REST endpoints
-  src/services/      auth, match, leaderboard, XP
+  src/services/      auth, match, leaderboard, XP, forums, avatars
   prisma/            schema and migrations
 tests/
   engine/            characterization, replay fidelity, clock, opponent view, parity
+  input/             handling
+  lab/               the catalogue test and the browser recorders
   server/            game server units
-  scripts/           the docs governance check
+  core/, community/  client units
+  scripts/           the docs governance check and changelog extraction
   helpers/           deterministic drivers and fixed seeds
 docs/
   adr/               architecture decision records (canonical)
   doc-map.json       which docs pages must change when which code changes
 website/             this documentation site
-scripts/             repository tooling (docs-check)
+scripts/             repository tooling: docs-check, release notes, icon rendering
 ```
 
 ## Where things live
@@ -94,7 +102,12 @@ scripts/             repository tooling (docs-check)
 | Shared frame timeline | `src/core/MatchClock.ts` |
 | Opponent simulation | `src/core/OpponentView.ts` |
 | Replay playback | `src/core/ReplayEngine.ts`, `src/core/ReplaySimulator.ts` |
-| Render loop, input, DAS/ARR | `src/scenes/GameScene.ts` |
+| Game loop: stepping, input, network | `src/scenes/GameScene.ts` |
+| Drawing a board | `src/render/BoardView.ts` |
+| Key latching, DAS and ARR | `src/core/Input.ts`, `src/input/Handling.ts` |
+| Colours, fonts, themes | `src/theme/tokens.ts` |
+| Animations and their scenarios | `src/lab/animations.ts`, `src/lab/scenarios.ts` |
+| Forums | `api/src/services/forum.service.ts`, `src/community/` |
 | Wire alphabet to engine calls | `server/PuyoSimulator.ts` |
 | Matchmaking, rooms, wire validation | `server/index.ts` |
 | Accounts, rating, leaderboard | `api/src/services/` |
@@ -112,3 +125,6 @@ asymmetry is deliberate and explained in
 The engine compiles with **no DOM library and no Node types**, so reaching for
 `document`, `localStorage`, `Audio` or `process` inside it is a compile error.
 Its one host dependency, `console.warn`, is declared in `src/env.d.ts`.
+
+The names used throughout the code and these pages are defined once in the
+[Glossary](/reference/glossary/).

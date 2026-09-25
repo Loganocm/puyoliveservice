@@ -18,7 +18,7 @@
  * the only place both can import from. Nothing here is a runtime dependency on
  * the engine: it is types plus one version string.
  *
- * See README "Replay format" and docs/adr/0002-replay-determinism.md.
+ * See website/src/content/docs/reference/replay-format.md and docs/adr/0002-replay-determinism.md.
  */
 
 /**
@@ -102,7 +102,7 @@ export interface StateHash {
  * The V3 replay file: a seed plus an input log, not board states.
  *
  * A hash stamped frame N describes the board BEFORE the inputs also stamped
- * frame N. See README "The ordering invariant".
+ * frame N. See website/src/content/docs/reference/replay-format.md ("The ordering invariant").
  */
 export interface ReplayFileV3 {
     version: 3;

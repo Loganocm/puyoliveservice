@@ -55,19 +55,24 @@ A change is done when **all** of these are in the same pull request:
 
 ## What CI enforces
 
-`scripts/docs-check.ts` runs on every pull request (the `Docs governance` job)
-and against `origin/main` locally with `npm run docs:check`.
+`scripts/docs-check.ts` runs on every pull request (the `Docs governance` job,
+against the pull request's base branch) and locally with `npm run docs:check`
+(against `origin/main`, or `--base <ref>`). It looks at everything that changed
+since the merge base, committed or not, including new untracked files. The
+rules themselves are pure functions in `scripts/lib/docs-check-core.ts`, each
+with tests in `tests/scripts/docs-check.test.ts`. The step-by-step for
+contributors is [Update the documentation](/guides/update-the-docs/).
 
 | Rule | Fails when | Waivable |
 |---|---|---|
-| Mapped docs | A changed file matches a rule in `docs/doc-map.json` and none of that rule's pages changed | Yes: `Docs-Impact: none - <reason>` |
-| Changelog | Any non-documentation file changed and `CHANGELOG.md` did not | Yes: `Changelog: skip - <reason>` |
-| Behaviour change | A snapshot golden has modified or deleted lines, and the change lacks an `ENGINE_VERSION` change in `packages/engine/src/replay.ts` or a new ADR | No |
+| Mapped docs | A changed file matches a rule's `paths` in `docs/doc-map.json` (a leading `!` excludes) and none of that rule's `docs` changed | Yes: `Docs-Impact: none - <reason>` |
+| Changelog | Any file outside `docOnly` (the site, `docs/`, Markdown files, issue templates, `LICENSE`) changed and `CHANGELOG.md` did not | Yes: `Changelog: skip - <reason>` |
+| Behaviour change | A file under `tests/**/__snapshots__/` lost or changed lines (or was deleted), and neither the `export const ENGINE_VERSION` line in `packages/engine/src/replay.ts` changed nor a new ADR was added | No |
 | ADR format | An ADR lacks `# N. Title`, `**Status:**` or `**Date:**`, or numbers are duplicated or skipped | No |
-| Unmapped code | A new top-level source directory has no rule in the map | No (add a rule) |
+| Unmapped code | A directory under the `sourceRoots` (`src/*`, `server`, `api/src/*`, `api/prisma`, `packages/*/src`, `scripts`, `tests/*`) has no file any rule covers, and is not listed under `unmapped` with a reason | No (add a rule) |
 
-Waivers go in the pull request description or any commit message in the
-branch, on their own line, and **must give a reason**:
+Waivers go in the pull request description or any commit message on the
+branch since the merge base, on their own line, and **must give a reason**:
 
 ```text
 Docs-Impact: none - renames a private helper, no behaviour change
@@ -112,7 +117,9 @@ the rules there, once; the other two files only import it.
   (`GameEngine.handleCheckMatch`). Line numbers go stale; use them only in the
   [findings register](/review/findings/), which is pinned to a commit.
 - **Units.** Timings are in frames at 60 logical fps, with wall time in
-  parentheses. Garbage is in *rocks* or *points*; say which.
+  brackets. Garbage is in *puyos* or *points*; say which.
+- **Terms.** Use the names in the [Glossary](/reference/glossary/), one name per
+  concept.
 - **Tone.** State what the code does, including when it is wrong. A known
   limitation belongs on the page, not in someone's memory.
 - **Diagrams.** Use fenced `mermaid` blocks. They are text, so they are diffed
@@ -123,4 +130,4 @@ the rules there, once; the other two files only import it.
 Release notes are not written separately: they are the `CHANGELOG.md` section
 for the version. Pushing a `vX.Y.Z` tag runs the release workflow, which
 publishes that section as the GitHub release. See
-[Cut a release](/guides/release/) and [Versioning](/reference/versioning/).
+[Release](/guides/release/) and [Versioning](/reference/versioning/).

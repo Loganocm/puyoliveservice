@@ -30,7 +30,7 @@ import gameBgm3 from './resources/bgm/gameplay/flemnco.mp3';
 // Errors and warnings are always kept -- they are what you need when
 // something breaks in the wild. Verbose levels can be restored at runtime
 // with `localStorage.setItem('puyolive_debug', '1')` and a reload.
-// See README section "Logging".
+// See website/src/content/docs/reference/configuration.md ("Logging").
 const debugEnabled =
   import.meta.env.DEV || localStorage.getItem('puyolive_debug') === '1';
 

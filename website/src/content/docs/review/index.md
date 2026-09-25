@@ -104,17 +104,33 @@ the roadmap.
    no rollback, no metrics, no alerting, and a restart drops every live match
    (OPS-01, OPS-02, NET-10).
 
-## Fixed during this review
+## Where things stand after 0.3.0
 
-Small, verified fixes that did not need a design decision were made
-immediately, each with a regression test where one could be written:
+The review found 80 problems; building 0.3.0 and testing it in a real browser
+found 23 more. **42 of the 103 are fixed**, none of them S1. The register has
+the details; by area:
+
+| Area | Baseline | 0.3.0 | What changed |
+|---|---|---|---|
+| Engine design and determinism | B+ | **B+** | Timed games end through the state machine (ENG-07). Snapshot/restore and rulesets are still engine v2 |
+| Rules fidelity | D | **D** | Unchanged: every rules finding waits on the ruleset decision |
+| Netcode and integrity | D | **D** | Liveness, match results, the Mines target board and a broadcast flood fixed (NET-13 to NET-17). The client still decides garbage and top-out |
+| Client and UX | C− | **B** | Frame-exact handling with fast defaults, an original look, touch controls and a sharp canvas on phones, an 18 MB build instead of 91 MB, pooled rendering, and 13 more bugs found while testing in a browser fixed (CLI-21 to CLI-33) |
+| Backend and data | C | **C+** | Avatars by cached URL and compressed responses (API-02); the game server no longer locks players out of sign-in (API-09); forums. Ratings and validation unchanged |
+| Security | C | **C** | Two exposures closed (NET-17, OPS-11); tokens, lockout and validation findings remain |
+| Operations and delivery | C | **C** | API tests, schema drift, docs build and releases in CI; no staging, rollback or monitoring yet |
+| Code quality and testing | C+ | **B−** | 198 client, engine and tooling tests (from about 40), a checked animation catalogue, 85 API tests; no end-to-end tests or lint yet |
+| Documentation | B | **A** | This site, enforced by CI ([ADR 0007](/decisions/0007-documentation-system/)) |
+| Legal and business readiness | F | **D** | All recycled artwork replaced; the name and the missing LICENSE remain |
+
+Fixed before 0.3.0's feature work, during the review itself:
 
 | Finding | Fix |
 |---|---|
 | NET-06 | Spawn-frame moves are now recorded; replays, the opponent view and the server no longer miss them |
 | NET-07 | Reconnecting keeps the player's index, simulator and recorded settings (4 tests) |
 | API-01 | Moderation tables finally have a migration (verified idempotent on fresh and `db push` databases); banned users can no longer log in (3 tests) |
-| OPS-06 | The API suite had rotted outside CI; fixed and now runs in CI against PostgreSQL (66 tests green) |
+| OPS-06 | The API suite had rotted outside CI; fixed and now runs in CI against PostgreSQL |
 | OPS-07 | Game server's default API port corrected |
 | DOC-01 | Documentation site, changelog, release notes and CI enforcement |
 

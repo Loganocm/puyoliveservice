@@ -10,7 +10,7 @@
  * extraction possible: a rule and a sprite size were sitting in the same file,
  * and only one of them belongs on the server.
  *
- * See README "Vocabulary" -> Board.
+ * See website/src/content/docs/reference/glossary.md ("Board").
  */
 
 /** Playfield width in columns. */

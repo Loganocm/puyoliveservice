@@ -43,18 +43,25 @@ same pipeline feeds touch controls.
 
 ## Budgets
 
-Enforced in CI; the build fails when exceeded.
+The targets below are not yet enforced in CI (QA-04); the build is measured
+by hand. The 0.3.0 figures:
 
-| Budget | Limit |
-|---|---|
-| Initial JavaScript (gzip) | 450 KB |
-| Initial transfer before the menu is usable | 1.5 MB |
-| Any single image | 400 KB |
-| Any single audio file | 3 MB |
-| Build output total | 25 MB |
+| Budget | Limit | 0.3.0 |
+|---|---|---|
+| Initial JavaScript (gzip) | 450 KB | about 300 KB |
+| Initial transfer before the menu is usable | 1.5 MB | met: music and screens load later |
+| Any single image | 400 KB | met: the board is drawn from a generated atlas |
+| Any single audio file | 3 MB | **over**: the four tracks are 3.0 to 4.7 MB |
+| Build output total | 25 MB | 18 MB |
 
-Music is Opus in WebM (with AAC for Safari), about 96 kbps, and streamed
-without preloading. Images are WebP or AVIF sized for the screen.
+Screens other than the first path (onboarding, menu, play) load on demand and
+are preloaded once the browser is idle (`src/utils/lazyScreen.tsx`). A
+preloaded screen renders at once; one still loading waits inside its own
+suspense boundary, never the menu's (CLI-30).
+
+Music is AAC (the menu track) and MP3, streamed without preloading. The target
+is Opus in WebM with AAC for Safari, about 96 kbps, which brings every track
+under the audio budget.
 
 ## Audio
 

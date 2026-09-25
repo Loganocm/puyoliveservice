@@ -7,7 +7,7 @@ import { GameEngine } from '@puyolive/engine';
  * wall clock, Math.random, or ambient localStorage — a characterization golden
  * that depends on the environment is worthless as a refactor gate.
  *
- * See README §"Testing" and docs/adr/0002-replay-determinism.md.
+ * See website/src/content/docs/reference/testing.md and docs/adr/0002-replay-determinism.md.
  */
 
 /** Mulberry32, kept deliberately separate from the engine's own PRNG so that

@@ -59,11 +59,12 @@ without real ones (see [Configuration](/reference/configuration/)).
 ## 4. Run the tests
 
 ```bash
-npm test                    # engine + client-core + server suites: no DB, no network, ~1s
+npm test                    # engine, client, server and tooling suites: no DB, no network, ~5 s
 npm run typecheck           # client and tests
 npm run build:engine        # compiles the engine (this is also its type check)
 (cd server && npx tsc --noEmit)   # needs build:engine first
 (cd api && npx tsc --noEmit)
+npx tsc -p scripts          # tooling
 npm test --prefix api       # API suite: needs PostgreSQL and DATABASE_URL
 npm run docs:check          # documentation governance check against origin/main
 ```

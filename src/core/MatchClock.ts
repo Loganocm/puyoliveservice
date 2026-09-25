@@ -17,7 +17,7 @@
  * is real live, and lockstep replay becomes correct by construction. The replay
  * file format is unchanged — this is a timing fix, not a storage change.
  *
- * See README §"Match timing" and docs/adr/0003-shared-match-clock.md.
+ * See website/src/content/docs/reference/frame-timing.md and docs/adr/0003-shared-match-clock.md.
  */
 
 /** Logical simulation rate. One engine frame is 1/60th of a second. */

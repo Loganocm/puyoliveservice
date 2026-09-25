@@ -24,7 +24,7 @@ import { GOLDEN_SEEDS } from '../helpers/scriptedRun';
  *   - The HEURISTIC driver plays well enough to build chains, which is what
  *     puts scoring, cascades and the nuisance tray under comparison.
  *
- * See README "Testing" -> "Coverage floors".
+ * See website/src/content/docs/reference/testing.md ("Coverage floors").
  */
 /** Hash the parts of the state both implementations claim to share. */
 function hashOf(grid: number[][], score: number, gq: number, tray: number): string {

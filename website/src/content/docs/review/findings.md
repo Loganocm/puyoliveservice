@@ -59,7 +59,7 @@ Roadmap items (`P1.3`) are defined on the [roadmap](/roadmap/).
 | ENG-04 | S4 | Open | PRNG state kept as an unbounded float | P1.1 |
 | ENG-05 | S4 | Open | Dead code and comments that contradict behaviour | P0.3 |
 | ENG-06 | S4 | Open | A normal top-out is logged as a warning | P1.1 |
-| ENG-07 | S4 | Open | Timed mode ends the game by writing engine state directly | P1.1 |
+| ENG-07 | S4 | Fixed | Timed mode ends the game by writing engine state directly | P1.1 |
 | NET-01 | S1 | Open | Garbage is decided by the client | P1.4 |
 | NET-02 | S1 | Open | Top-out is decided by the client | P1.4 |
 | NET-03 | S2 | Decision | Going AFK aborts a ranked match with no result | P1.5 |
@@ -72,35 +72,55 @@ Roadmap items (`P1.3`) are defined on the [roadmap](/roadmap/).
 | NET-10 | S3 | Open | One process holds every match; a deploy drops them all | P2.6 |
 | NET-11 | S3 | Open | Snapshot reconcile hides desyncs instead of reporting them | P1.3 |
 | NET-12 | S3 | Open | No engine-version handshake between clients and server | P1.1 |
-| NET-13 | S3 | Open | The server's heartbeat measures board changes, not liveness | P1.5 |
-| CLI-01 | S2 | Open | DAS and ARR depend on monitor refresh rate | P1.6 |
-| CLI-02 | S2 | Open | 91 MB client; a 57 MB WAV streams on the menu | P2.2 |
+| NET-13 | S3 | Fixed | The server's heartbeat measures board changes, not liveness | P1.5 |
+| NET-14 | S2 | Fixed | Players never received their match result | P0.2 |
+| NET-15 | S3 | Fixed | Puyo Mines never sent the target's board | P0.2 |
+| NET-16 | S3 | Open | A replay whose settings never arrived plays with the wrong soft drop | P1.1 |
+| NET-17 | S3 | Fixed | Any client could make the server broadcast the room list to everyone | P2.4 |
+| NET-18 | S4 | Open | Two Puyo Mines events have no rate limit | P2.4 |
+| CLI-01 | S2 | Fixed | DAS and ARR depend on monitor refresh rate | P1.6 |
+| CLI-02 | S2 | Fixed | 91 MB client; a 57 MB WAV streams on the menu | P2.2 |
 | CLI-03 | S3 | Open | 2,000-line scene classes mix every concern | P3.5 |
 | CLI-04 | S3 | Open | No accessibility support | P2.3 |
 | CLI-05 | S3 | Open | No localization | P3.5 |
 | CLI-06 | S3 | Open | Session token in `localStorage` | P2.4 |
-| CLI-07 | S3 | Open | Sound effects use `HTMLAudioElement` | P2.2 |
-| CLI-08 | S4 | Open | ArrowUp rotates regardless of key bindings | P1.6 |
+| CLI-07 | S3 | Fixed | Sound effects use `HTMLAudioElement` | P2.2 |
+| CLI-08 | S4 | Fixed | ArrowUp rotates regardless of key bindings | P1.6 |
 | CLI-09 | S4 | Open | No Content Security Policy; no offline shell | P2.4 |
-| CLI-10 | S3 | Open | Input is applied once per rendered frame, after catch-up | P1.6 |
-| CLI-11 | S2 | Open | Key taps shorter than one frame are dropped | P1.6 |
-| CLI-12 | S2 | Open | Default handling is very slow (DAS 25, ARR 15) | P1.6 |
-| CLI-13 | S2 | Open | Unplayable on phones: no touch controls, blurry canvas | P2.3 |
-| CLI-14 | S2 | Open | No visual identity: recycled sprites and unrelated stock photos | P2.1 |
-| CLI-15 | S3 | Open | Floating music player covers menus and, mid-match, the player's own board | P2.3 |
-| CLI-16 | S3 | Open | In-game text overlaps the HUD and renders in a fallback serif font | P2.1 |
-| CLI-17 | S3 | Open | Every puyo sprite is created and destroyed every frame | P2.2 |
-| CLI-18 | S3 | Open | Phone menu: side tab overlaps buttons, footer wraps and clips | P2.3 |
-| CLI-19 | S4 | Open | Single-player top-out says "YOU LOST" and shows no results | P2.1 |
+| CLI-10 | S3 | Fixed | Input is applied once per rendered frame, after catch-up | P1.6 |
+| CLI-11 | S2 | Fixed | Key taps shorter than one frame are dropped | P1.6 |
+| CLI-12 | S2 | Fixed | Default handling is very slow (DAS 25, ARR 15) | P1.6 |
+| CLI-13 | S2 | Fixed | Unplayable on phones: no touch controls, blurry canvas | P2.3 |
+| CLI-14 | S2 | Fixed | No visual identity: recycled sprites and unrelated stock photos | P2.1 |
+| CLI-15 | S3 | Fixed | Floating music player covers menus and, mid-match, the player's own board | P2.3 |
+| CLI-16 | S3 | Fixed | In-game text overlaps the HUD and renders in a fallback serif font | P2.1 |
+| CLI-17 | S3 | Fixed | Every puyo sprite is created and destroyed every frame | P2.2 |
+| CLI-18 | S3 | Fixed | Phone menu: side tab overlaps buttons, footer wraps and clips | P2.3 |
+| CLI-19 | S4 | Fixed | Single-player top-out says "YOU LOST" and shows no results | P2.1 |
 | CLI-20 | S4 | Open | A slow device is told it is "RECONNECTING…" | P2.3 |
+| CLI-21 | S3 | Fixed | The replay viewer played animations at half speed | P0.2 |
+| CLI-22 | S3 | Fixed | The opponent's garbage tray showed about 70 times the real amount | P0.2 |
+| CLI-23 | S3 | Fixed | The new pair spawned above the visible stage | P2.1 |
+| CLI-24 | S3 | Fixed | Typing a space in a text field was blocked by game input | P2.3 |
+| CLI-25 | S4 | Fixed | A soft drop factor of 0 disabled soft drop | P1.6 |
+| CLI-26 | S3 | Fixed | Settings changed with the keyboard were never saved | P2.3 |
+| CLI-27 | S4 | Fixed | Enter at game over restarted the game under the results screen | P2.3 |
+| CLI-28 | S4 | Fixed | Four sound effects were silent | P2.2 |
+| CLI-29 | S4 | Fixed | Fake "All systems operational" status, stale version and a "MyWebSite" manifest | P2.1 |
+| CLI-30 | S3 | Fixed | Opening any screen for the first time hid the menu and could freeze the account menu open | P2.3 |
+| CLI-31 | S4 | Fixed | A guest's profile showed "Authentication required" | P2.3 |
+| CLI-32 | S4 | Fixed | A hidden in-game settings panel edited settings that do not exist | P0.3 |
+| CLI-33 | S4 | Fixed | The frame-rate notice covered the spawning piece | P2.3 |
 | API-01 | S2 | Fixed | Moderation tables never migrated; bans did not work | P0.2 |
-| API-02 | S2 | Open | Player lists ship megabytes of base64 avatars, uncompressed | P2.2 |
+| API-02 | S2 | Fixed | Player lists ship megabytes of base64 avatars, uncompressed | P2.2 |
 | API-03 | S3 | Open | Elo with fixed K and an inflationary floor; rank by COUNT | P3.1 |
 | API-04 | S4 | Open | Login timing reveals which usernames exist | P2.4 |
 | API-05 | S3 | Open | Seven-day tokens with no revocation; HS256 still accepted | P2.4 |
 | API-06 | S3 | Open | No schema validation; typed access bypassed with `any` | P2.4 |
 | API-07 | S3 | Open | Anyone can lock any account by failing its login | P2.4 |
 | API-08 | S3 | Open | Rate limits and lockouts live in process memory | P4.1 |
+| API-09 | S2 | Fixed | The game server's calls shared one address's rate limits | P2.4 |
+| API-10 | S3 | Open | 20 known-vulnerable API dependencies, 17 in the client workspace | P2.7 |
 | OPS-01 | S2 | Open | `:latest` auto-deploys with no staging or rollback | P2.6 |
 | OPS-02 | S2 | Open | No metrics, tracing, error tracking or alerting | P2.6 |
 | OPS-03 | S3 | Open | Backups every 10 days on the same host, never restore-tested | P0.5 |
@@ -111,6 +131,9 @@ Roadmap items (`P1.3`) are defined on the [roadmap](/roadmap/).
 | OPS-08 | S4 | Open | CORS allowlists duplicated; Socket.IO ignores `CORS_ORIGIN` | P2.4 |
 | OPS-09 | S3 | Open | No supply-chain hardening | P2.6 |
 | OPS-10 | S4 | Open | 88 MB of binaries in git without LFS | P0.5 |
+| OPS-11 | S3 | Fixed | The game server image ran without `NODE_ENV=production` | P2.6 |
+| OPS-12 | S4 | Open | `DB_*` settings are read but unused | P0.3 |
+| OPS-13 | S4 | Fixed | CI tested against PostgreSQL 16; production runs 18 | P0.2 |
 | QA-01 | S2 | Open | No end-to-end, client or socket-layer tests | P2.5 |
 | QA-02 | S3 | Open | No lint or format standard | P0.3 |
 | QA-03 | S3 | Open | No state-coverage or property-based engine tests | P2.5 |
@@ -307,11 +330,13 @@ describes death rules the code does not implement.
 
 ### ENG-07 Timed mode ends the game by writing engine state directly
 
-<span class="sev s4">S4</span> **Open** · `src/scenes/GameScene.ts` (timer, `this.engine.state = GameState.GAMEOVER`)
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/scenes/GameScene.ts` (timer, `this.engine.state = GameState.GAMEOVER`)
 
 The timer sets the state field instead of calling `changeState`, so no state
 hook fires: nothing observing the engine (recorder, replay, opponent) learns
 the game ended. Found by the animation lab, which had to special-case it.
+
+**Fixed:** `GameScene` now ends a timed game with `changeState(GAMEOVER)`, so every observer sees it. Two other endings still write the field (an opponent leaving, a server abort) because `changeState` would report a loss; they belong to ENG-01.
 
 ### ENG-06 A normal top-out is logged as a warning
 
@@ -437,7 +462,7 @@ should send `ENGINE_VERSION` and the server should refuse mismatches with a
 
 ### NET-13 The server's heartbeat measures board changes, not liveness
 
-<span class="sev s3">S3</span> **Open** · `server/index.ts` (heartbeat), `GameScene` (`onBoardChange` throttle)
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `server/index.ts` (heartbeat), `GameScene` (`onBoardChange` throttle)
 
 The heartbeat aborts a match when no `send_board_state` arrives for 7 seconds,
 but clients only send it when their board changes. A connected player whose
@@ -447,26 +472,81 @@ a slow device it does not, and the recorded multiplayer session was aborted
 every time until a dev-only override was added. Liveness needs its own
 periodic ping.
 
+**Fixed:** Inputs (`record_input`) now count as signs of life, and the client sends a board snapshot at least every 2 seconds while its game loop runs (`GameRoom.markAlive`, `findStalledPlayer`, tested in `tests/server/liveness.test.ts`).
+
+### NET-14 Players never received their match result
+
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `server/index.ts` (`handleMatchEnd`), `api/src/routes/matches.routes.ts`
+
+The client listens for `match_result` to show XP, level and rating changes,
+but the server never sent it, and the API's response did not include each
+player's progress to send. Ranked players finished every match without seeing
+what they earned.
+
+**Fixed:** the API returns `player1_stats` and `player2_stats`, and the server
+sends each player their own result (`server/matchResult.ts`, tested).
+
+### NET-15 Puyo Mines never sent the target's board
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `server/index.ts` (`onStateSync`)
+
+The client draws the board of the player it is targeting from
+`mines_target_board`, which the server never emitted, so the target panel was
+always empty.
+
+**Fixed:** `server/minesTarget.ts` picks the target's board and the state sync
+sends it (tested).
+
+### NET-16 A replay whose settings never arrived plays with the wrong soft drop
+
+<span class="sev s3">S3</span> **Open** · `server/GameRoom.ts` (`buildReplayFile`)
+
+If a player's `record_settings` never reaches the server, the replay records
+SDF 10 and soft drop protection on, the defaults of an older client. Current
+clients default to SDF 20, so such a replay diverges from the first soft drop.
+Settings should be part of joining a match, not a separate message.
+
+### NET-17 Any client could make the server broadcast the room list to everyone
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `server/index.ts` (`get_rooms`)
+
+`get_rooms` had no rate limit and answered by broadcasting the room list to
+**every** connected socket, so one client could make the server flood all
+players.
+
+**Fixed:** it answers the sender only, at most five times a second. Room
+changes are still broadcast.
+
+### NET-18 Two Puyo Mines events have no rate limit
+
+<span class="sev s4">S4</span> **Open** · `server/index.ts` (`mines_record_input`, `mines_player_lost`)
+
+Both are validated but not rate-limited, unlike every other gameplay event.
+
 ## Client (CLI)
 
 Context and recommendations: [Client review](/review/client/).
 
 ### CLI-01 DAS and ARR depend on monitor refresh rate
 
-<span class="sev s2">S2</span> **Open** · `src/scenes/GameScene.ts:1141`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `src/scenes/GameScene.ts:1141`
 
 DAS and ARR count calls to `handleInput`, which runs once per *rendered* frame.
 On a 144 Hz monitor, DAS 10 lasts 69 ms; on 60 Hz it lasts 167 ms. Two players
 with identical settings get different handling, which is unfair in a
 competitive game.
 
+**Fixed:** `HandlingController` (`src/input/Handling.ts`) counts DAS and ARR in logical frames and is called once per engine step, in every mode that is played. Tested in `tests/input/handling.test.ts`.
+
 ### CLI-02 91 MB client; a 57 MB WAV streams on the menu
 
-<span class="sev s2">S2</span> **Open** · `src/core/BGMManager.ts:159`, `src/resources/`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `src/core/BGMManager.ts:159`, `src/resources/`
 
 The production build is 91 MB. The menu track is a 57 MB uncompressed WAV
 loaded with `preload = 'auto'`; the backgrounds are up to 8.3 MB JPEGs. The
 first 15 seconds of a visit already transfer 9.6 MB (measured).
+
+**Fixed:** The menu track is a 3.6 MB AAC file, the stock backgrounds and recycled sprite sheets are gone (the board is drawn from a generated atlas), screens load on demand, and the build is 18 MB, of which about 16 MB is four music tracks fetched only when they play. The binaries remain in git history (OPS-10).
 
 ### CLI-03 2,000-line scene classes mix every concern
 
@@ -475,12 +555,16 @@ first 15 seconds of a visit already transfer 9.6 MB (measured).
 Input, networking, simulation stepping, rendering, audio and UI live in one
 class. NET-06 lived here, untested and unnoticed.
 
+**Progress in 0.3.0:** `GameScene` is down to about 1,100 lines and `QuickPlayScene` to about 400: drawing moved to `BoardView`, handling to `HandlingController`, layout to `MatchLayout`. Networking and match flow still share the scene.
+
 ### CLI-04 No accessibility support
 
 <span class="sev s3">S3</span> **Open** · `src/screens/`, `src/components/`
 
 No ARIA attributes anywhere in the React UI, no reduced-motion option, and
 colour is the only way to tell puyos apart.
+
+**Progress in 0.3.0:** a symbol on every puyo colour, a high-contrast theme, a reduced-motion setting, labelled icon buttons and dialogs, and keyboard-reachable menus. No screen-reader pass yet.
 
 ### CLI-05 No localization
 
@@ -497,17 +581,21 @@ cookie with short-lived access tokens removes the exposure.
 
 ### CLI-07 Sound effects use `HTMLAudioElement`
 
-<span class="sev s3">S3</span> **Open** · `src/core/SoundManager.ts:41`
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/core/SoundManager.ts:41`
 
 Media elements have scheduling latency and limited polyphony. Game feedback
 sounds should be pre-decoded `AudioBuffer`s played through Web Audio.
 
+**Fixed:** `SoundManager` decodes every effect once into an `AudioBuffer` and plays it through Web Audio; music fades with gain ramps.
+
 ### CLI-08 ArrowUp rotates regardless of key bindings
 
-<span class="sev s4">S4</span> **Open** · `GameScene.ts:1242`
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `GameScene.ts:1242`
 
 `|| Input.isPressed('ArrowUp')` hard-codes a binding the controls screen cannot
 change.
+
+**Fixed:** Rotation comes only from the bound actions; the hard-coded key went with the input rewrite.
 
 ### CLI-09 No Content Security Policy; no offline shell
 
@@ -515,57 +603,69 @@ change.
 
 ### CLI-10 Input is applied once per rendered frame, after catch-up
 
-<span class="sev s3">S3</span> **Open** · `GameScene.ts` (update loop)
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `GameScene.ts` (update loop)
 
 When the loop advances several logical frames in one rendered frame, input is
 sampled once, after all of them, and stamped on the last frame.
 
+**Fixed:** `GameScene.stepFrame` applies input after **each** engine step, stamped with that step's frame.
+
 ### CLI-11 Key taps shorter than one frame are dropped
 
-<span class="sev s2">S2</span> **Open** · `src/core/Input.ts:49–54`, `:104–107`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `src/core/Input.ts:49–54`, `:104–107`
 
 `isPressed` compares the current key state with a snapshot taken once per
 rendered frame. If key-down and key-up both happen between two frames (a fast
 tap, under ~16 ms), the press is never seen. Found while driving the game with
 scripted input: several of eight quick drops were lost.
 
+**Fixed:** `Input` latches every press until the next logical frame consumes it (`consumePlay`), so a press and release between two frames still counts. Tested, and demonstrated by the `keys-tap-loss` catalogue scenario.
+
 ### CLI-12 Default handling is very slow
 
-<span class="sev s2">S2</span> **Open** · `src/core/SettingsManager.ts:6–12`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `src/core/SettingsManager.ts:6–12`
 
 Defaults are DAS 25 and ARR 15 frames. The first step is instant, but moving a
 pair three columns takes 40 frames (0.67 s) and five columns 70 (1.17 s). Tsu
 moves a pair three columns in 8 frames and five in 12, and TETR.IO defaults to
 DAS 10, ARR 2. New players judge the game on its defaults.
 
+**Fixed:** Three presets, with Standard as the default: Relaxed DAS 16 / ARR 4, Standard 10 / 2, Competitive 7 / 0. Players still on the old untouched defaults are moved to Standard.
+
 ### CLI-13 Unplayable on phones
 
-<span class="sev s2">S2</span> **Open** · `src/scenes/GameScene.ts`, `src/core/Input.ts`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `src/scenes/GameScene.ts`, `src/core/Input.ts`
 
 There are no touch controls, so a phone can open the game but not play it. The
 canvas ignores `devicePixelRatio`, so text and pieces are blurry on high-density
 screens, and the board uses about a third of the screen.
 
+**Fixed:** On-screen touch controls (automatic on touch devices, switchable in settings), a canvas that renders at the device pixel ratio (up to 2), and a portrait layout that gives the board most of the screen.
+
 ### CLI-14 No visual identity
 
-<span class="sev s2">S2</span> **Open** · `src/resources/puyo.png`, `src/resources/backgrounds/`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `src/resources/puyo.png`, `src/resources/backgrounds/`
 
 The pieces are a recycled sprite sheet in the official games' style; the
 backgrounds are unrelated stock photographs (night skies, a gothic hall) that
 compete with the board for attention; menus are generic glass panels. There is
 nothing a player would recognise as *this* game. See also LEG-01.
 
+**Fixed:** An original identity: generated orbs with a symbol per colour, a board and backdrop drawn from theme tokens, the Fredoka typeface, a new mark and wordmark, and themes including a high-contrast one ([Visual identity](/design/visual-identity/)).
+
 ### CLI-15 Floating music player covers menus and, mid-match, the player's own board
 
-<span class="sev s3">S3</span> **Open** · `src/components/BGMPlayer.tsx`
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/components/BGMPlayer.tsx`
 
 On desktop it covers the footer and the edge of the last menu button; in a
 multiplayer match at 800 × 720 it covers the bottom rows of the player's own
 board; on a phone it covers the bottom of the board and the results screen.
 
+**Fixed:** The player docks into the menu, and elsewhere collapses to a small chip in the corner, clear of both boards and the results screen.
+
 ### CLI-16 In-game text overlaps the HUD and renders in a fallback serif font
 
-<span class="sev s3">S3</span> **Open** · `GameScene.spawnFloatingText`, `src/style.css`
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `GameScene.spawnFloatingText`, `src/style.css`
 
 Floating texts ("Warning! +1", "OFFSET! -1") are placed at fixed coordinates
 that overlap the NEXT label and the board. They ask for the Rajdhani font,
@@ -573,29 +673,37 @@ which is only imported by `src/style.css`, a 604-line stylesheet nothing
 imports, so they render in the browser's default serif. Seen in the recorded
 multiplayer match.
 
+**Fixed:** All in-game text is drawn by `BoardView.callout` in the game's typeface, placed relative to the board and kept inside it; a new chain callout replaces the previous one.
+
 ### CLI-17 Every puyo sprite is created and destroyed every frame
 
-<span class="sev s3">S3</span> **Open** · `GameScene.draw`, `drawOpponent`
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `GameScene.draw`, `drawOpponent`
 
 `draw()` removes and destroys every sprite and creates a new one for each puyo,
 every frame, for both boards: about 150 allocations per frame at mid-game.
 That is steady garbage-collection pressure, the classic cause of
 micro-stutter, which is worst exactly when the screen is busiest.
 
+**Fixed:** `BoardView` draws from `SpritePool`s and allocates nothing per frame.
+
 ### CLI-18 Phone menu: side tab overlaps buttons, footer wraps and clips
 
-<span class="sev s3">S3</span> **Open** · `src/App.tsx`, `src/components/PuyoFooter.tsx`
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/App.tsx`, `src/components/PuyoFooter.tsx`
 
 On a phone the Community side tab covers the left of the Multiplayer button,
 the footer wraps "© 2026 PUYO LIVE" onto three lines, and "All systems
 operational" is clipped behind the music button.
 
+**Fixed:** On phones Community is a menu item instead of a side tab, and the footer fits one line with real server status.
+
 ### CLI-19 Single-player top-out says "YOU LOST" and shows no results
 
-<span class="sev s4">S4</span> **Open** · `GameScene` (`onStateChange`), `src/screens/GameOverScreen.tsx`
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `GameScene` (`onStateChange`), `src/screens/GameOverScreen.tsx`
 
 There is no opponent in practice mode, so there is nobody to lose to. The
 screen should say "Game over" and show the run's score, best chain and time.
+
+**Fixed:** The results screen says "Game over" in solo modes and shows score, best chain, puyos cleared, time and personal bests; Enter or R plays again.
 
 ### CLI-20 A slow device is told it is "RECONNECTING…"
 
@@ -603,6 +711,135 @@ screen should say "Game over" and show the run's score, best chain and time.
 
 Falling behind the shared clock because the device cannot render fast enough
 is reported as a connection problem.
+
+**Progress in 0.3.0:** single player now tells a slow device the truth ("About N fps: effects reduced") and lowers effects; the multiplayer message is unchanged.
+
+### CLI-21 The replay viewer played animations at half speed
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/scenes/ReplayScene.ts`
+
+Animation timings in the replay viewer were written for the double-speed engine
+(ADR 0001) and never restated, so every effect lasted twice as long as in play.
+
+**Fixed:** replays use the same `BoardView` as play, and effects follow the
+playback speed.
+
+### CLI-22 The opponent's garbage tray showed about 70 times the real amount
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `GameScene` (opponent tray)
+
+The tray added `garbageQueue` (puyos) to `nuisanceTray` (points), so an
+incoming 5 read as about 350.
+
+**Fixed:** `pendingGarbage()` converts points to puyos, for both boards.
+
+### CLI-23 The new pair spawned above the visible stage
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/core/RenderConstants.ts`
+
+The pair appears above the board, and the stage cut it off: players saw it
+only once it fell into the board.
+
+**Fixed:** a taller stage with room above the board for the spawning pair and
+the garbage tray.
+
+### CLI-24 Typing a space in a text field was blocked by game input
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/core/Input.ts`
+
+The game's key handler cancelled Space and the arrow keys everywhere, so
+usernames, search boxes and forum posts could not contain spaces.
+
+**Fixed:** keys typed into editable fields never reach the game
+(`Input.isEditable`).
+
+### CLI-25 A soft drop factor of 0 disabled soft drop
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/screens/SettingsScreen.tsx`
+
+The slider allowed 0, which divided gravity by zero into "never".
+
+**Fixed:** the minimum is 1.
+
+### CLI-26 Settings changed with the keyboard were never saved
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/screens/SettingsScreen.tsx`
+
+Only mouse changes called `save()`; keyboard and controller changes were lost
+on reload.
+
+**Fixed:** every change saves.
+
+### CLI-27 Enter at game over restarted the game under the results screen
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/screens/GameOverScreen.tsx`
+
+The Enter that ended a hard drop could land on the results screen and restart
+the game behind it.
+
+**Fixed:** Enter or R restarts, after a short guard, and the screen closes
+first.
+
+### CLI-28 Four sound effects were silent
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/core/SoundManager.ts`
+
+`pop`, `menu_select`, `menu_back` and `level_up` were played but had no sound
+files.
+
+**Fixed:** they map to existing sounds; the redundant `pop` calls were removed.
+
+### CLI-29 Fake status, stale version and a "MyWebSite" manifest
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/components/PuyoFooter.tsx`, `public/site.webmanifest`
+
+The footer always said "All systems operational" and "v0.1.1", and the web
+manifest named the app "MyWebSite".
+
+**Fixed:** the footer shows the real connection state and the build's version;
+the manifest names the game, with its own icons.
+
+### CLI-30 Opening any screen for the first time hid the menu
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `src/App.tsx`, `src/utils/lazyScreen.tsx`
+
+Screens load on demand, and every one shared a single suspense boundary with
+the menu, so the first time any screen opened the whole menu was hidden for a
+moment. Opening the profile from the account menu this way cut off the menu's
+closing animation, which then stayed on screen behind the profile for good.
+Found while recording the screen flows.
+
+**Fixed:** a screen whose code has been preloaded renders at once, and one
+still loading waits inside its own boundary.
+
+### CLI-31 A guest's profile showed "Authentication required"
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/screens/ProfileScreen.tsx`
+
+A guest opening My Profile got a red API error, a "Level" badge with no number,
+and on phones a header that wrapped badly.
+
+**Fixed:** guests see what an account gives them and a way to sign in; the
+account menu offers "Sign in" instead of "Log out".
+
+### CLI-32 A hidden in-game settings panel edited settings that do not exist
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/ui/SettingsOverlay.ts`
+
+F2 toggled a Pixi panel that was never added to the stage, with sliders for a
+spawn delay and a line clear delay the game does not have.
+
+**Fixed:** removed, with the unused `lineClearDelay` setting.
+
+### CLI-33 The frame-rate notice covered the spawning piece
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `src/components/PerfNotice.tsx`
+
+The notice added earlier in 0.3.0 sat at the top centre of the screen, where
+the next pair appears.
+
+**Fixed:** bottom left on wide screens, one short line above the spawn point on
+phones.
 
 ## Backend and security (API)
 
@@ -619,13 +856,15 @@ database and on one built with `db push`) and by removing the catch-all.
 
 ### API-02 Player lists ship megabytes of base64 avatars, uncompressed
 
-<span class="sev s2">S2</span> **Open** · `api/prisma/schema.prisma:17`, `api/src/routes/users.routes.ts`
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `api/prisma/schema.prisma:17`, `api/src/routes/users.routes.ts`
 
 Avatars are stored as base64 data URIs (up to ~150 KB) in the `users` row and
 returned inline. Measured with 30 realistic users: `/users/all?limit=20`
 returns **2.9 MB**, and `/users/search`, which the UI calls as you type,
 returns **3.65 MB**. Responses are not compressed and carry no cache headers.
 Uploads are checked by data-URI prefix only.
+
+**Fixed:** Lists and profiles return a versioned `avatar_url`; `GET /api/users/:id/avatar` serves the image with an `ETag` and, when versioned, a year-long immutable cache. Responses are compressed. Uploads are still checked by declared type only, but the image is always served with that type and `nosniff`, never inline.
 
 ### API-03 Elo with fixed K and an inflationary floor; rank by COUNT
 
@@ -666,6 +905,30 @@ real owner out for up to 30 minutes.
 <span class="sev s3">S3</span> **Open** · `api/src/index.ts`, `auth.service.ts:26`
 
 They reset on every deploy and cannot be shared by a second instance.
+
+### API-09 The game server's calls shared one address's rate limits
+
+<span class="sev s2">S2</span> **Fixed in 0.3.0** · `api/src/routes/auth.routes.ts`, `api/src/index.ts`, `server/ApiClient.ts`
+
+The game server verifies every player who signs in through
+`POST /api/auth/verify`, which allowed 60 calls per 15 minutes per address.
+All of those calls come from the game server's one address, so after the 60th
+sign-in in 15 minutes every other player silently failed to authenticate and
+could not play ranked. Its result recording also counted against the global
+100-a-minute limit.
+
+**Fixed:** the game server sends its internal key, and requests carrying a
+valid key skip the per-address limits (`hasInternalKey`, tested in
+`api/src/tests/internal-limits.test.ts`).
+
+### API-10 Known-vulnerable dependencies
+
+<span class="sev s3">S3</span> **Open** · `api/package-lock.json`, `package-lock.json`
+
+`npm audit` reports 20 advisories in the API (1 critical, 13 high, 5 moderate,
+1 low) and 17 in the client workspace (9 high, 7 moderate, 1 low). Most are
+transitive; each needs checking for reachability before upgrading. Dependabot
+now proposes updates weekly. See OPS-05.
 
 ## Operations (OPS)
 
@@ -736,6 +999,32 @@ SBOM or image signing; Watchtower holds the Docker socket.
 
 <span class="sev s4">S4</span> **Open** · `src/resources/`
 
+### OPS-11 The game server image ran without `NODE_ENV=production`
+
+<span class="sev s3">S3</span> **Fixed in 0.3.0** · `server/Dockerfile`, `docker-compose.yml`
+
+The development switches (`DEV_FIXED_SEED`, `SIMULATED_LATENCY_MS`,
+`EXTRA_CORS_ORIGINS`, `HEARTBEAT_TIMEOUT_MS`) are ignored only in production,
+but nothing set production for the game server, so any of them set on the
+host would have taken effect: a fixed seed would make every match's pieces
+known in advance.
+
+**Fixed:** the image and the Compose service set `NODE_ENV=production`.
+
+### OPS-12 `DB_*` settings are read but unused
+
+<span class="sev s4">S4</span> **Open** · `api/src/config/index.ts`, `api/.env.example`
+
+`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` are read into
+`config.db` and listed in the example, but Prisma reads only `DATABASE_URL`.
+Setting them changes nothing.
+
+### OPS-13 CI tested against PostgreSQL 16; production runs 18
+
+<span class="sev s4">S4</span> **Fixed in 0.3.0** · `.github/workflows/verify.yml`
+
+**Fixed:** the API tests run against the same major version as production.
+
 ## Quality and testing (QA)
 
 Context: [Quality review](/review/quality-and-testing/).
@@ -780,6 +1069,8 @@ Context: [Legal and IP review](/review/legal-and-ip/).
 "Puyo Puyo" is a registered trademark of SEGA. The sprite sheets follow the
 layout of fan "skins" derived from official art, and their origin is not
 recorded. This blocks any monetization and is a takedown risk.
+
+**Progress in 0.3.0:** all recycled artwork is gone (CLI-14); the name remains the decision.
 
 ### LEG-02 No LICENSE file; asset licences unrecorded
 

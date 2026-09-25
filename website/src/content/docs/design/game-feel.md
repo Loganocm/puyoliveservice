@@ -19,10 +19,13 @@ that can be tested.
 | Input is timed to the simulation | Presses applied on the logical frame they occurred in | CLI-10 |
 | Bindings are respected | No hard-coded keys | CLI-08 |
 
-**Design.** Key events are latched as they arrive, with their timestamp, into
-a queue. Each logical frame consumes the events that happened before its
-instant. A press and release inside one frame still yields one press. DAS and
-ARR count logical frames, so they mean the same everywhere.
+**How it works (0.3.0; all four met).** `Input` latches every press as it
+arrives and keeps it until the next logical frame consumes it
+(`Input.consumePlay`), so a press and release inside one frame still yields
+one press. `HandlingController` runs once per engine step, after the step, and
+counts DAS and ARR in logical frames, so they mean the same on every display.
+Rotation and drops come only from bound actions. Details:
+[Frame timing](/reference/frame-timing/#handling).
 
 ## Handling defaults
 
@@ -30,7 +33,7 @@ New players judge the game on its defaults (CLI-12).
 
 | Preset | DAS | ARR | SDF | Notes |
 |---|---|---|---|---|
-| **Standard** (default) | 10 | 2 | 20 | Moves three columns in 14 frames, close to Tsu's feel |
+| **Standard** (default) | 10 | 2 | 20 | Moves three columns in 12 frames (Tsu: 8) |
 | Relaxed | 16 | 4 | 10 | For new or casual players |
 | Competitive | 7 | 0 | 40 | Instant ARR, sonic soft drop |
 | Custom | any | any | any | Existing settings screen |
@@ -54,14 +57,14 @@ such as during chains.
 
 Every action a player takes must be visibly acknowledged within one frame:
 
-| Action | Feedback |
-|---|---|
-| Move, rotate | Piece moves; a quiet tick sound |
-| Blocked move or rotation | A tiny nudge toward the wall and a muted tick, so a failed input is distinguishable from a missed one |
-| Lock | Group squash; landing sound |
-| Pop | Glow, burst and chain numeral; the pitch of the chain sound rises with each link |
-| Garbage incoming | Tray icons appear above the board; a warning tick |
-| Danger | Board rim and death ring pulse |
+| Action | Feedback | In 0.3.0 |
+|---|---|---|
+| Move, rotate | Piece moves (the second puyo swings round on a rotation); a quiet tick sound | Yes |
+| Blocked move or rotation | A tiny nudge toward the wall and a muted tick, so a failed input is distinguishable from a missed one | Not yet |
+| Lock | Group squash; landing sound | Squash yes; a sound only on hard drop |
+| Pop | Glow, burst and chain callout; a different, rising chain sound for each link up to 7 | Yes |
+| Garbage incoming | Tray icons appear above the board and a "+N INCOMING" callout; a warning tick | Icons and callout yes; no sound |
+| Danger | Board rim and death ring pulse | Yes |
 
 ## How it is verified
 

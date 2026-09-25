@@ -20,7 +20,7 @@ import {
  * change must be accompanied by an ADR in docs/adr/ explaining why. Never run
  * `vitest -u` to make a red suite green without understanding what moved.
  *
- * See README §"Testing" -> "Characterization goldens".
+ * See website/src/content/docs/reference/testing.md ("Characterization goldens").
  */
 describe('piece sequence', () => {
   /**

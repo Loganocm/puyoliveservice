@@ -24,7 +24,7 @@ export type GameState = typeof GameState[keyof typeof GameState];
  * it at the player's settings, replay and the opponent view point it at the
  * values recorded for that player.
  *
- * See README "Vocabulary".
+ * See website/src/content/docs/reference/glossary.md.
  */
 export interface EngineConfig {
     /** Soft-drop factor: gravity multiplier while soft drop is held. >= 40 is sonic drop. */
@@ -59,7 +59,7 @@ export interface GameStats {
  * `activePiece.mainColor` were the same concept under two names, and every
  * spawn had to translate between them. One spelling, declared once.
  *
- * See README "Vocabulary" -> Piece.
+ * See website/src/content/docs/reference/glossary.md ("Pieces").
  */
 export interface PuyoPair {
     mainColor: PuyoColor;
@@ -364,7 +364,7 @@ export class GameEngine {
      * advanced 144/sec while the simulation advanced 60/sec worth of time. The
      * field therefore meant "update calls" in single player and "logical
      * frames" in multiplayer. One meaning is worth more than the smoothness.
-     * See README "Vocabulary" and docs/adr/0005-fixed-step-engine.md.
+     * See website/src/content/docs/reference/glossary.md and docs/adr/0005-fixed-step-engine.md.
      */
     public update() {
         this.frameCount++;

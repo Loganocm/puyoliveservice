@@ -9,7 +9,7 @@
  * engine's out-of-bounds lock guard report through it, and both are worth
  * keeping -- a silent guard is a guard you find out about from a bug report.
  * `warn` is also the one console method production builds never silence
- * (README "Logging"), so it is the right channel for these.
+ * (website/src/content/docs/reference/configuration.md, "Logging"), so it is the right channel for these.
  *
  * Declared narrowly on purpose: only `warn`, and nothing else from the host.
  */

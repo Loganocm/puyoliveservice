@@ -96,7 +96,7 @@ Tsu clamps the multiplier to 999; Puyo Live does not clamp it.
 | Event | Tsu (frames at 60 fps) | Puyo Live |
 |---|---|---|
 | Vanish animation per link | 50, constant | 18 at link 1, then `9 × (1 + 0.3 × 1.3^(n−1))`: 37 at link 10, 312 at link 19 (RUL-03) |
-| Move a pair 1 / 3 / 5 columns (held) | 4 / 8 / 12 | 0 / 40 / 70 with default DAS 25, ARR 15: the first step is instant, the rest are slow (CLI-12) |
+| Move a pair 1 / 3 / 5 columns (held) | 4 / 8 / 12 | 0 / 12 / 16 with the Standard preset (DAS 10, ARR 2) since 0.3.0; 0 / 40 / 70 at baseline with DAS 25, ARR 15 (CLI-12) |
 | Natural fall | Level-dependent, half-cell steps | 30 frames per row, whole-cell steps |
 
 ## Field and piece rules

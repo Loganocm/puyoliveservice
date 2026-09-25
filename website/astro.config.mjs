@@ -88,7 +88,15 @@ export default defineConfig({
             { slug: 'architecture/netcode' },
             { slug: 'architecture/rating-and-matchmaking' },
             { slug: 'architecture/client-platform' },
+            { slug: 'architecture/community' },
             { slug: 'architecture/platform' },
+          ],
+        },
+        {
+          label: 'Design',
+          items: [
+            { slug: 'design/visual-identity' },
+            { slug: 'design/game-feel' },
           ],
         },
         {
@@ -101,16 +109,16 @@ export default defineConfig({
         },
         {
           label: 'How-to guides',
-          autogenerate: { directory: 'guides' },
+          items: [{ autogenerate: { directory: 'guides' } }],
         },
         {
           label: 'Reference',
-          autogenerate: { directory: 'reference' },
+          items: [{ autogenerate: { directory: 'reference' } }],
         },
         {
           label: 'Decisions (ADRs)',
           collapsed: true,
-          autogenerate: { directory: 'decisions' },
+          items: [{ autogenerate: { directory: 'decisions' } }],
         },
         {
           label: 'Releases',
