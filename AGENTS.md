@@ -84,7 +84,12 @@ and say which you ran.
   views and feed them frames. The render loop allocates nothing per frame: use
   `SpritePool`.
 - **Colours come from `src/theme/tokens.ts`** (canvas) or the `--pl-*` CSS custom
-  properties (menus). No new hard-coded hex colours in UI code.
+  properties (menus). Piece colours come from the active skin through
+  `getPieceStyle`. No new hard-coded hex colours in UI code.
+- **Skins are data and untrusted.** Pieces are composed into one atlas from the
+  skin (`src/skins/`); the renderer never knows which skin it draws. Imported
+  files are size-checked before decoding, SVG loads only through `<img>`, and
+  skin text renders as text. Skins never touch the simulation.
 - **The server decides results.** Clients are never trusted for scores, wins,
   garbage validation or ratings. Internal endpoints need `X-Internal-Key`.
 - **User text is never HTML.** Forum posts go through `src/community/markdown.ts`
@@ -98,7 +103,8 @@ and say which you ran.
 |---|---|
 | A game rule or timing | `packages/engine/src/`, tests in `tests/engine/`, `reference/rules.md` or `reference/frame-timing.md`, maybe `ENGINE_VERSION` |
 | Handling (DAS, ARR, keys) | `src/input/Handling.ts`, `src/core/Input.ts`, `tests/input/`, `design/game-feel.md` |
-| How the board looks or moves | `src/render/`, `src/core/PieceArt.ts`, `design/visual-identity.md`; check with the animation lab |
+| How the board looks or moves | `src/render/`, `design/visual-identity.md`; check with the animation lab |
+| How pieces look, or the skin format | `src/skins/` (painters, format, composer), `tests/skins/`, `reference/skins.md`, `design/visual-identity.md` |
 | A new animation or board situation | a scenario in `src/lab/scenarios.ts`; `tests/lab/catalogue.test.ts` checks it; `reference/animation-catalogue.md` |
 | A socket event | `server/index.ts`, `src/core/NetworkManager.ts`, `reference/wire-protocol.md` |
 | A REST endpoint | `api/src/routes/`, `api/src/services/`, tests in `api/src/tests/`, `reference/api.md` |

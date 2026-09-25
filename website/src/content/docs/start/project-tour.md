@@ -63,6 +63,7 @@ src/
   input/             HandlingController: DAS, ARR, rotation and drops per logical frame
   render/            BoardView (the only board renderer), backdrop, next queue, stat panel, layout
   theme/             colour, type and theme tokens
+  skins/             how pieces look: skin format, painters, atlas composer, built-in skins
   scenes/            Pixi scenes: game, menu, quick play, replay
   screens/           React overlays and menus
   components/        shared React components (touch controls, music player, footer)
@@ -106,6 +107,7 @@ scripts/             repository tooling: docs-check, release notes, icon renderi
 | Drawing a board | `src/render/BoardView.ts` |
 | Key latching, DAS and ARR | `src/core/Input.ts`, `src/input/Handling.ts` |
 | Colours, fonts, themes | `src/theme/tokens.ts` |
+| How pieces look; skins | `src/skins/` ([Skins](/reference/skins/)) |
 | Animations and their scenarios | `src/lab/animations.ts`, `src/lab/scenarios.ts` |
 | Forums | `api/src/services/forum.service.ts`, `src/community/` |
 | Wire alphabet to engine calls | `server/PuyoSimulator.ts` |

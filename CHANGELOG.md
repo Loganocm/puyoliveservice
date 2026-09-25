@@ -20,6 +20,33 @@ Finding IDs such as `NET-06` refer to the
 
 ## [Unreleased]
 
+### Added
+
+- **Skins** ([ADR 0008](docs/adr/0008-skins-are-data.md),
+  [Skins](website/src/content/docs/reference/skins.md)): choose how the pieces
+  look in Settings, Display. A skin is a folder, or a .zip of one, holding a
+  `skin.json` (name, colours, symbols, style) and any images it wants to
+  replace; whatever it leaves out is drawn for it, in its colours, as osu!
+  skins fall back to the default. Import a .zip, a folder or loose files;
+  drop in a classic community `puyo.png` sheet as it is, under any name;
+  export any skin as an editable template; delete imports. Imported skins
+  stay on the device. A walkthrough is
+  [Make a skin](website/src/content/docs/guides/make-a-skin.md).
+- Built-in skins: **Circuit** (the new default), **Tile** (Circuit on
+  rounded squares), **Contrast** (the high-contrast theme's piece colours)
+  and **Gel** (the 0.3.0 look).
+
+### Changed
+
+- **CLI-34**: new default piece art, Circuit, built for clarity at play size:
+  a crisp outline, a flat rail that joins same-colour pieces at full width
+  (so groups read as solid capsules and blocks, with the centre of 2×2 blocks
+  filled), a raised cap with a machined bevel, a hard-edged gloss band and an
+  engraved symbol. Garbage is a bolted steel plate; the ghost, tray icons and
+  death marker share the crisp, outlined finish.
+- Piece colours now belong to the skin rather than the theme. Players on the
+  high-contrast theme start on the Contrast skin.
+
 ## [0.3.0] - 2026-09-25
 
 A new look, frame-exact controls, phone play, a community hub, and a

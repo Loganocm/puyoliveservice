@@ -54,7 +54,7 @@ team is told about problems before players are.*
 
 | Item | Resolves | Design | Status |
 |---|---|---|---|
-| P2.1 Original visual identity and theme system | CLI-14, CLI-16, CLI-19, CLI-23, CLI-29, LEG-01 (art) | [Visual identity](/design/visual-identity/) | **Done** for in-game art, text, results and theme tokens (0.3.0); menus are themed but keep their layouts |
+| P2.1 Original visual identity, theme system and skins | CLI-14, CLI-16, CLI-19, CLI-23, CLI-29, CLI-34, LEG-01 (art) | [Visual identity](/design/visual-identity/), [Skins](/reference/skins/) | **Done** for in-game art, text, results and theme tokens (0.3.0), and the Circuit default with player skins (after 0.3.0); menus are themed but keep their layouts |
 | P2.2 Performance: asset pipeline and budgets, pooled rendering, Web Audio, API payloads | CLI-02, CLI-07, CLI-17, CLI-28, API-02 | [Client platform](/architecture/client-platform/#budgets) | **Done** for every listed finding (0.3.0); budgets in CI move to P2.5 |
 | P2.3 Mobile and accessibility: touch controls, device pixel ratio, reduced motion, glyphs, ARIA, docked music player, menu quality of life | CLI-04, CLI-13, CLI-15, CLI-18, CLI-24–27, CLI-30, CLI-31, CLI-33 | [Client platform](/architecture/client-platform/#mobile) | **Done** except CLI-04 (0.3.0); a screen-reader pass remains |
 | P2.4 Security and data: cookie sessions, shared Zod protocol, CSP, avatar storage, retention, account deletion and export, socket limits | CLI-06, CLI-09, API-04–07, API-09 (fixed), OPS-08, NET-17 (fixed), NET-18, LEG-03 | [Platform](/architecture/platform/#security) | Planned |
@@ -82,7 +82,7 @@ to talk.*
 | Item | Resolves | Status |
 |---|---|---|
 | P4.1 Horizontal scale: gateways, match workers, Redis | API-08, NET-10 | Planned; only when metrics require |
-| P4.2 Brand and monetisation (cosmetic themes, supporter tier) after legal clearance | LEG-01 | Planned |
+| P4.2 Brand and monetisation (cosmetic skins and themes, supporter tier) after legal clearance | LEG-01 | Planned; the skin format (ADR 0008) is the vehicle for cosmetics |
 | P4.3 Desktop wrapper (Tauri) and store presence | | Planned |
 | P4.4 Anti-cheat analytics (input-timing anomaly detection) | | Planned |
 

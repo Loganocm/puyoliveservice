@@ -2,7 +2,7 @@
 
 A competitive falling-puyo puzzle game for the browser: real-time 1v1 matches
 with ratings and replays, a free-for-all mode (Puyo Mines), solo modes with
-personal bests, play on phones, and a community hub with forums.
+personal bests, play on phones, custom skins, and a community hub with forums.
 
 **Play:** [puyo.live](https://puyo.live) · **Handbook:** `website/` (run
 `npm run docs:dev`) · **Changes:** [CHANGELOG.md](CHANGELOG.md)
@@ -76,7 +76,7 @@ npm run docs:build        # build the handbook; fails on broken links
 | Directory | What |
 |---|---|
 | `packages/engine/` | The simulation: deterministic, pure, shared by the client and the game server |
-| `src/` | The client: rendering (`render/`), input (`input/`), scenes, React screens, the community hub, the animation lab |
+| `src/` | The client: rendering (`render/`), skins (`skins/`), input (`input/`), scenes, React screens, the community hub, the animation lab |
 | `server/` | The game server: matchmaking, rooms, input relay, replay recording, Puyo Mines |
 | `api/` | The REST API: accounts, matches and replays, ratings, leaderboard, forums, administration |
 | `website/` | The handbook |

@@ -84,7 +84,8 @@ one is missing.
 
 ## In the browser
 
-The client keeps per-device state in `localStorage`. None of it is sent to the
+The client keeps per-device state in `localStorage`, and imported skins in
+IndexedDB (database `puyolive`, store `skins`). None of it is sent to the
 server except the session token.
 
 | Key | Holds |
@@ -93,6 +94,7 @@ server except the session token.
 | `puyolive_settings` | Handling (DAS, ARR, SDF, soft drop protection), volumes and screen shake, with a version for migrations |
 | `puyolive_controls`, `puyolive_controller_bindings` | Keyboard and controller bindings |
 | `puyolive_theme`, `puyolive_glyphs`, `puyolive_reduced_motion` | Theme, colour-blind symbols on puyos, reduced motion |
+| `puyolive_skin` | The chosen skin's id ([Skins](/reference/skins/)) |
 | `puyolive_touch_controls` | Forces on-screen controls on or off |
 | `puyolive_solo_bests`, `puyolive_last_solo_mode` | Personal bests per solo mode, and the last mode played |
 | `puyolive_debug` | `1` restores verbose console logging in a production build |

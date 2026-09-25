@@ -8,7 +8,7 @@ sidebar:
 ## Running the tests
 
 ```bash
-npm test                      # client, engine, server and tooling: 198 tests, ~5 s
+npm test                      # client, engine, server and tooling: 231 tests, ~5 s
 npm run test:watch
 npm run test:coverage         # v8 coverage of packages/engine and src/core
 npm run typecheck             # client and tests
@@ -47,6 +47,7 @@ npm --prefix api run db:migrate && npm --prefix api test
 | `tests/server/*` | 14 | Room indices across reconnects, liveness, match result delivery, the Mines target board |
 | `tests/core/*` | 10 | Personal bests, the frame-rate monitor |
 | `tests/community/*` | 11 | The safe Markdown subset (no HTML, safe links only) and community routes |
+| `tests/skins/*` | 33 | The skin format: manifest defaults and validation, element names, classic-sheet bit order, which source draws each slot; reading zips and folders within limits; every built-in skin parses |
 | `tests/scripts/*` | 21 | The documentation check and changelog extraction |
 | `api/src/tests/*` | 85 | Accounts, bans, matches, ratings, leaderboard, avatars, compression, forums, rate limits for the game server |
 

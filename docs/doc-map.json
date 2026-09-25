@@ -60,7 +60,6 @@
       "paths": [
         "src/render/**",
         "src/theme/**",
-        "src/core/PieceArt.ts",
         "src/core/ResourceManager.ts",
         "src/core/RenderConstants.ts",
         "src/core/SceneManager.ts",
@@ -73,6 +72,18 @@
         "website/src/content/docs/design/visual-identity.md",
         "website/src/content/docs/reference/animation-catalogue.md",
         "website/src/content/docs/architecture/client-platform.md"
+      ]
+    },
+    {
+      "name": "Skins",
+      "paths": [
+        "src/skins/**",
+        "src/components/SkinPicker.tsx"
+      ],
+      "docs": [
+        "website/src/content/docs/reference/skins.md",
+        "website/src/content/docs/design/visual-identity.md",
+        "website/src/content/docs/guides/make-a-skin.md"
       ]
     },
     {
@@ -177,7 +188,8 @@
         "src/core/PersonalBests.ts",
         "src/core/FrameRateMonitor.ts",
         "!src/screens/CommunityScreen.tsx",
-        "!src/components/TouchControls.tsx"
+        "!src/components/TouchControls.tsx",
+        "!src/components/SkinPicker.tsx"
       ],
       "docs": [
         "website/src/content/docs/architecture/client-platform.md",

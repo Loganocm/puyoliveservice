@@ -5,8 +5,10 @@ sidebar:
   order: 1
 ---
 
-**Status:** adopted in 0.3.0. The implementation is `src/theme/` and
-`src/core/PieceArt.ts`; this page is the specification they follow.
+**Status:** adopted in 0.3.0; pieces redrawn as the Circuit skin, and skins
+made player-selectable, after 0.3.0. The implementation is `src/theme/` (board,
+menus) and `src/skins/` (pieces); this page is the specification they follow.
+The skin file format is on [Skins](/reference/skins/).
 
 ## Why
 
@@ -27,37 +29,70 @@ handful of strong decisions applied everywhere, not from lavish art.
    neighbours visibly *fuse*. You can see a group forming before it pops.
 4. **Drawn in code.** Pieces, board, icons and backgrounds are generated at
    runtime. Nothing to license, nothing to download, and sharp at any size and
-   pixel density.
-5. **One source of truth.** A single set of theme tokens drives the canvas
+   pixel density. Players can replace the pieces with a skin of their own.
+5. **Hard edges.** Pieces are built from crisp shapes: outlines, flat colour,
+   hard-edged highlights. Nothing on a piece is blurred, so it reads cleanly at
+   play size, on a 1x screen as well as a 3x one.
+6. **One source of truth.** A single set of theme tokens drives the canvas
    (PixiJS) and the menus (CSS), so they cannot drift apart.
 
-## Pieces: gel orbs
+## Pieces: Circuit
 
-Each puyo is a **gel orb**: a soft body with a lit rim, a darker core and a
-specular highlight, drawn procedurally for each of the 16 neighbour
-combinations. Where two same-colour orbs touch, the join fills in with a smooth
-bridge, so a group reads as one fused body.
+The default skin, **Circuit**, draws each puyo like a keycap on a rail:
+
+- a **crisp outline** in a deep shade of the piece colour;
+- a flat, saturated **rail** that joins same-colour neighbours at full width,
+  so a group reads as one solid capsule or block, with no necks and no seams
+  (a small filler closes the centre of 2x2 blocks);
+- a raised **cap** on each piece with a machined **bevel** (light along the
+  top, shadow along the bottom), a hard-edged **gloss band** and one small,
+  sharp **glint**;
+- the colour's **symbol engraved** in the cap: a dark cut with a light lip.
+
+Garbage is a **bolted steel plate**: the same build in grey, with no gloss, a
+recessed centre and four rivets. The ghost is the piece's outline with a faint
+fill. Tray icons and the death-cell reticle use the same flat-and-outlined
+finish.
 
 Orbs have **no faces**. The official characters' eyes are the most
-recognisable part of that design and the part most clearly owned by it; an orb
-without a face is unmistakably this game's own.
+recognisable part of that design and the part most clearly owned by it; a
+piece without a face is unmistakably this game's own.
 
-Each colour carries a **glyph**, a small embossed shape in the core, so colour
-is never the only cue:
+Each colour carries a **symbol**, so colour is never the only cue:
 
-| Colour | Token | Hex (dark theme) | Glyph |
-|---|---|---|---|
-| Red | `piece.red` | `#FF5A6A` | circle |
-| Green | `piece.green` | `#3DDC97` | triangle |
-| Blue | `piece.blue` | `#4C8DFF` | square |
-| Yellow | `piece.yellow` | `#FFD23F` | diamond |
-| Purple | `piece.purple` | `#B57BFF` | plus |
-| Garbage | `piece.garbage` | `#8A93A6` | none; frosted, with a hairline cross-hatch |
+| Colour | Hex | Symbol |
+|---|---|---|
+| Red | `#FF5A6A` | circle |
+| Green | `#3DDC97` | triangle |
+| Blue | `#4C8DFF` | square |
+| Yellow | `#FFD23F` | diamond |
+| Purple | `#B57BFF` | plus |
+| Garbage | `#8A93A6` | none; a bolted plate |
 
 The hues are spaced around the wheel *and* separated in lightness (yellow
 lightest, blue darkest), which keeps them apart under the common colour-vision
-deficiencies. The glyphs can be switched to bold for players who need them and
-off for players who do not (accessibility settings).
+deficiencies. Symbols can be switched to bold for players who need them and
+off for players who do not; bold symbols are drawn over imported art too.
+
+### Skins
+
+Pieces come from the player's **skin** (Settings, Display). Built in:
+
+| Skin | Look |
+|---|---|
+| **Circuit** (default) | The keycaps above, round |
+| **Tile** | The same finish on rounded squares, in the manner of modern block-puzzle games |
+| **Contrast** | Circuit in maximum-contrast colours (formerly the high-contrast theme's pieces) |
+| **Gel** | The soft glossy orbs of 0.3.0, joined like beads |
+
+A skin is a folder: a `skin.json` and any images it wants to replace, in the
+way of osu! skins; everything it leaves out is drawn by its style in its
+colours. Players import skins as a .zip or a folder, export any skin as an
+editable template, and can drop in a classic community `puyo.png` sheet as it
+is. The format is specified on [Skins](/reference/skins/), and
+[Make a skin](/guides/make-a-skin/) walks through making one. Skins are
+cosmetic only: they never touch the simulation, and they stay on the
+player's device.
 
 ## Board
 
@@ -126,8 +161,12 @@ It responds gently to play (a brief brightening on big chains).
 The token set supports multiple themes without new art:
 
 - **Midnight** (default): the dark palette above.
-- **Daybreak**: a light variant for bright rooms.
-- **High contrast**: pure black board, saturated pieces, bold glyphs.
+- **Daybreak**: a light variant for bright rooms (defined, not yet offered).
+- **High contrast**: pure black board and bright edges.
+
+Themes colour the board and menus; piece colours belong to the skin. Players
+who chose the high-contrast theme before skins existed start on the Contrast
+skin.
 
 ## What this does not change
 

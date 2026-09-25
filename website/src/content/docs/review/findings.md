@@ -111,6 +111,7 @@ Roadmap items (`P1.3`) are defined on the [roadmap](/roadmap/).
 | CLI-31 | S4 | Fixed | A guest's profile showed "Authentication required" | P2.3 |
 | CLI-32 | S4 | Fixed | A hidden in-game settings panel edited settings that do not exist | P0.3 |
 | CLI-33 | S4 | Fixed | The frame-rate notice covered the spawning piece | P2.3 |
+| CLI-34 | S3 | Fixed | Soft, dated piece art; players could not change or share it | P2.1 |
 | API-01 | S2 | Fixed | Moderation tables never migrated; bans did not work | P0.2 |
 | API-02 | S2 | Fixed | Player lists ship megabytes of base64 avatars, uncompressed | P2.2 |
 | API-03 | S3 | Open | Elo with fixed K and an inflationary floor; rank by COUNT | P3.1 |
@@ -840,6 +841,23 @@ the next pair appears.
 
 **Fixed:** bottom left on wide screens, one short line above the spawn point on
 phones.
+
+### CLI-34 Soft, dated piece art; players could not change or share it
+
+<span class="sev s3">S3</span> **Fixed after 0.3.0 (unreleased)** · `src/core/PieceArt.ts`, `src/theme/tokens.ts`
+
+The 0.3.0 gel orbs used blurred radial shading, soft highlights and small,
+faint symbols, and joined through narrow bridges that read as beads: next to
+modern block-puzzle games (TETR.IO) they looked soft and dated at play size.
+The art was one hard-coded function with colours wired into each theme, so a
+player could not change it, and the community's existing skins could not be
+used.
+
+**Fixed:** a new default, Circuit (crisp outline, full-width seamless joins,
+bevelled cap, hard gloss band, engraved symbols), and a skin system: skins are
+folders of `skin.json` plus optional images, with osu!-style fallback to a
+painted style, classic community sheets read as they are, and import, export
+and removal in Settings ([Skins](/reference/skins/), ADR 0008).
 
 ## Backend and security (API)
 

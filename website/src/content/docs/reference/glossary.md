@@ -101,6 +101,10 @@ is keyed by socket, identity by user.
 | `ReplaySimulator` | Two engines fed by a replay's log |
 | `BoardFrame` | Everything `BoardView` needs to draw one board, from an engine (`engineFrame`) or a bare grid (`gridFrame`) |
 | `BoardView` | The only thing that draws a board |
+| **skin** | A folder of `skin.json` and element images that decides how pieces look ([Skins](/reference/skins/)) |
+| **style** / **painter** | The code that draws whatever a skin leaves out: `circuit` or `gel` (`src/skins/painters/`) |
+| **atlas** | The one texture every skin is composed into, in a fixed layout (`src/skins/atlas.ts`) |
+| **junction** | The filler drawn over the centre of a 2×2 same-colour block, where full-width joins leave a notch |
 | **golden** | A characterization snapshot: a behaviour contract, not test output |
 
 ## The rules and presentation boundary
@@ -109,7 +113,8 @@ is keyed by socket, identity by user.
 |---|---|---|
 | `packages/engine/src/Constants.ts` | The rules: `COLS`, `ROWS`, `HIDDEN_ROWS`, `TOTAL_ROWS`, `PuyoColor` | Anything, including the server |
 | `src/core/RenderConstants.ts` | How it looks: `CELL_SIZE`, board placement | The client only |
-| `src/theme/tokens.ts` | Colours, fonts and themes | The client only |
+| `src/theme/tokens.ts` | Colours, fonts and themes; the active skin's piece colours | The client only |
+| `src/skins/` | How pieces look: the skin format, painters and the atlas | The client only |
 
 The engine compiles with no DOM and no Node types, so reaching for
 `document`, `localStorage`, `Audio` or `process` inside it is a compile error.

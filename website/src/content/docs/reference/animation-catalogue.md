@@ -17,6 +17,9 @@ list rather than a memory. It has three parts:
   and captured as a video with exact keyframes, plus every menu flow and a real
   two-player match.
 
+The lab always draws with the default skin, whatever the player chose, so
+recordings compare across machines ([Skins](/reference/skins/)).
+
 `tests/lab/catalogue.test.ts` (95 tests) runs every engine-driven scenario
 headless and fails if a scenario does not witness what it claims, if any
 action in the inventory is not demonstrated by some scenario, if any reachable
