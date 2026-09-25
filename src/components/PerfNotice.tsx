@@ -25,24 +25,28 @@ export function PerfNotice() {
     };
   }, []);
 
+  // Kept clear of the board: bottom left on wide screens, where nothing is
+  // drawn; one short line above the spawn point on phones. At top centre it
+  // used to cover the piece as it spawned.
   return (
-    <AnimatePresence>
-      {fps !== null && (
-        <motion.div
-          role="status"
-          className="fixed left-1/2 top-4 z-[120] -translate-x-1/2 pointer-events-none"
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-        >
-          <div className="flex items-start gap-3 max-w-[92vw] sm:max-w-md px-4 py-3 rounded-2xl bg-black/75 backdrop-blur-md border border-white/10 text-sm text-white/85">
-            <Gauge className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "var(--pl-state-warning, #FFB23F)" }} />
-            <p>
-              Running at about {fps} fps, so effects are reduced. Closing other tabs or apps helps the game run smoothly.
-            </p>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className="fixed z-[120] pointer-events-none left-1/2 -translate-x-1/2 top-2 sm:top-auto sm:bottom-4 sm:left-4 sm:translate-x-0">
+      <AnimatePresence>
+        {fps !== null && (
+          <motion.div
+            role="status"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 text-xs sm:text-sm text-white/85 whitespace-nowrap sm:whitespace-normal sm:max-w-xs"
+          >
+            <Gauge className="w-4 h-4 shrink-0" style={{ color: "var(--pl-state-warning)" }} />
+            <span className="sm:hidden">About {fps} fps: effects reduced</span>
+            <span className="hidden sm:inline">
+              Running at about {fps} fps, so effects are reduced. Closing other tabs or apps helps.
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

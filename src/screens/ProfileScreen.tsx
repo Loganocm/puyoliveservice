@@ -26,7 +26,12 @@ interface MatchHistoryEntry {
 export const ProfileScreen: React.FC<{
   onClose: () => void;
   onWatchReplay: () => void;
-}> = ({ onClose, onWatchReplay }) => {
+  /** Leave guest play for the sign-in screen. */
+  onSignIn?: () => void;
+}> = ({ onClose, onWatchReplay, onSignIn }) => {
+  // A guest has no account to load: show what signing in gives instead of
+  // the API's "Authentication required".
+  const guest = AuthManager.isGuest;
   const [user, setUser] = useState(AuthManager.currentUser);
   const [matches, setMatches] = useState<MatchHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +66,10 @@ export const ProfileScreen: React.FC<{
   }, []);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!user || guest) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -143,13 +151,18 @@ export const ProfileScreen: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Profile"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto"
+    >
       <div className="w-full max-w-4xl bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-        <div className="p-8 overflow-y-auto custom-scrollbar">
+        <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-6">
-              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 shadow-lg shadow-blue-500/20 flex items-center justify-center text-4xl font-bold border border-white/10">
+          <div className="flex justify-between items-start gap-4 mb-6 sm:mb-8">
+            <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+              <div className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 shadow-lg shadow-blue-500/20 flex items-center justify-center text-2xl sm:text-4xl font-bold border border-white/10">
                 {user?.avatar_url ? (
                   <img
                     src={user.avatar_url}
@@ -208,7 +221,7 @@ export const ProfileScreen: React.FC<{
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 mb-2">
-                    <h1 className="text-3xl font-bold text-white">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">
                       {user?.username}
                     </h1>
                     {!AuthManager.isGuest && (
@@ -222,13 +235,21 @@ export const ProfileScreen: React.FC<{
                     )}
                   </div>
                 )}
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-blue-300">
-                    Level {user?.level}
-                  </div>
-                  <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-amber-400">
-                    {user?.elo_rating} Elo
-                  </div>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  {guest ? (
+                    <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-white/60 whitespace-nowrap">
+                      Playing as a guest
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-blue-300 whitespace-nowrap">
+                        Level {user?.level ?? 1}
+                      </div>
+                      <div className="bg-white/5 px-3 py-1 rounded-full border border-white/10 text-sm font-medium text-amber-400 whitespace-nowrap">
+                        {user?.elo_rating ?? 1000} Elo
+                      </div>
+                    </>
+                  )}
                   {(user as any)?.is_admin && (
                     <div className="flex items-center gap-1 bg-red-500/15 border border-red-500/30 px-3 py-1 rounded-full">
                       <ShieldCheck size={13} className="text-red-400" />
@@ -242,16 +263,34 @@ export const ProfileScreen: React.FC<{
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
+              aria-label="Close profile"
+              className="p-2 shrink-0 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
             >
-              <div className="text-sm font-medium uppercase tracking-wider">
-                Close
-              </div>
+              <X size={20} />
             </button>
           </div>
 
+          {guest ? (
+            <div className="text-center py-10 px-4 border-2 border-dashed border-white/10 rounded-xl">
+              <p className="text-lg font-bold text-white">Your games aren't being saved</p>
+              <p className="mt-2 text-sm text-white/50 max-w-md mx-auto">
+                Sign in or create an account to play ranked, earn a rating and
+                levels, and keep your match history and replays.
+              </p>
+              {onSignIn && (
+                <button
+                  onClick={onSignIn}
+                  className="mt-6 px-5 py-2.5 rounded-lg text-sm font-bold text-white transition-transform hover:scale-[1.03] active:scale-95"
+                  style={{ background: "var(--pl-accent-primary)" }}
+                >
+                  Sign in or create an account
+                </button>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Tabs */}
-          <div className="flex gap-1 bg-black/20 p-1 rounded-xl mb-8 w-fit">
+          <div className="flex gap-1 bg-black/20 p-1 rounded-xl mb-6 sm:mb-8 w-fit">
             <button
               onClick={() => setActiveTab("history")}
               className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${
@@ -383,7 +422,7 @@ export const ProfileScreen: React.FC<{
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white/5 border border-white/5 p-6 rounded-2xl">
                 <div className="text-white/40 text-xs font-bold uppercase tracking-wider mb-2">
                   Total Games
@@ -440,6 +479,8 @@ export const ProfileScreen: React.FC<{
                 )}
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

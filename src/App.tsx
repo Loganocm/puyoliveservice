@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { lazyScreen } from "@/utils/lazyScreen";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Gamepad2,
@@ -40,35 +41,26 @@ import { NetworkManager } from "@/core/NetworkManager";
 /*
  * Screens off the first path (onboarding -> menu -> play) load on demand, so
  * the first paint does not wait for the admin panel or the community hub.
- * They are prefetched once the menu is idle, so opening one is still instant.
+ * They are preloaded once the menu is idle, so opening one is still instant
+ * (src/utils/lazyScreen.tsx).
  */
-const screenLoaders = {
-  multiplayer: () => import("@/screens/MultiplayerLobby"),
-  leaderboard: () => import("@/screens/LeaderboardScreen"),
-  settings: () => import("@/screens/SettingsScreen"),
-  controls: () => import("@/screens/ControlsScreen"),
-  replay: () => import("@/screens/ReplayOverlay"),
-  quickplay: () => import("@/screens/QuickPlayScreen"),
-  profile: () => import("@/screens/ProfileScreen"),
-  community: () => import("@/screens/CommunityScreen"),
-  admin: () => import("@/screens/AdminScreen"),
-};
-const MultiplayerLobby = lazy(() => screenLoaders.multiplayer().then(m => ({ default: m.MultiplayerLobby })));
-const LeaderboardScreen = lazy(() => screenLoaders.leaderboard().then(m => ({ default: m.LeaderboardScreen })));
-const SettingsScreen = lazy(() => screenLoaders.settings().then(m => ({ default: m.SettingsScreen })));
-const ControlsScreen = lazy(() => screenLoaders.controls().then(m => ({ default: m.ControlsScreen })));
-const ReplayOverlay = lazy(() => screenLoaders.replay().then(m => ({ default: m.ReplayOverlay })));
-const QuickPlayScreen = lazy(() => screenLoaders.quickplay().then(m => ({ default: m.QuickPlayScreen })));
-const ProfileScreen = lazy(() => screenLoaders.profile().then(m => ({ default: m.ProfileScreen })));
-const CommunityScreen = lazy(() => screenLoaders.community().then(m => ({ default: m.CommunityScreen })));
-const AdminScreen = lazy(() => screenLoaders.admin().then(m => ({ default: m.AdminScreen })));
+const MultiplayerLobby = lazyScreen(() => import("@/screens/MultiplayerLobby"), m => m.MultiplayerLobby);
+const LeaderboardScreen = lazyScreen(() => import("@/screens/LeaderboardScreen"), m => m.LeaderboardScreen);
+const SettingsScreen = lazyScreen(() => import("@/screens/SettingsScreen"), m => m.SettingsScreen);
+const ControlsScreen = lazyScreen(() => import("@/screens/ControlsScreen"), m => m.ControlsScreen);
+const ReplayOverlay = lazyScreen(() => import("@/screens/ReplayOverlay"), m => m.ReplayOverlay);
+const QuickPlayScreen = lazyScreen(() => import("@/screens/QuickPlayScreen"), m => m.QuickPlayScreen);
+const ProfileScreen = lazyScreen(() => import("@/screens/ProfileScreen"), m => m.ProfileScreen);
+const CommunityScreen = lazyScreen(() => import("@/screens/CommunityScreen"), m => m.CommunityScreen);
+const AdminScreen = lazyScreen(() => import("@/screens/AdminScreen"), m => m.AdminScreen);
+const SCREENS = [MultiplayerLobby, LeaderboardScreen, SettingsScreen, ControlsScreen, ReplayOverlay, QuickPlayScreen, ProfileScreen, CommunityScreen, AdminScreen];
 
 let prefetched = false;
-/** Warm every lazy screen in the background, once, when the browser is idle. */
+/** Preload every screen in the background, once, when the browser is idle. */
 function prefetchScreens() {
   if (prefetched) return;
   prefetched = true;
-  const run = () => Object.values(screenLoaders).forEach(load => { load().catch(() => undefined); });
+  const run = () => SCREENS.forEach(screen => { void screen.preload(); });
   if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 4000 });
   else setTimeout(run, 1500);
 }
@@ -415,9 +407,9 @@ export default function App() {
                             setShowUserMenu(false);
                             setScreen("onboarding");
                           }}
-                          className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/5 font-medium transition-colors flex items-center gap-2"
+                          className={`w-full text-left px-4 py-3 text-sm hover:bg-white/5 font-medium transition-colors flex items-center gap-2 ${AuthManager.isGuest ? "text-white" : "text-red-400"}`}
                         >
-                          Log Out
+                          {AuthManager.isGuest ? "Sign in" : "Log Out"}
                         </button>
                       </motion.div>
                     )}
@@ -748,6 +740,10 @@ export default function App() {
       {showProfile && (
         <ProfileScreen
           onClose={() => setShowProfile(false)}
+          onSignIn={() => {
+            setShowProfile(false);
+            handleSignIn();
+          }}
           onWatchReplay={() => {
             setShowProfile(false);
             setScreen("replay");

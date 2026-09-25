@@ -216,10 +216,6 @@ export class NetworkManager {
             this.emit('mines_player_died_broadcast', data);
         });
 
-        this.socket.on('mines_server_death', (data: any) => {
-            this.emit('mines_server_death', data);
-        });
-
         this.socket.on('mines_state_sync', (data: any) => {
             this.emit('mines_state_sync', data);
         });

@@ -155,7 +155,6 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
     NetworkManager.on("mines_player_list", onPlayerList);
     NetworkManager.on("mines_target_updated", onTargetUpdated);
     NetworkManager.on("mines_player_died_broadcast", onDiedBroadcast);
-    NetworkManager.on("mines_server_death", onDied as any);
     GameEvents.on("mines_died", onDied);
     GameEvents.on("mines_left", onLeft);
     GameEvents.on("mines_level_up", onLevelUp);
@@ -165,7 +164,6 @@ export function QuickPlayScreen({ onLeave }: QuickPlayScreenProps) {
       NetworkManager.off("mines_player_list", onPlayerList);
       NetworkManager.off("mines_target_updated", onTargetUpdated);
       NetworkManager.off("mines_player_died_broadcast", onDiedBroadcast);
-      NetworkManager.off("mines_server_death", onDied as any);
       GameEvents.off("mines_died", onDied);
       GameEvents.off("mines_left", onLeft);
       GameEvents.off("mines_level_up", onLevelUp);

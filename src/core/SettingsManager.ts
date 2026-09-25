@@ -47,7 +47,6 @@ export class SettingsManager {
 
   // Line Clear Delay (frames to wait during clear animation)
   // 0 = Instant, 20 = Standard
-  public static lineClearDelay = 20;
 
   // Master Volume (0 to 100)
   // Master Volume (0 to 100) - controls overall volume
@@ -74,7 +73,6 @@ export class SettingsManager {
       das: this.das,
       arr: this.arr,
       sdf: this.sdf,
-      lineClearDelay: this.lineClearDelay,
       masterVolume: this.masterVolume,
       bgmVolume: this.bgmVolume,
       sfxVolume: this.sfxVolume,
@@ -94,7 +92,6 @@ export class SettingsManager {
         if (parsed.sdf !== undefined) this.sdf = parsed.sdf;
         else if (parsed.softDropSpeed !== undefined) this.sdf = parsed.softDropSpeed;
 
-        if (parsed.lineClearDelay !== undefined) this.lineClearDelay = parsed.lineClearDelay;
         if (parsed.masterVolume !== undefined) {
           this.masterVolume = parsed.masterVolume;
           // Migration: If loading old float volume (between 0 and 1 exclusive)

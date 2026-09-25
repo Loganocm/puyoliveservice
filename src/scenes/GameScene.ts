@@ -12,7 +12,6 @@ import { NetworkManager } from '../core/NetworkManager';
 import { MatchClock } from '../core/MatchClock';
 import { OpponentView } from '../core/OpponentView';
 import { GameEvents } from '../core/GameEvents';
-import { SettingsOverlay } from '../ui/SettingsOverlay';
 import { BGMManager } from '../core/BGMManager';
 import type { LabController } from '../lab/LabDriver';
 import { BoardView, engineFrame, pendingGarbage } from '../render/BoardView';
@@ -41,7 +40,6 @@ export class GameScene implements IScene {
     private opponentFrame: BoardFrame | null = null;
     private opponentLabel: Text | null = null;
     private uiContainer: Container;
-    private settingsOverlay!: SettingsOverlay;
     private scoreShown = -1;
     private scoreText = '0';
 
@@ -247,12 +245,6 @@ export class GameScene implements IScene {
             NetworkManager.on('receive_board_state', onBoard);
             this.networkListeners.push({ event: 'receive_board_state', cb: onBoard });
 
-            const onOpponentWon = (_data: any) => {
-                // Handled by opponent_lost
-            };
-            NetworkManager.on('opponent_won', onOpponentWon);
-            this.networkListeners.push({ event: 'opponent_won', cb: onOpponentWon });
-
             const onOpponentLost = (_data: any) => {
                 console.log("[GameScene] Opponent Lost! Triggering Win.");
                 this.gameMessage = "YOU WIN!";
@@ -380,8 +372,6 @@ export class GameScene implements IScene {
         NetworkManager.on('match_found', onMatchFound);
         this.networkListeners.push({ event: 'match_found', cb: onMatchFound });
 
-        this.settingsOverlay = new SettingsOverlay();
-        // this.container.addChild(this.settingsOverlay.container); // Temporarily remove to debug ghost rectangle
 
         // Listen for React overlay events
         GameEvents.on('game_resume', this.handleGameResume);
@@ -576,11 +566,6 @@ export class GameScene implements IScene {
         this.labStepped = false;
 
         try {
-            // Toggle Settings Overlay
-            if (Input.isPressed('F2')) {
-                this.settingsOverlay.toggle();
-            }
-
             // Custom Pause/Escape Handling (works with keyboard Escape OR controller Start)
             const pauseDown = Input.isActionDown('pause');
             const pausePressed = Input.isActionPressed('pause');
