@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import "@fontsource-variable/fredoka";
 import "./index.css";
+import { applyThemeToDocument, FONTS } from './theme/tokens';
 
 // Game Imports
 import { SceneManager } from './core/SceneManager';
@@ -56,6 +58,13 @@ const initGame = async () => {
   
   try {
     if (!labId) NetworkManager.connect(); // Connect to server
+    // Canvas text is rasterised once, so the display face must be loaded
+    // before the first scene draws any. Bounded so a font failure cannot
+    // hold the game back: the fallback stack is fine.
+    await Promise.race([
+      document.fonts.load(`600 32px ${FONTS.display}`),
+      new Promise(resolve => setTimeout(resolve, 1500)),
+    ]).catch(() => undefined);
     await SceneManager.init(1000, 900, appDiv);
     await ResourceManager.load();
     await SoundManager.load();
@@ -109,6 +118,8 @@ const initGame = async () => {
     console.error("Failed to initialize game:", error);
   }
 };
+
+applyThemeToDocument();
 
 // Render React UI
 createRoot(document.getElementById("root")!).render(<App />);

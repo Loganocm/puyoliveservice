@@ -11,14 +11,18 @@
 /** Size of one board cell in pixels, before scene scaling. */
 export const CELL_SIZE = 60;
 
-/** Fallback tint per PuyoColor, indexed by its numeric value. Used where a
- *  sprite is unavailable; the sprite sheet is the normal path. */
-export const PUYO_COLORS = [
-  0x000000, // None
-  0xFF0000, // Red
-  0x00FF00, // Green
-  0x0000FF, // Blue
-  0xFFFF00, // Yellow
-  0x800080, // Purple
-  0x808080  // Garbage
-];
+/*
+ * Match layout, in the scenes' 1000 x 1000 base coordinates (SceneManager
+ * scales that box to fit the window). A piece spawns four rows above the
+ * visible board (the two hidden rows, then two more of open sky), so the
+ * board sits low enough for all of that to be on screen.
+ */
+
+/** Left edge of the player's board: centred in the base width. */
+export const BOARD_LEFT = (1000 - 6 * CELL_SIZE) / 2;
+/** Top edge of the player's visible board: four rows of spawn space above it. */
+export const BOARD_TOP = 4 * CELL_SIZE + 10;
+/** Space between the board and the panels either side of it. */
+export const SIDE_GAP = 28;
+/** Size of the opponent's board relative to the player's. */
+export const OPPONENT_SCALE = 0.42;

@@ -24,6 +24,9 @@ export {
     GameEngine,
     GameState,
     DEFAULT_ENGINE_CONFIG,
+    POP_ANIM_FRAMES,
+    FALL_STEP_FRAMES,
+    chainScaledDuration,
 } from './GameEngine.js';
 
 export type {

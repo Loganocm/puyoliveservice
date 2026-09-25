@@ -63,6 +63,9 @@ export class OpponentView {
     /** The simulated board, for rendering. */
     get board() { return this.engine.board; }
 
+    /** The whole simulation, for the board renderer. Read it; never drive it. */
+    get simulation(): Readonly<GameEngine> { return this.engine; }
+
     /** The opponent's active piece, or null between pieces. */
     get activePiece() { return this.engine.activePiece; }
 

@@ -1,20 +1,49 @@
+/**
+ * Handling presets, in logical frames (1/60 s). "Standard" is the default:
+ * it moves a pair three columns in 14 frames, close to Puyo Puyo Tsu. The old
+ * default (DAS 25, ARR 15) took 40 frames, which is what made the game feel
+ * slow to new players (CLI-12). See design/game-feel.md.
+ */
+export const HANDLING_PRESETS = {
+  relaxed: { das: 16, arr: 4, sdf: 10 },
+  standard: { das: 10, arr: 2, sdf: 20 },
+  competitive: { das: 7, arr: 0, sdf: 40 },
+} as const;
+
+export type HandlingPreset = keyof typeof HANDLING_PRESETS;
+
+/** Bumped when defaults change in a way untouched settings should follow. */
+const HANDLING_VERSION = 2;
+
 export class SettingsManager {
   // --- HANDLING SETTINGS ---
 
-  // DAS: Delayed Auto Shift (frames before auto-repeat)
-  // Competitive standard: 5-10 frames (83ms - 167ms at 60fps)
-  // Default changed to 25 per user request
-  public static das = 25;
+  // DAS: Delayed Auto Shift (logical frames before auto-repeat).
+  public static das: number = HANDLING_PRESETS.standard.das;
 
-  // ARR: Auto Repeat Rate (frames between auto-repeat steps)
-  // 0 = Instant (Teleport to wall), 1 = 60Hz, 2 = 30Hz
-  // Default changed to 15 per user request
-  public static arr = 15;
+  // ARR: Auto Repeat Rate (logical frames between auto-repeat steps).
+  // 0 = straight to the wall.
+  public static arr: number = HANDLING_PRESETS.standard.arr;
 
-  // SDF: Soft Drop Factor (multiplier for gravity)
-  // 40 = Instant/Sonic Drop, 6 = Fast, 2 = Default
-  // User requested default 10
-  public static sdf = 10;
+  // SDF: Soft Drop Factor (gravity multiplier while soft dropping).
+  // 40 or more = sonic drop.
+  public static sdf: number = HANDLING_PRESETS.standard.sdf;
+
+  /** The preset the handling values match, or null for custom values. */
+  public static get handlingPreset(): HandlingPreset | null {
+    for (const [name, p] of Object.entries(HANDLING_PRESETS) as [HandlingPreset, typeof HANDLING_PRESETS[HandlingPreset]][]) {
+      if (p.das === this.das && p.arr === this.arr && p.sdf === this.sdf) return name;
+    }
+    return null;
+  }
+
+  public static applyHandlingPreset(name: HandlingPreset): void {
+    const p = HANDLING_PRESETS[name];
+    this.das = p.das;
+    this.arr = p.arr;
+    this.sdf = p.sdf;
+    this.save();
+  }
 
   // Line Clear Delay (frames to wait during clear animation)
   // 0 = Instant, 20 = Standard
@@ -41,6 +70,7 @@ export class SettingsManager {
 
   public static save() {
     localStorage.setItem('puyolive_settings', JSON.stringify({
+      handlingVersion: HANDLING_VERSION,
       das: this.das,
       arr: this.arr,
       sdf: this.sdf,
@@ -77,6 +107,17 @@ export class SettingsManager {
         if (parsed.screenShake !== undefined) this.screenShake = parsed.screenShake;
         if (parsed.bgmVolume !== undefined) this.bgmVolume = parsed.bgmVolume;
         if (parsed.sfxVolume !== undefined) this.sfxVolume = parsed.sfxVolume;
+
+        // Players still on the version-1 defaults never chose them: move them
+        // to Standard. Anyone who changed a value keeps it.
+        if ((parsed.handlingVersion ?? 1) < HANDLING_VERSION) {
+          if (this.das === 25 && this.arr === 15) {
+            this.das = HANDLING_PRESETS.standard.das;
+            this.arr = HANDLING_PRESETS.standard.arr;
+            if (this.sdf === 10) this.sdf = HANDLING_PRESETS.standard.sdf;
+          }
+          this.save();
+        }
       } catch (e) {
         console.warn('[SettingsManager] Corrupt settings data, resetting:', e);
         localStorage.removeItem('puyolive_settings');

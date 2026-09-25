@@ -15,22 +15,30 @@ export class SceneManager {
   public static screenWidth: number = 1000;
   public static screenHeight: number = 900;
 
-  // Base game dimensions (logical size for game elements)
+  // Base game dimensions (logical size for game elements). Tall enough for
+  // the rows above the board where pieces spawn to be on screen: at 900 the
+  // pair appeared off the top edge and was invisible for its first second.
   public static readonly BASE_WIDTH = 1000;
-  public static readonly BASE_HEIGHT = 900;
+  public static readonly BASE_HEIGHT = 1000;
 
   public static async init(_width: number, _height: number, el: HTMLElement) {
     this.app = new Application();
 
     // Initialize with full window size
+    // Render at the screen's pixel density (capped at 2: beyond that the
+    // fill cost grows faster than anyone can see), with CSS size kept at the
+    // window size. Without this the canvas rendered at 1x and was stretched
+    // on high-density screens, which is why pieces and text looked soft.
     await this.app.init({
       width: window.innerWidth,
       height: window.innerHeight,
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      autoDensity: true,
+      antialias: true,
       backgroundAlpha: 0,
       clearBeforeRender: true,
       preserveDrawingBuffer: false,
       preference: 'webgl',
-      roundPixels: true,
       resizeTo: window // Auto-resize with window
     });
 

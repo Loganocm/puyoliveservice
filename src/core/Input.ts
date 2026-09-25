@@ -1,6 +1,23 @@
 import { ControlsManager } from './ControlsManager';
 import type { GameAction } from './ControlsManager';
+import { PLAY_ACTIONS } from '../input/Handling';
+import type { FrameInput, PlayAction } from '../input/Handling';
 
+/**
+ * Keyboard and gamepad state.
+ *
+ * Presses are LATCHED: a key-down is remembered until something reads it,
+ * even if the key is already up again. Two latches serve two clocks:
+ *
+ *   - the frame latch, cleared by update() after every rendered frame, backs
+ *     isPressed()/isActionPressed() for menus and scene-level keys;
+ *   - the play latch, cleared by consumePlay() once per LOGICAL frame, feeds
+ *     piece handling (src/input/Handling.ts).
+ *
+ * Before this, "pressed" meant "down now and not down at the last rendered
+ * frame", so a tap that went down and up between two frames was never seen
+ * (CLI-11), and gameplay input was tied to the monitor's refresh rate.
+ */
 export class InputManager {
   private keys: { [key: string]: boolean } = {};
   // Previous frame key state
@@ -16,6 +33,14 @@ export class InputManager {
   // Stick Deadzone
   private readonly DEADZONE = 0.5;
 
+  /** Codes pressed since the last rendered frame. */
+  private readonly frameLatch = new Set<string>();
+  /** Codes pressed since the last logical frame consumed them. */
+  private readonly playLatch = new Set<string>();
+  private readonly playPressed = new Set<PlayAction>();
+  private readonly playHeld = new Set<PlayAction>();
+  private readonly playInput: FrameInput = { pressed: this.playPressed, held: this.playHeld };
+
   constructor() {
     window.addEventListener('keydown', (e) => {
       // Prevent default scrolling for arrow keys
@@ -23,6 +48,11 @@ export class InputManager {
         e.preventDefault();
       }
       this.keys[e.code] = true;
+      // Auto-repeat is the OS's, not the player's: handling has its own DAS.
+      if (!e.repeat) {
+        this.frameLatch.add(e.code);
+        this.playLatch.add(e.code);
+      }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -50,7 +80,7 @@ export class InputManager {
     if (keyCode.startsWith('GP_')) {
       return !!this.padKeys[keyCode] && !this.prevPadKeys[keyCode];
     }
-    return !!this.keys[keyCode] && !this.prevKeys[keyCode];
+    return this.frameLatch.has(keyCode);
   }
 
   // Returns the duration (in ticks) the key has been held
@@ -101,13 +131,40 @@ export class InputManager {
     });
   }
 
+  /**
+   * Input for one logical frame of play: every play action pressed since the
+   * previous call, and every one held now. Clears the play latch. The
+   * returned object is reused; read it before the next call.
+   */
+  consumePlay(): FrameInput {
+    this.playPressed.clear();
+    this.playHeld.clear();
+    for (const action of PLAY_ACTIONS) {
+      const key = ControlsManager.getKey(action);
+      const pad = ControlsManager.getControllerKey(action);
+      if (this.playLatch.has(key) || this.playLatch.has(pad)) this.playPressed.add(action);
+      if (this.keys[key] || this.padKeys[pad]) this.playHeld.add(action);
+    }
+    this.playLatch.clear();
+    return this.playInput;
+  }
+
+  /** Drop presses nobody has read yet, e.g. menu keys, when a game starts or resumes. */
+  discardPlay(): void {
+    this.playLatch.clear();
+  }
+
   update() {
     // 1. Snapshot Previous State
     this.prevKeys = { ...this.keys };
     this.prevPadKeys = { ...this.padKeys };
+    this.frameLatch.clear();
 
-    // 2. Poll Gamepads
+    // 2. Poll Gamepads, latching buttons that went down since the last poll.
     this.pollGamepads();
+    for (const code in this.padKeys) {
+      if (this.padKeys[code] && !this.prevPadKeys[code]) this.playLatch.add(code);
+    }
 
     // 3. Update Durations (Keyboard)
     for (const key in this.keys) {

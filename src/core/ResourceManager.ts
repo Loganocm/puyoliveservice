@@ -1,178 +1,107 @@
-import { Assets, Texture, Rectangle, groupD8 } from 'pixi.js';
+import { Texture, Rectangle } from 'pixi.js';
 import { PuyoColor } from '@puyolive/engine';
-import puyoPng from '../resources/puyo.png';
-// // import playbgPng from '../resources/playbg.png'; // Removed per user request // Removed per user request
+import { CELL_SIZE } from './RenderConstants';
+import {
+    paintAtlas, ORB_ROWS, ICONS, ICON_ROW, MARKER_ROW, MARKER_FRAMES, PARTICLE_COLUMN,
+    RING_COLUMN, GHOST_ROW,
+} from './PieceArt';
+import type { GarbageIcon } from './PieceArt';
+import { getTheme } from '../theme/tokens';
 
+/**
+ * Textures for the board, generated rather than downloaded.
+ *
+ * This used to slice a recycled sprite sheet (src/resources/puyo.png, 1.7 MB,
+ * of unverified origin; CLI-14, LEG-01). It now serves Puyo Live's own art,
+ * painted at start-up by PieceArt into one atlas at the device's pixel
+ * density. The public methods are unchanged, so every scene that draws pieces
+ * works as before.
+ */
 export class ResourceManager {
-  private static sheetTexture: Texture;
-  // public static backgroundTexture: Texture;
-  private static puyoTextures: Map<string, Texture> = new Map();
-  public static loaded: boolean = false;
+    private static atlas: Texture | null = null;
+    private static cellPx = CELL_SIZE * 2;
+    private static cache = new Map<string, Texture>();
+    private static markerFrames: Texture[] | null = null;
+    public static loaded = false;
 
-  /** Returns the pixel size of one sprite cell in the sheet (e.g. 32 for 512px, 80 for 1280px). */
-  public static get spriteSize(): number {
-    return this.sheetTexture ? this.sheetTexture.width / 16 : 32;
-  }
-
-  public static async load() {
-    this.sheetTexture = await Assets.load(puyoPng);
-    this.loaded = true;
-    try {
-      // Load the play background
-      // this.backgroundTexture = await Assets.load(playbgPng);
-      // this.backgroundTexture = Texture.WHITE;
-    } catch (e) {
-      console.warn("Failed to load high-res background, falling back/ignoring", e);
-      // Fallback or empty? dynamic graphics will be used if this is null usually,
-      // but we'll handle it in GameScene
-      // this.backgroundTexture = Texture.WHITE; // Placeholder
-    }
-  }
-
-  public static getPuyoTexture(color: PuyoColor, neighbors: number = 0): Texture {
-    if (color === PuyoColor.None) return Texture.EMPTY;
-
-    // Map PuyoColor to Row
-    let row = 0;
-    switch (color) {
-      case PuyoColor.Red: row = 0; break;
-      case PuyoColor.Green: row = 1; break;
-      case PuyoColor.Blue: row = 2; break;
-      case PuyoColor.Yellow: row = 3; break;
-      case PuyoColor.Purple: row = 4; break;
-      case PuyoColor.Garbage:
-        // Garbage is a single sprite
-        // User specified: Row 9, Col 10
-        return this.getFixedPuyoTexture(9, 10);
-      default: return Texture.EMPTY;
+    /** Pixel size of one texture cell in the atlas. */
+    public static get spriteSize(): number {
+        return this.cellPx;
     }
 
-    // Neighbors bitmask: Top(1), Right(2), Bottom(4), Left(8)
-    // Image Format (Standard Puyo): Down(1), Up(2), Right(4), Left(8)
-    // Neigbor Top(1) -> Needs Up(2)
-    // Neighbor Right(2) -> Needs Right(4)
-    // Neighbor Bottom(4) -> Needs Down(1)
-    // Neighbor Left(8) -> Needs Left(8)
-
-    let mappedCol = 0;
-    if (neighbors & 1) mappedCol |= 2;
-    if (neighbors & 2) mappedCol |= 4;
-    if (neighbors & 4) mappedCol |= 1;
-    if (neighbors & 8) mappedCol |= 8;
-
-    const col = mappedCol;
-
-    // Cache key
-    const key = `${row}_${col}`;
-    if (this.puyoTextures.has(key)) {
-      return this.puyoTextures.get(key)!;
+    /** Paint the atlas for the current theme. Synchronous and fast; no network. */
+    public static async load(): Promise<void> {
+        const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+        // Two texels per board pixel at DPR 1 keeps orbs crisp when the scene is scaled up.
+        this.cellPx = Math.round(CELL_SIZE * Math.max(2, dpr * 1.5));
+        const canvas = paintAtlas(getTheme(), this.cellPx);
+        this.atlas?.destroy(true);
+        this.atlas = Texture.from(canvas);
+        this.cache.clear();
+        this.markerFrames = null;
+        this.loaded = true;
     }
 
-    // Create texture format
-    // If sprite sheet logic:
-    // x = col * width
-    // y = row * height
-    // But we need to know the actual dimensions of the loaded image to be sure of SPRITE_SIZE?
-    // Let's rely on constant for now. 
-    // If the image is 512 wide, 512/16 = 32.
-
-    // Auto-detect size if needed, but simpler to fix it.
-    const size = this.sheetTexture.width / 16;
-
-    // Inset by half a pixel to prevent texture bleeding from adjacent sprites
-    const inset = 0.5;
-    const rect = new Rectangle(
-      col * size + inset,
-      row * size + inset,
-      size - inset * 2,
-      size - inset * 2
-    );
-    const texture = new Texture({
-      source: this.sheetTexture.source,
-      frame: rect
-    });
-
-    this.puyoTextures.set(key, texture);
-    return texture;
-  }
-
-  private static getFixedPuyoTexture(row: number, col: number): Texture {
-    const size = this.sheetTexture.width / 16;
-    const key = `${row}_${col}`;
-    if (this.puyoTextures.has(key)) return this.puyoTextures.get(key)!;
-
-    // Inset by half a pixel to prevent texture bleeding from adjacent sprites
-    const inset = 0.5;
-    const rect = new Rectangle(
-      col * size + inset,
-      row * size + inset,
-      size - inset * 2,
-      size - inset * 2
-    );
-    const texture = new Texture({
-      source: this.sheetTexture.source,
-      frame: rect
-    });
-    this.puyoTextures.set(key, texture);
-    return texture;
-  }
-
-  public static getGarbageIconTexture(type: 'small' | 'big' | 'rock' | 'star' | 'moon' | 'crown'): Texture {
-    // Row 11 contains the Garbage Puyo (Col 0) and Icons (Col 1+)
-    const row = 11;
-    let col = 1;
-
-    switch (type) {
-      case 'small': col = 1; break;
-      case 'big': col = 2; break;
-      case 'rock': col = 3; break;
-      case 'star': col = 4; break;
-      case 'moon': col = 5; break;
-      case 'crown': col = 6; break;
+    /** Repaint after a theme change. */
+    public static async reload(): Promise<void> {
+        await this.load();
     }
 
-    return this.getFixedPuyoTexture(row, col);
-  }
-
-  public static getXMarkerTexture(): Texture {
-    // X marker for death cell - Row 12 contains the X patterns (cols 7-11)
-    return this.getFixedPuyoTexture(12, 7);
-  }
-
-  public static getXMarkerTextures(): Texture[] {
-    const textures: Texture[] = [];
-
-    const getTex = (col: number, rot: number) => {
-      const size = this.sheetTexture.width / 16;
-      const inset = 0.5;
-      const rect = new Rectangle(
-        col * size + inset,
-        12 * size + inset,
-        size - inset * 2,
-        size - inset * 2
-      );
-      return new Texture({
-        source: this.sheetTexture.source,
-        frame: rect,
-        rotate: rot
-      });
+    private static frame(col: number, row: number): Texture {
+        const key = `${col}_${row}`;
+        const hit = this.cache.get(key);
+        if (hit) return hit;
+        const s = this.cellPx;
+        const texture = new Texture({
+            source: this.atlas!.source,
+            frame: new Rectangle(col * s, row * s, s, s),
+        });
+        this.cache.set(key, texture);
+        return texture;
     }
 
-    // X Marker Loop Logic (PPT Style)
-    // Sequence: 7->8->9->10->11 (Forward) -> 11->10->9->8->7 (Reverse + Mirror)
-    // This creates a full 10-frame rotation loop.
-
-    // Pass 1: Forward (Frames 7-11)
-    for (let i = 7; i <= 11; i++) {
-      textures.push(getTex(i, 0));
+    /**
+     * A piece of `color` joined to its same-colour neighbours.
+     * `neighbors` bits: 1 up, 2 right, 4 down, 8 left.
+     */
+    public static getPuyoTexture(color: PuyoColor, neighbors: number = 0): Texture {
+        if (color === PuyoColor.None || !this.atlas) return Texture.EMPTY;
+        const row = ORB_ROWS.indexOf(color);
+        if (row < 0) return Texture.EMPTY;
+        return this.frame(color === PuyoColor.Garbage ? 0 : neighbors & 15, row);
     }
 
-    // Pass 2: Reverse + Mirror Horizontal (Frames 11-7)
-    // Flipping the animation and playing in reverse creates the "back half" of the rotation
-    for (let i = 11; i >= 7; i--) {
-      textures.push(getTex(i, groupD8.MIRROR_HORIZONTAL));
+    public static getGarbageIconTexture(type: GarbageIcon): Texture {
+        if (!this.atlas) return Texture.EMPTY;
+        return this.frame(ICONS.indexOf(type), ICON_ROW);
     }
 
-    return textures;
-  }
+    /** A soft white dot, tinted per particle. */
+    public static getParticleTexture(): Texture {
+        if (!this.atlas) return Texture.WHITE;
+        return this.frame(PARTICLE_COLUMN, ICON_ROW);
+    }
+
+    /** A thin white ring, tinted per use (pop bursts). */
+    public static getRingTexture(): Texture {
+        if (!this.atlas) return Texture.EMPTY;
+        return this.frame(RING_COLUMN, ICON_ROW);
+    }
+
+    /** The landing preview for a piece of `color`. */
+    public static getGhostTexture(color: PuyoColor): Texture {
+        const col = ORB_ROWS.indexOf(color);
+        if (col < 0 || color === PuyoColor.Garbage || !this.atlas) return Texture.EMPTY;
+        return this.frame(col, GHOST_ROW);
+    }
+
+    public static getXMarkerTexture(): Texture {
+        return this.frame(0, MARKER_ROW);
+    }
+
+    /** The death-cell marker's animation loop. */
+    public static getXMarkerTextures(): Texture[] {
+        if (!this.atlas) return [Texture.EMPTY];
+        return this.markerFrames ??= Array.from({ length: MARKER_FRAMES }, (_, f) => this.frame(f, MARKER_ROW));
+    }
 }

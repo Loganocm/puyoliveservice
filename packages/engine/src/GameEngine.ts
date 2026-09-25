@@ -74,6 +74,25 @@ export interface ActivePiece extends PuyoPair {
     rot: number;
 }
 
+/** Hold time for the clear animation, before chain scaling. 9 frames = 0.15 s. */
+export const POP_ANIM_FRAMES = 9;
+/** Delay per cascade step after a pop, before chain scaling. 5 frames = 0.083 s. */
+export const FALL_STEP_FRAMES = 5;
+
+/**
+ * How long a chain-timed phase (the pop hold, or a cascade step) lasts at a
+ * given chain count, in frames.
+ *
+ * The first link is held twice as long so the start of a chain reads clearly;
+ * later links grow by 0.3 x 1.3^(n-1). Exported so renderers that animate
+ * from snapshots (replays, the opponent view) use the engine's timing rather
+ * than a copy of it that can drift.
+ */
+export function chainScaledDuration(baseFrames: number, chainCount: number): number {
+    if (chainCount <= 1) return baseFrames * 2;
+    return Math.floor(baseFrames * (1 + 0.3 * Math.pow(1.3, chainCount - 1)));
+}
+
 export class GameEngine {
     public board: Board;
     public state: GameState = GameState.SPAWN;
@@ -142,10 +161,10 @@ export class GameEngine {
 
     // State Timers (managed by engine, but renderer can override/sync)
     public stateTimer = 0;
-    /** Hold time for the clear animation. 9 = 0.15s, chain-scaled at use. */
-    public readonly POP_ANIM_DURATION = 9;
-    /** Delay per cascade step after a pop. 5 = 0.083s, chain-scaled at use. */
-    public readonly FALL_STEP_DELAY = 5;
+    /** Hold time for the clear animation, before chain scaling. */
+    public readonly POP_ANIM_DURATION = POP_ANIM_FRAMES;
+    /** Delay per cascade step after a pop, before chain scaling. */
+    public readonly FALL_STEP_DELAY = FALL_STEP_FRAMES;
 
     // Events
     public onStateChange?: (state: GameState) => void;
@@ -1051,15 +1070,7 @@ export class GameEngine {
     // --- Helpers ---
 
     public getChainScaledDuration(baseDuration: number): number {
-        // Exponential scaling: each chain step adds progressively more delay
-        // Chain 1: 1x, Chain 2: 1.3x, Chain 3: 1.7x, Chain 4: 2.3x, Chain 5: 3.1x, etc.
-        // Formula: baseDuration * (1 + 0.3 * (1.3^(chainCount - 1)))
-
-        // Puyo Tsu Style: First chain is slower/pronounced to show start of combo
-        if (this.stats.chainCount <= 1) return baseDuration * 2; // ~36 frames (600ms)
-
-        const multiplier = 1 + 0.3 * Math.pow(1.3, this.stats.chainCount - 1);
-        return Math.floor(baseDuration * multiplier);
+        return chainScaledDuration(baseDuration, this.stats.chainCount);
     }
 
     private fillNextQueue() {

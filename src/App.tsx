@@ -9,8 +9,7 @@ import {
   Users,
   Shield,
 } from "lucide-react";
-import puyoHeaderLogo from "@/resources/puyoheader.svg";
-import { backgroundManager } from "@/core/BackgroundManager";
+import { Wordmark } from "@/components/Wordmark";
 import { PuyoFooter } from "@/components/PuyoFooter";
 import { WaterFillButton } from "@/components/WaterFillButton";
 import { PlayerStatsPanel } from "@/components/PlayerStatsPanel";
@@ -72,16 +71,6 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
-  const [bgImage, setBgImage] = useState<string>("");
-
-  // Set random background on component mount
-  useEffect(() => {
-    // Select a random background for the menu
-    const bg = backgroundManager.getRandomBackground();
-    console.log("[App] Setting menu background:", bg);
-    backgroundManager.setMenuBackground(bg);
-    setBgImage(bg);
-  }, []);
 
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
@@ -124,31 +113,17 @@ export default function App() {
         const startTime = Date.now();
         console.log("[App] Starting Transition. Waiting for assets...");
 
-        // 1. Wait for Game Core (ResourceManager) to be loaded
-        // Simple polling since it runs in parallel
+        // Wait for the game core (piece art is painted at start-up, with
+        // no downloads, so this is normally already done).
         while (!ResourceManager.loaded) {
-          await new Promise((r) => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 50));
         }
         console.log("[App] Core Assets Loaded.");
 
-        // 2. Preload Menu Background
-        // We use the one we selected on mount
-        const bg = backgroundManager.getMenuBackground();
-        if (bg) {
-          console.log("[App] Preloading Menu Background:", bg);
-          await backgroundManager.preload(bg);
-        }
-
-        // 3. Preload Game Background (for instant start)
-        const gameBg = backgroundManager.prepareGameBackground();
-        if (gameBg) {
-          console.log("[App] Preloading Game Background:", gameBg);
-          await backgroundManager.preload(gameBg);
-        }
-
-        // 4. Ensure Minimum Duration (2s) for smooth effect
+        // Hold the transition just long enough to read as one, not the
+        // fixed two seconds it used to impose on every sign-in.
         const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, 2000 - elapsed);
+        const remaining = Math.max(0, 450 - elapsed);
         console.log(`[App] Transition wait: ${remaining}ms`);
 
         if (remaining > 0) {
@@ -286,20 +261,6 @@ export default function App() {
 
   return (
     <div className="relative h-screen w-screen bg-transparent overflow-hidden font-sans text-white z-50 pointer-events-none">
-      {bgImage &&
-        screen !== "game" &&
-        screen !== "replay" &&
-        screen !== "quickplay" &&
-        screen !== "onboarding" &&
-        screen !== "transition" && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
-            className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${bgImage})` }}
-          />
-        )}
       <AnimatePresence mode="wait">
         {screen === "menu" && (
           <motion.div
@@ -457,11 +418,7 @@ export default function App() {
               }}
               className="flex justify-center px-8 pt-4 pb-4 z-10"
             >
-              <img
-                src={puyoHeaderLogo}
-                alt="Puyo Live"
-                className="w-full max-w-lg"
-              />
+              <Wordmark size={84} />
             </motion.div>
 
             {/* Main Menu */}
