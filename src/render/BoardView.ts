@@ -31,8 +31,8 @@ import {
 import { CELL_SIZE } from '../core/RenderConstants';
 import { ResourceManager } from '../core/ResourceManager';
 import { SettingsManager } from '../core/SettingsManager';
-import type { GarbageIcon } from '../core/PieceArt';
-import { FONTS, alphaOf, chainColor, getTheme, prefersReducedMotion, toPixi } from '../theme/tokens';
+import type { GarbageIcon } from '../skins/atlas';
+import { FONTS, alphaOf, chainColor, getPieceStyle, getTheme, prefersReducedMotion, toPixi } from '../theme/tokens';
 import type { Theme } from '../theme/tokens';
 import { SpritePool } from './SpritePool';
 
@@ -387,7 +387,7 @@ export class BoardView {
 
         if (color === PuyoColor.Garbage && this.options.effects === 'full' && !this.reduced) {
             const x = c0 * CELL + HALF, y = (r0 - HIDDEN_ROWS + 1) * CELL - 4;
-            for (let i = 0; i < 2; i++) this.emit(x, y, (Math.random() - 0.5) * 3, -Math.random() * 1.5, 0.12, 22, toPixi(this.theme.pieces[PuyoColor.Garbage].light), 0.05);
+            for (let i = 0; i < 2; i++) this.emit(x, y, (Math.random() - 0.5) * 3, -Math.random() * 1.5, 0.12, 22, toPixi(getPieceStyle(PuyoColor.Garbage)?.light ?? '#D5DAE5'), 0.05);
         }
     }
 
@@ -413,7 +413,7 @@ export class BoardView {
     /** The popped groups burst into droplets and a ring as they vanish. */
     private burst(): void {
         for (const group of this.popping) {
-            const style = this.theme.pieces[group.color];
+            const style = getPieceStyle(group.color);
             if (!style) continue;
             const tint = toPixi(style.base);
             this.rings.push({ x: group.cx, y: group.cy, t: 0, dur: 20, from: 0.6, to: 1.3 + group.cells.length * 0.12, color: tint });
@@ -595,6 +595,30 @@ export class BoardView {
         for (const gb of frame.fallingGarbage) {
             if (gb.delay <= 10) this.orb(gb.c, gb.r, PuyoColor.Garbage, 0, 1, 1, -1);
         }
+
+        this.drawJunctions(g);
+    }
+
+    /**
+     * Four joined pieces of one colour leave a small notch at their shared
+     * corner in skins whose joins run the full width. Fill it, over settled
+     * blocks only: a block that is popping, falling or squashing is moving.
+     */
+    private drawJunctions(g: BoardFrame['grid']): void {
+        for (let c = 0; c + 1 < COLS; c++) {
+            for (let r = 0; r + 1 < TOTAL_ROWS; r++) {
+                const color = g[c][r];
+                if (color === PuyoColor.None || color === PuyoColor.Garbage) continue;
+                if (g[c + 1][r] !== color || g[c][r + 1] !== color || g[c + 1][r + 1] !== color) continue;
+                const cells = [key(c, r), key(c + 1, r), key(c, r + 1), key(c + 1, r + 1)];
+                if (cells.some(k => this.popSet.has(k) || this.fallMap.has(k) || this.landing.has(k))) continue;
+                const texture = ResourceManager.getJunctionTexture(color as PuyoColor);
+                const s = this.cells.next(texture);
+                s.position.set((c + 1) * CELL, (r + 1 - HIDDEN_ROWS) * CELL);
+                s.width = s.height = CELL;
+                s.alpha = r + 1 < HIDDEN_ROWS ? 0.45 : 1;
+            }
+        }
     }
 
     /** Glow, swell and burst over the engine's pop duration. */
@@ -603,7 +627,7 @@ export class BoardView {
         const fade = t < hold ? 1 : 1 - (t - hold) / (1 - hold);
         const swell = this.reduced ? 1 : t < hold ? 1 + 0.08 * Math.sin((t / hold) * Math.PI) : 1 - 0.55 * (1 - fade);
         this.orb(c, r, color, t < hold ? mask : 0, 0.15 + 0.85 * fade, swell, -1);
-        const style = this.theme.pieces[color];
+        const style = getPieceStyle(color);
         if (!style) return;
         const glow = this.glows.next(ResourceManager.getParticleTexture());
         glow.blendMode = 'add';

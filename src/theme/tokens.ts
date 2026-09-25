@@ -5,12 +5,17 @@
  * and the React menus (through CSS custom properties set by
  * applyThemeToDocument) -- so the game and its UI cannot drift apart.
  *
- * Values, rationale and the glyph assignments are specified in
+ * A theme colours the board and the menus. Piece colours belong to the
+ * active skin (src/skins/): it sets them here with setPiecePalette, and
+ * everything else reads them with getPieceStyle.
+ *
+ * Values and rationale are specified in
  * website/src/content/docs/design/visual-identity.md. Change them there and
  * here together.
  */
 
 import { PuyoColor } from '@puyolive/engine';
+import { DEFAULT_PALETTE } from '../skins/format';
 
 export type Glyph = 'circle' | 'triangle' | 'square' | 'diamond' | 'plus';
 
@@ -35,17 +40,7 @@ export interface Theme {
     state: { danger: string; success: string; warning: string };
     /** Soft light blobs drifting behind everything. */
     ambient: string[];
-    pieces: Record<number, PieceStyle>;
 }
-
-const MIDNIGHT_PIECES: Record<number, PieceStyle> = {
-    [PuyoColor.Red]: { base: '#FF5A6A', light: '#FFB3BB', dark: '#B3203A', glyph: 'circle' },
-    [PuyoColor.Green]: { base: '#3DDC97', light: '#B4F5D6', dark: '#128A5A', glyph: 'triangle' },
-    [PuyoColor.Blue]: { base: '#4C8DFF', light: '#B5D0FF', dark: '#1D4FC4', glyph: 'square' },
-    [PuyoColor.Yellow]: { base: '#FFD23F', light: '#FFF1B8', dark: '#C98A00', glyph: 'diamond' },
-    [PuyoColor.Purple]: { base: '#B57BFF', light: '#E3CCFF', dark: '#6E35C9', glyph: 'plus' },
-    [PuyoColor.Garbage]: { base: '#8A93A6', light: '#D5DAE5', dark: '#4A5163', glyph: null },
-};
 
 export const THEMES: Record<Theme['id'], Theme> = {
     midnight: {
@@ -57,7 +52,6 @@ export const THEMES: Record<Theme['id'], Theme> = {
         accent: { primary: '#FF4F7B', secondary: '#35D0E6' },
         state: { danger: '#FF5A5A', success: '#3DDC97', warning: '#FFB23F' },
         ambient: ['#FF4F7B', '#35D0E6', '#7B5CFF', '#FF9F43'],
-        pieces: MIDNIGHT_PIECES,
     },
     daybreak: {
         id: 'daybreak',
@@ -68,7 +62,6 @@ export const THEMES: Record<Theme['id'], Theme> = {
         accent: { primary: '#E0305F', secondary: '#0E9FB8' },
         state: { danger: '#D93636', success: '#138A5A', warning: '#C77700' },
         ambient: ['#FF8FAB', '#7FE3F0', '#B7A6FF', '#FFC98A'],
-        pieces: MIDNIGHT_PIECES,
     },
     contrast: {
         id: 'contrast',
@@ -79,16 +72,20 @@ export const THEMES: Record<Theme['id'], Theme> = {
         accent: { primary: '#FF3B6B', secondary: '#00E5FF' },
         state: { danger: '#FF3B3B', success: '#00FF94', warning: '#FFD000' },
         ambient: [],
-        pieces: {
-            ...MIDNIGHT_PIECES,
-            [PuyoColor.Red]: { base: '#FF3344', light: '#FF99A2', dark: '#99000F', glyph: 'circle' },
-            [PuyoColor.Green]: { base: '#00E676', light: '#99FFCC', dark: '#007A3D', glyph: 'triangle' },
-            [PuyoColor.Blue]: { base: '#2979FF', light: '#99BFFF', dark: '#003C99', glyph: 'square' },
-            [PuyoColor.Yellow]: { base: '#FFEA00', light: '#FFF899', dark: '#998C00', glyph: 'diamond' },
-            [PuyoColor.Purple]: { base: '#D500F9', light: '#EE99FF', dark: '#7A008F', glyph: 'plus' },
-        },
     },
 };
+
+let piecePalette: Record<number, PieceStyle> = DEFAULT_PALETTE;
+
+/** The active skin's colours for a piece colour (PuyoColor), for effects and UI. */
+export function getPieceStyle(color: number): PieceStyle | undefined {
+    return piecePalette[color];
+}
+
+/** Set by the skin loader once a skin is composed. Does not notify: the loader already has. */
+export function setPiecePalette(palette: Record<number, PieceStyle>): void {
+    piecePalette = palette;
+}
 
 /**
  * Type families. Fredoka (SIL OFL) is bundled with the client, so the display
@@ -107,11 +104,11 @@ export const FONTS = {
 export function chainColor(theme: Theme, links: number): string {
     const ramp = [
         theme.accent.secondary,
-        theme.pieces[PuyoColor.Green].base,
-        theme.pieces[PuyoColor.Yellow].base,
+        piecePalette[PuyoColor.Green].base,
+        piecePalette[PuyoColor.Yellow].base,
         theme.state.warning,
         theme.accent.primary,
-        theme.pieces[PuyoColor.Purple].base,
+        piecePalette[PuyoColor.Purple].base,
     ];
     return ramp[Math.max(0, Math.min(ramp.length - 1, links - 2))];
 }
@@ -148,6 +145,11 @@ export function onThemeChange(listener: () => void): () => void {
 function changed(): void {
     applyThemeToDocument();
     for (const listener of listeners) listener();
+}
+
+/** Tell listeners the appearance changed for a reason outside this module (a new skin). */
+export function notifyAppearanceChanged(): void {
+    changed();
 }
 
 /** Switch theme for this and future sessions. */

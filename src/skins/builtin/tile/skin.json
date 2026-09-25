@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "name": "Tile",
+  "author": "Puyo Live",
+  "version": "1.0.0",
+  "description": "Circuit's finish on rounded squares, for players who like the block-puzzle look.",
+  "style": "circuit",
+  "shape": "tile"
+}

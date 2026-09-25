@@ -7,6 +7,7 @@ import type { HandlingPreset } from "@/core/SettingsManager";
 import { SoundManager } from "@/core/SoundManager";
 import { BGMManager } from "@/core/BGMManager";
 import { BackButton } from "@/components/BackButton";
+import { SkinPicker } from "@/components/SkinPicker";
 import { useMenuInput } from "@/hooks/useMenuInput";
 import {
   SELECTABLE_THEMES, THEMES, getTheme, setTheme,
@@ -135,6 +136,11 @@ export function SettingsScreen({ onOpenControls, onBack }: SettingsScreenProps) 
                   onChange={id => { setTheme(id); refresh(); }}
                 />
               </Row>
+              <div>
+                <div className="text-sm font-bold text-white tracking-widest">SKIN</div>
+                <div className="text-xs text-white/45 mt-1 mb-3">How the pieces look. Import your own, or export a template to start one.</div>
+                <SkinPicker />
+              </div>
               <Row label="PIECE SYMBOLS" description="A shape on each colour, so colour is never the only cue">
                 <Segmented
                   options={[["subtle", "Subtle"], ["bold", "Bold"], ["off", "Off"]] as [GlyphStyle, string][]}

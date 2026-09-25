@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "name": "Circuit",
+  "author": "Puyo Live",
+  "version": "1.0.0",
+  "description": "The default. Crisp keycap pieces on a seamless rail: hard edges, a machined bevel and clear symbols.",
+  "style": "circuit",
+  "shape": "round"
+}

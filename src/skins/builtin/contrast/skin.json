@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "name": "Contrast",
+  "author": "Puyo Live",
+  "version": "1.0.0",
+  "description": "Circuit in maximum-contrast colours, as far apart as possible for every kind of colour vision.",
+  "style": "circuit",
+  "shape": "round",
+  "colors": {
+    "red": { "base": "#FF3344", "light": "#FF99A2", "dark": "#99000F" },
+    "green": { "base": "#00E676", "light": "#99FFCC", "dark": "#007A3D" },
+    "blue": { "base": "#2979FF", "light": "#99BFFF", "dark": "#003C99" },
+    "yellow": { "base": "#FFEA00", "light": "#FFF899", "dark": "#998C00" },
+    "purple": { "base": "#D500F9", "light": "#EE99FF", "dark": "#7A008F" }
+  }
+}

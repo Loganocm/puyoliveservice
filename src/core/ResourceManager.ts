@@ -2,26 +2,29 @@ import { Texture, Rectangle } from 'pixi.js';
 import { PuyoColor } from '@puyolive/engine';
 import { CELL_SIZE } from './RenderConstants';
 import {
-    paintAtlas, ORB_ROWS, ICONS, ICON_ROW, MARKER_ROW, MARKER_FRAMES, PARTICLE_COLUMN,
-    RING_COLUMN, GHOST_ROW,
-} from './PieceArt';
-import type { GarbageIcon } from './PieceArt';
-import { getGlyphStyle, getTheme } from '../theme/tokens';
+    ORB_ROWS, ICONS, ICON_ROW, MARKER_ROW, MARKER_FRAMES, PARTICLE_COLUMN, RING_COLUMN, GHOST_ROW, JUNCTION_COLUMN,
+} from '../skins/atlas';
+import type { GarbageIcon } from '../skins/atlas';
+import { composeSkin } from '../skins/compose';
+import { BUILTIN_SKINS, currentSkin, DEFAULT_SKIN_ID } from '../skins/registry';
+import { getGlyphStyle, getTheme, setPiecePalette } from '../theme/tokens';
 
 /**
  * Textures for the board, generated rather than downloaded.
  *
- * This used to slice a recycled sprite sheet (src/resources/puyo.png, 1.7 MB,
- * of unverified origin; CLI-14, LEG-01). It now serves Puyo Live's own art,
- * painted at start-up by PieceArt into one atlas at the device's pixel
- * density. The public methods are unchanged, so every scene that draws pieces
- * works as before.
+ * The board is drawn from one atlas composed from the player's skin
+ * (src/skins/): the skin's own images where it has them, its painter for the
+ * rest, at the device's pixel density. The public methods do not change with
+ * the skin, so no scene knows which skin it draws. See
+ * website/src/content/docs/reference/skins.md.
  */
 export class ResourceManager {
     private static atlas: Texture | null = null;
     private static cellPx = CELL_SIZE * 2;
     private static cache = new Map<string, Texture>();
     private static markerFrames: Texture[] | null = null;
+    /** Bumped per load, so a slow load cannot overwrite a newer one. */
+    private static loadSeq = 0;
     public static loaded = false;
 
     /** Pixel size of one texture cell in the atlas. */
@@ -29,17 +32,32 @@ export class ResourceManager {
         return this.cellPx;
     }
 
-    /** Paint the atlas for the current theme. Synchronous and fast; no network. */
+    /** Compose the atlas for the chosen skin and theme. Falls back to the default skin if the chosen one fails. */
     public static async load(): Promise<void> {
         const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
-        // Two texels per board pixel at DPR 1 keeps orbs crisp when the scene is scaled up.
-        this.cellPx = Math.round(CELL_SIZE * Math.max(2, dpr * 1.5));
-        const canvas = paintAtlas(getTheme(), this.cellPx, getGlyphStyle());
-        this.atlas?.destroy(true);
-        this.atlas = Texture.from(canvas);
+        // Two texels per board pixel at DPR 1 keeps pieces crisp when the scene is scaled up.
+        const cellPx = Math.round(CELL_SIZE * Math.max(2, dpr * 1.5));
+        const seq = ++this.loadSeq;
+        let skin = await currentSkin();
+        let composed = await composeSkin(skin.manifest, skin.sources, getTheme(), cellPx, getGlyphStyle());
+        if (composed.problems.length) {
+            console.warn(`[Skin] ${skin.manifest.name}:`, composed.problems.join(' '));
+            if (!skin.builtin && composed.problems.length >= skin.sources.length && skin.sources.length > 0) {
+                // Nothing of the skin could be read: use the default rather than a half-drawn board.
+                skin = BUILTIN_SKINS.find(s => s.id === DEFAULT_SKIN_ID)!;
+                composed = await composeSkin(skin.manifest, skin.sources, getTheme(), cellPx, getGlyphStyle());
+            }
+        }
+        // A newer load (the player changed something again) supersedes this one.
+        if (seq !== this.loadSeq) return;
+        this.cellPx = cellPx;
+        setPiecePalette(composed.palette);
+        const old = this.atlas;
+        this.atlas = Texture.from(composed.canvas);
         this.cache.clear();
         this.markerFrames = null;
         this.loaded = true;
+        old?.destroy(true);
     }
 
     /** Repaint after a theme change. */
@@ -86,6 +104,16 @@ export class ResourceManager {
     public static getRingTexture(): Texture {
         if (!this.atlas) return Texture.EMPTY;
         return this.frame(RING_COLUMN, ICON_ROW);
+    }
+
+    /**
+     * Drawn centred on the corner shared by a 2x2 block of `color`, to fill
+     * the gap the four joined pieces leave. Empty for skins that leave none.
+     */
+    public static getJunctionTexture(color: PuyoColor): Texture {
+        const col = ORB_ROWS.indexOf(color);
+        if (col < 0 || color === PuyoColor.Garbage || !this.atlas) return Texture.EMPTY;
+        return this.frame(JUNCTION_COLUMN + col, GHOST_ROW);
     }
 
     /** The landing preview for a piece of `color`. */
