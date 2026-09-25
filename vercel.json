@@ -11,6 +11,14 @@
         {
             "source": "/about",
             "destination": "/about.html"
+        },
+        {
+            "source": "/community",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/community/:path*",
+            "destination": "/index.html"
         }
     ]
 }

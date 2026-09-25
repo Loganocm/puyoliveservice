@@ -45,8 +45,15 @@ export class InputManager {
 
   constructor() {
     window.addEventListener('keydown', (e) => {
-      // Prevent default scrolling for arrow keys
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].indexOf(e.code) > -1) {
+      // Typing is not playing. Keys typed into a text field are the field's:
+      // this used to preventDefault Space and the arrows everywhere, so no
+      // text box in the app could take a space or move its caret, and what
+      // was typed also reached the game as input.
+      if (isEditable(e.target)) return;
+      // Stop arrows and Space scrolling the page, except that Space must
+      // still press a focused button (keyboard users activate buttons with it).
+      const pressesControl = e.code === 'Space' && isControl(e.target);
+      if (!pressesControl && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].indexOf(e.code) > -1) {
         e.preventDefault();
       }
       this.keys[e.code] = true;
@@ -260,6 +267,24 @@ export class InputManager {
     }
     return null;
   }
+}
+
+/** Whether a key event belongs to a text field rather than to the game. */
+export function isEditable(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  if (target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
+  if (target.tagName !== 'INPUT') return false;
+  // Sliders own their arrow keys; buttons and checkboxes are handled below.
+  const type = (target as HTMLInputElement).type;
+  return !['button', 'checkbox', 'radio', 'submit', 'reset', 'color', 'file', 'image'].includes(type);
+}
+
+/** A focused control that Space activates (a button, link, checkbox...). */
+function isControl(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false;
+  return target.tagName === 'BUTTON' || target.tagName === 'A' || target.tagName === 'INPUT'
+    || ['button', 'tab', 'radio', 'checkbox', 'menuitem', 'switch'].includes(target.getAttribute('role') ?? '');
 }
 
 /** The latch code for an on-screen button; cannot collide with a KeyboardEvent.code or a GP_ code. */

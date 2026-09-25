@@ -11,113 +11,170 @@ datasource db {
 }
 
 model User {
-  id               Int      @id @default(autoincrement())
-  username         String   @unique
-  email            String?  @unique
-  avatar_url       String?  // Base64 data URI; served by GET /api/users/:id/avatar, never inline
-  avatar_updated_at DateTime? // Version for the avatar URL, so it can be cached forever
-  password_hash    String
-  elo_rating       Int      @default(1000)
-  games_played     Int      @default(0)
-  games_won        Int      @default(0)
-  games_lost       Int      @default(0)
-  highest_chain    Int      @default(0)
-  total_garbage_sent Int    @default(0)
-  level            Int      @default(1)
-  current_xp       Int      @default(0)
-  is_admin         Boolean  @default(false)
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  id                 Int       @id @default(autoincrement())
+  username           String    @unique
+  email              String?   @unique
+  avatar_url         String? // Base64 data URI; served by GET /api/users/:id/avatar, never inline
+  avatar_updated_at  DateTime? // Version for the avatar URL, so it can be cached forever
+  password_hash      String
+  elo_rating         Int       @default(1000)
+  games_played       Int       @default(0)
+  games_won          Int       @default(0)
+  games_lost         Int       @default(0)
+  highest_chain      Int       @default(0)
+  total_garbage_sent Int       @default(0)
+  level              Int       @default(1)
+  current_xp         Int       @default(0)
+  is_admin           Boolean   @default(false)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
 
-  matches_as_p1    Match[]  @relation("Player1Matches")
-  matches_as_p2    Match[]  @relation("Player2Matches")
-  matches_won      Match[]  @relation("WinnerMatches")
-  matches_lost     Match[]  @relation("LoserMatches")
-  
-  bans             Ban[]
-  auditLogs        AuditLog[]
-  loginLogs        LoginLog[]
+  matches_as_p1 Match[] @relation("Player1Matches")
+  matches_as_p2 Match[] @relation("Player2Matches")
+  matches_won   Match[] @relation("WinnerMatches")
+  matches_lost  Match[] @relation("LoserMatches")
+
+  bans         Ban[]
+  auditLogs    AuditLog[]
+  loginLogs    LoginLog[]
+  forumThreads ForumThread[] @relation("ForumThreadAuthor")
+  forumPosts   ForumPost[]   @relation("ForumPostAuthor")
 
   @@map("users")
 }
 
 model Match {
-  id               Int      @id @default(autoincrement())
-  player1_id       Int
-  player2_id       Int
-  winner_id        Int
-  loser_id         Int
-  
+  id         Int @id @default(autoincrement())
+  player1_id Int
+  player2_id Int
+  winner_id  Int
+  loser_id   Int
+
   room_id          String?
   duration_seconds Int?
-  
+
   // Game stats
-  player1_max_chain     Int     @default(0)
-  player2_max_chain     Int     @default(0)
-  player1_garbage_sent  Int     @default(0)
-  player2_garbage_sent  Int     @default(0)
-  
+  player1_max_chain    Int @default(0)
+  player2_max_chain    Int @default(0)
+  player1_garbage_sent Int @default(0)
+  player2_garbage_sent Int @default(0)
+
   // Elo snapshots
-  player1_elo_before    Int
-  player2_elo_before    Int
-  player1_elo_after     Int
-  player2_elo_after     Int
-  elo_change            Int
-  
-  is_ranked        Boolean  @default(true)
-  started_at       DateTime?
-  ended_at         DateTime @default(now())
+  player1_elo_before Int
+  player2_elo_before Int
+  player1_elo_after  Int
+  player2_elo_after  Int
+  elo_change         Int
+
+  is_ranked  Boolean   @default(true)
+  started_at DateTime?
+  ended_at   DateTime  @default(now())
 
   // Replay Data
-  replay_data      Json?    // Stores seed, inputs, and settings
+  replay_data Json? // Stores seed, inputs, and settings
 
   // Relations
-  player1          User     @relation("Player1Matches", fields: [player1_id], references: [id])
-  player2          User     @relation("Player2Matches", fields: [player2_id], references: [id])
-  winner           User     @relation("WinnerMatches", fields: [winner_id], references: [id])
-  loser            User     @relation("LoserMatches", fields: [loser_id], references: [id])
+  player1 User @relation("Player1Matches", fields: [player1_id], references: [id])
+  player2 User @relation("Player2Matches", fields: [player2_id], references: [id])
+  winner  User @relation("WinnerMatches", fields: [winner_id], references: [id])
+  loser   User @relation("LoserMatches", fields: [loser_id], references: [id])
 
   @@map("matches")
 }
 
 model Ban {
-  id               Int      @id @default(autoincrement())
-  user_id          Int?
-  ip_address       String?
-  reason           String
-  banned_by        Int?
-  expires_at       DateTime?
-  created_at       DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  ip_address String?
+  reason     String
+  banned_by  Int?
+  expires_at DateTime?
+  created_at DateTime  @default(now())
 
-  user             User?    @relation(fields: [user_id], references: [id])
-  
+  user User? @relation(fields: [user_id], references: [id])
+
   @@index([ip_address])
   @@map("bans")
 }
 
 model AuditLog {
-  id               Int      @id @default(autoincrement())
-  admin_id         Int
-  action           String
-  target_id        Int?
-  target_ip        String?
-  details          Json?
-  created_at       DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  admin_id   Int
+  action     String
+  target_id  Int?
+  target_ip  String?
+  details    Json?
+  created_at DateTime @default(now())
 
-  admin            User     @relation(fields: [admin_id], references: [id])
-  
+  admin User @relation(fields: [admin_id], references: [id])
+
   @@map("audit_logs")
 }
 
 model LoginLog {
-  id               Int      @id @default(autoincrement())
-  user_id          Int
-  ip_address       String
-  success          Boolean
-  created_at       DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  ip_address String
+  success    Boolean
+  created_at DateTime @default(now())
 
-  user             User     @relation(fields: [user_id], references: [id])
-  
+  user User @relation(fields: [user_id], references: [id])
+
   @@index([ip_address])
   @@map("login_logs")
+}
+
+// ── Community forums (website/src/content/docs/architecture/community.md) ──
+
+model ForumCategory {
+  id          Int     @id @default(autoincrement())
+  slug        String  @unique
+  name        String
+  description String
+  position    Int     @default(0)
+  /// Only admins may start threads here (Announcements).
+  staff_only  Boolean @default(false)
+
+  threads ForumThread[]
+
+  @@map("forum_categories")
+}
+
+model ForumThread {
+  id           Int      @id @default(autoincrement())
+  category_id  Int
+  author_id    Int
+  title        String   @db.VarChar(120)
+  pinned       Boolean  @default(false)
+  locked       Boolean  @default(false)
+  deleted      Boolean  @default(false)
+  /// Visible posts, kept in step by the forum service.
+  post_count   Int      @default(0)
+  created_at   DateTime @default(now())
+  last_post_at DateTime @default(now())
+
+  category ForumCategory @relation(fields: [category_id], references: [id])
+  author   User          @relation("ForumThreadAuthor", fields: [author_id], references: [id])
+  posts    ForumPost[]
+
+  @@index([category_id, pinned, last_post_at])
+  @@map("forum_threads")
+}
+
+model ForumPost {
+  id         Int       @id @default(autoincrement())
+  thread_id  Int
+  author_id  Int
+  /// Plain text; rendered with a safe Markdown subset on the client.
+  body       String
+  deleted    Boolean   @default(false)
+  created_at DateTime  @default(now())
+  edited_at  DateTime?
+
+  thread ForumThread @relation(fields: [thread_id], references: [id])
+  author User        @relation("ForumPostAuthor", fields: [author_id], references: [id])
+
+  @@index([thread_id, created_at])
+  @@index([author_id, created_at])
+  @@map("forum_posts")
 }

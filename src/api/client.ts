@@ -178,4 +178,54 @@ export class APIClient {
     static async adminGetLoginLogs(page: number = 1, limit: number = 25) {
         return this.request(`/admin/login-logs?page=${page}&limit=${limit}`);
     }
+
+    // ── Community forums (api/src/routes/forum.routes.ts) ──
+
+    static async getForums() {
+        return this.request('/forums');
+    }
+
+    static async getForumNews(limit: number = 5) {
+        return this.request(`/forums/news?limit=${limit}`);
+    }
+
+    static async getForumThreads(slug: string, page: number = 1) {
+        return this.request(`/forums/${encodeURIComponent(slug)}/threads?page=${page}`);
+    }
+
+    static async getForumThread(id: number, page: number = 1) {
+        return this.request(`/forums/threads/${id}?page=${page}`);
+    }
+
+    static async createForumThread(slug: string, title: string, body: string) {
+        return this.request(`/forums/${encodeURIComponent(slug)}/threads`, {
+            method: 'POST',
+            body: JSON.stringify({ title, body }),
+        }, 1);
+    }
+
+    static async replyForumThread(id: number, body: string) {
+        return this.request(`/forums/threads/${id}/posts`, {
+            method: 'POST',
+            body: JSON.stringify({ body }),
+        }, 1);
+    }
+
+    static async editForumPost(id: number, body: string) {
+        return this.request(`/forums/posts/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ body }),
+        }, 1);
+    }
+
+    static async deleteForumPost(id: number) {
+        return this.request(`/forums/posts/${id}`, { method: 'DELETE' }, 1);
+    }
+
+    static async moderateForumThread(id: number, changes: { pinned?: boolean; locked?: boolean; deleted?: boolean }) {
+        return this.request(`/forums/threads/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(changes),
+        }, 1);
+    }
 }

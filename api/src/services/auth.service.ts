@@ -73,7 +73,7 @@ function clearLoginFailures(username: string): void {
 }
 
 /** The user's ban that is currently in force (permanent or not yet expired), if any. */
-function findActiveBan(userId: number) {
+export function findActiveBan(userId: number) {
   return prisma.ban.findFirst({
     where: {
       user_id: userId,

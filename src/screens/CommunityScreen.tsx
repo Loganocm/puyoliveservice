@@ -5,7 +5,6 @@ import {
   X,
   Trophy,
   Users,
-  Activity,
   Search,
   Clock,
   Swords,
@@ -15,10 +14,35 @@ import {
   Target,
   Flame,
   Zap,
+  MessageSquare,
+  Home,
+  Megaphone,
 } from "lucide-react";
 import { APIClient } from "../api/client";
+import { ForumsView } from "@/community/ForumsView";
+import { Markdown } from "@/community/Markdown";
+import { communityPath, parseCommunityPath } from "@/community/route";
+import type { CommunityRoute } from "@/community/route";
 
-type Tab = "activity" | "leaderboard" | "players";
+type Tab = "activity" | "forums" | "leaderboard" | "players";
+
+interface NewsItem {
+  id: number;
+  title: string;
+  excerpt: string;
+  created_at: string;
+  post_count: number;
+  author: { id: number; username: string };
+}
+
+function tabOf(route: CommunityRoute): Tab {
+  switch (route.page) {
+    case "home": return "activity";
+    case "rankings": return "leaderboard";
+    case "players": return "players";
+    default: return "forums";
+  }
+}
 
 interface RecentMatch {
   id: number;
@@ -98,13 +122,48 @@ interface MatchHistoryEntry {
   has_valid_replay?: boolean;
 }
 
+/**
+ * The community hub: news and activity, forums, rankings and players, each
+ * at its own /community URL so pages can be linked and shared. Opened from
+ * the menu, or directly by visiting a /community link.
+ * Design: website/src/content/docs/architecture/community.md.
+ */
 export const CommunityScreen: React.FC<{
   onClose: () => void;
   onWatchReplay: () => void;
-}> = ({ onClose, onWatchReplay }) => {
-  const [tab, setTab] = useState<Tab>("activity");
+  initialRoute?: CommunityRoute;
+}> = ({ onClose, onWatchReplay, initialRoute }) => {
+  const [route, setRoute] = useState<CommunityRoute>(initialRoute ?? { page: "home" });
+  const tab = tabOf(route);
+  const [news, setNews] = useState<NewsItem[] | null>(null);
 
-  useMenuInput({ onBack: onClose }, [onClose]);
+  /** Go somewhere in the hub, and give it a URL. */
+  const navigate = useCallback((next: CommunityRoute) => {
+    setViewingProfile(null);
+    setRoute(next);
+    const path = communityPath(next);
+    if (window.location.pathname + window.location.search !== path) window.history.pushState(null, "", path);
+  }, []);
+
+  /** Leave the hub, and the /community URL with it. */
+  const close = useCallback(() => {
+    if (window.location.pathname.startsWith("/community")) window.history.pushState(null, "", "/");
+    onClose();
+  }, [onClose]);
+
+  // Opening the hub gives it its URL; Back and Forward move within it.
+  useEffect(() => {
+    const path = communityPath(route);
+    if (!window.location.pathname.startsWith("/community")) window.history.pushState(null, "", path);
+    const onPop = () => {
+      const r = parseCommunityPath(window.location.pathname, window.location.search);
+      if (r) { setViewingProfile(null); setRoute(r); } else onClose();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   // Activity tab
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
@@ -136,6 +195,16 @@ export const CommunityScreen: React.FC<{
   > | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // Escape (or the pad's back button) goes up one level, then closes.
+  useMenuInput({
+    onBack: () => {
+      if (viewingProfile) setViewingProfile(null);
+      else if (route.page === "thread" || route.page === "compose") navigate({ page: "forum", slug: route.slug, p: 1 });
+      else if (route.page === "forum") navigate({ page: "forums" });
+      else close();
+    },
+  }, [route, close, navigate, viewingProfile]);
+
   const [loading, setLoading] = useState(true);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -148,7 +217,7 @@ export const CommunityScreen: React.FC<{
 
   // Load initial data for the active tab
   useEffect(() => {
-    loadTabData(tab);
+    if (tab !== "forums") loadTabData(tab);
   }, [tab]);
 
   const loadTabData = async (t: Tab) => {
@@ -156,6 +225,7 @@ export const CommunityScreen: React.FC<{
     try {
       switch (t) {
         case "activity": {
+          APIClient.getForumNews(3).then(d => setNews(d.news ?? [])).catch(() => setNews([]));
           const [matches, stats] = await Promise.all([
             APIClient.getRecentMatches(15),
             APIClient.getLeaderboardStats(),
@@ -286,18 +356,6 @@ export const CommunityScreen: React.FC<{
     }
   };
 
-  // Escape key
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.code === "Escape") {
-        if (viewingProfile) setViewingProfile(null);
-        else onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose, viewingProfile]);
-
   const formatDuration = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -322,17 +380,18 @@ export const CommunityScreen: React.FC<{
     return "#888";
   };
 
-  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "activity", label: "Activity", icon: Activity },
-    { id: "leaderboard", label: "Rankings", icon: Trophy },
-    { id: "players", label: "Players", icon: Users },
+  const tabs: { id: Tab; label: string; icon: React.ElementType; to: CommunityRoute }[] = [
+    { id: "activity", label: "Home", icon: Home, to: { page: "home" } },
+    { id: "forums", label: "Forums", icon: MessageSquare, to: { page: "forums" } },
+    { id: "leaderboard", label: "Rankings", icon: Trophy, to: { page: "rankings" } },
+    { id: "players", label: "Players", icon: Users, to: { page: "players" } },
   ];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 pointer-events-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 pointer-events-auto"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) close();
       }}
     >
       <motion.div
@@ -340,18 +399,19 @@ export const CommunityScreen: React.FC<{
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-5xl bg-[#12121a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-6xl h-full sm:h-auto border border-white/10 sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col sm:max-h-[94vh]"
+        style={{ background: "var(--pl-bg-raised)" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/[0.02]">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-indigo-500/10">
-              <Users className="w-5 h-5 text-indigo-400" />
+            <div className="p-2 rounded-xl bg-white/5">
+              <Users className="w-5 h-5" style={{ color: "var(--pl-accent-secondary)" }} />
             </div>
-            <h2 className="text-xl font-bold tracking-wide">COMMUNITY</h2>
+            <h2 className="text-xl font-bold tracking-wide">Community</h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
             aria-label="Close community"
             className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"
           >
@@ -360,19 +420,19 @@ export const CommunityScreen: React.FC<{
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 px-6 pt-4 pb-2">
+        <div className="flex gap-1 px-4 sm:px-6 pt-4 pb-2 overflow-x-auto" role="tablist" aria-label="Community sections">
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => {
-                if (viewingProfile) setViewingProfile(null);
-                setTab(t.id);
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              role="tab"
+              aria-selected={tab === t.id && !viewingProfile}
+              onClick={() => navigate(t.to)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shrink-0 ${
                 tab === t.id && !viewingProfile
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
+                  ? "text-white"
                   : "text-white/40 hover:text-white hover:bg-white/5"
               }`}
+              style={tab === t.id && !viewingProfile ? { background: "var(--pl-accent-primary)" } : undefined}
             >
               <t.icon size={16} />
               {t.label}
@@ -387,7 +447,7 @@ export const CommunityScreen: React.FC<{
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-6 custom-scrollbar">
           <AnimatePresence mode="wait">
             {viewingProfile ? (
               <ProfileView
@@ -401,7 +461,13 @@ export const CommunityScreen: React.FC<{
                 formatDuration={formatDuration}
                 timeAgo={timeAgo}
               />
+            ) : route.page === "forums" || route.page === "forum" || route.page === "thread" || route.page === "compose" ? (
+              <motion.div key="forums" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-2">
+                <ForumsView route={route} navigate={navigate} onPlayerClick={openProfile} timeAgo={timeAgo} />
+              </motion.div>
             ) : tab === "activity" ? (
+              <div key="home">
+                <NewsSection news={news} timeAgo={timeAgo} onOpen={id => navigate({ page: "thread", slug: "announcements", id, p: 1 })} onAll={() => navigate({ page: "forum", slug: "announcements", p: 1 })} />
               <ActivityTab
                 key="activity"
                 recentMatches={recentMatches}
@@ -412,6 +478,7 @@ export const CommunityScreen: React.FC<{
                 formatDuration={formatDuration}
                 timeAgo={timeAgo}
               />
+              </div>
             ) : tab === "leaderboard" ? (
               <LeaderboardTab
                 key="leaderboard"
@@ -441,6 +508,35 @@ export const CommunityScreen: React.FC<{
         </div>
       </motion.div>
     </div>
+  );
+};
+
+/* ─────────── NEWS ─────────── */
+const NewsSection: React.FC<{
+  news: NewsItem[] | null;
+  timeAgo: (iso: string) => string;
+  onOpen: (id: number) => void;
+  onAll: () => void;
+}> = ({ news, timeAgo, onOpen, onAll }) => {
+  if (!news || news.length === 0) return null;
+  return (
+    <section className="pt-2 pb-5" aria-labelledby="news-heading">
+      <div className="flex items-center justify-between mb-3">
+        <h3 id="news-heading" className="flex items-center gap-2 text-sm font-bold tracking-widest text-white/60">
+          <Megaphone size={16} style={{ color: "var(--pl-accent-primary)" }} /> NEWS
+        </h3>
+        <button onClick={onAll} className="text-xs text-white/50 hover:text-white">All announcements</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {news.map(n => (
+          <button key={n.id} onClick={() => onOpen(n.id)} className="text-left p-4 rounded-2xl bg-white/[0.04] border border-white/5 hover:bg-white/[0.07] transition-colors flex flex-col gap-2">
+            <div className="font-semibold text-white">{n.title}</div>
+            <div className="text-sm text-white/60 line-clamp-3"><Markdown source={n.excerpt} /></div>
+            <div className="text-xs text-white/40 mt-auto">{n.author.username} · {timeAgo(n.created_at)} · {n.post_count - 1} comments</div>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 };
 

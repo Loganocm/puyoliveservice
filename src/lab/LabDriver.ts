@@ -163,12 +163,19 @@ export class LabDriver implements LabController {
     /** The outcome, including whether the rendered run matched the headless one. */
     result() {
         const engine = this.engine!;
-        const browserEngineTrace = this.session.trace.filter(e => !CLIENT_ONLY.has(e.t));
+        // A client rule (a timed mode running out) ends the game in the
+        // browser, which the headless run cannot know about. What it causes,
+        // such as the GAMEOVER transition, is the client's doing, so the
+        // comparison stops there. Engine events of that frame come before it
+        // in the trace, because the timer is checked after the engine steps.
+        const trace = this.session.trace;
+        const timeUp = trace.findIndex(e => e.t === 'client' && e.what === 'timeUp');
+        const compared = timeUp >= 0 ? trace.slice(0, timeUp) : trace;
+        const browserEngineTrace = compared.filter(e => !CLIENT_ONLY.has(e.t));
         let firstMismatch: number | null = null;
         if (this.headlessTrace) {
-            // Compare only up to where the browser run stopped: a client rule
-            // (a timed mode running out) can legitimately end it early.
-            const lastFrame = this.session.frame;
+            // Compare only up to where the browser run stopped.
+            const lastFrame = timeUp >= 0 ? trace[timeUp].f : this.session.frame;
             const headless = this.headlessTrace.filter(e => e.f <= lastFrame);
             const n = Math.max(headless.length, browserEngineTrace.length);
             for (let i = 0; i < n; i++) {

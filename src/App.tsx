@@ -13,6 +13,8 @@ import { Wordmark } from "@/components/Wordmark";
 import { TouchControls, wantsTouchControls } from "@/components/TouchControls";
 import { PersonalBests } from "@/core/PersonalBests";
 import { PerfNotice } from "@/components/PerfNotice";
+import { parseCommunityPath } from "@/community/route";
+import type { CommunityRoute } from "@/community/route";
 import { PuyoFooter } from "@/components/PuyoFooter";
 import { WaterFillButton } from "@/components/WaterFillButton";
 import { PlayerStatsPanel } from "@/components/PlayerStatsPanel";
@@ -97,7 +99,12 @@ export default function App() {
   const [user, setUser] = useState<UserData | null>(
     AuthManager.currentUser as UserData | null,
   );
-  const [showCommunity, setShowCommunity] = useState(false);
+  // A /community link opens the hub straight away, even before signing in:
+  // reading needs no account.
+  const [communityRoute, setCommunityRoute] = useState<CommunityRoute | undefined>(
+    () => (IS_LAB ? undefined : parseCommunityPath(window.location.pathname, window.location.search) ?? undefined),
+  );
+  const [showCommunity, setShowCommunity] = useState(() => communityRoute !== undefined);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(1);
@@ -105,6 +112,19 @@ export default function App() {
   const [soloGame, setSoloGame] = useState(true);
   // Read on every render (cheap), so changing the setting applies at once.
   const touch = !IS_LAB && wantsTouchControls();
+
+  // Forward into a /community URL after the hub was closed reopens it there.
+  useEffect(() => {
+    const onPop = () => {
+      const r = parseCommunityPath(window.location.pathname, window.location.search);
+      if (r && !showCommunity) {
+        setCommunityRoute(r);
+        setShowCommunity(true);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [showCommunity]);
 
   // Track if we've shown the menu animation once already
   const hasVisitedMenu = useRef(false);
@@ -737,7 +757,8 @@ export default function App() {
 
       {showCommunity && (
         <CommunityScreen
-          onClose={() => setShowCommunity(false)}
+          initialRoute={communityRoute}
+          onClose={() => { setShowCommunity(false); setCommunityRoute(undefined); }}
           onWatchReplay={() => {
             setShowCommunity(false);
             setScreen("replay");
