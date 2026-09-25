@@ -73,6 +73,7 @@ services:
     logging: *default-logging
     environment:
       PORT: 3000
+      NODE_ENV: production
       API_URL: http://api:8080
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
     ports:

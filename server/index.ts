@@ -643,9 +643,9 @@ io.on('connection', (socket: Socket) => {
     });
   };
 
-  const broadcastRoomList = () => {
-    // Only send PUBLIC rooms to the lobby list
-    const rooms = roomManager.getAllRooms()
+  /** Public rooms, as the lobby list shows them. */
+  const publicRoomList = () =>
+    roomManager.getAllRooms()
       .filter(r => !r.isPrivate)
       .map(r => ({
         id: r.id,
@@ -655,11 +655,18 @@ io.on('connection', (socket: Socket) => {
         status: r.matchStats ? 'playing' : 'waiting',
         isPrivate: false
       }));
-    io.emit('room_list_update', rooms);
+
+  // A room list change goes to everyone in the lobby.
+  const broadcastRoomList = () => {
+    io.emit('room_list_update', publicRoomList());
   };
 
+  // A request for the list is answered to the one who asked. It used to
+  // re-broadcast to every connected socket, unlimited, so one client could
+  // make the server flood everyone (NET-17).
   socket.on('get_rooms', () => {
-    broadcastRoomList();
+    if (!checkSocketRate(socket.id, 'get_rooms', 5)) return;
+    socket.emit('room_list_update', publicRoomList());
   });
 
   socket.on('create_room', (data: { isPrivate?: boolean } = {}) => {

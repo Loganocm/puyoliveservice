@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { AuthService } from '../services/auth.service.js';
-import { authenticate, asyncHandler } from '../middleware/index.js';
+import { authenticate, asyncHandler, hasInternalKey } from '../middleware/index.js';
 
 const router = Router();
 
@@ -97,9 +97,12 @@ router.post('/change-password', authenticate, authLimiter, asyncHandler(async (r
   }
 }));
 
+// The game server verifies every player who signs in, from one address, with
+// the internal key; only other callers are limited (API-09).
 const verifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60, // 60 verifications per window (game server calls this on each socket connect)
+  max: 60, // 60 verifications per window per address
+  skip: hasInternalKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many verification attempts' },

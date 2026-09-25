@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { AuthService } from '../services/auth.service.js';
 import { config } from '../config/index.js';
 import type { User } from '../types/user.js';
@@ -75,6 +76,28 @@ export async function optionalAuth(
  * Used for server-to-server endpoints (e.g., match recording from game server).
  * This key is NOT a user JWT — it's a shared secret only the game server knows.
  */
+/** Whether `key` is the internal API key, compared in constant time. */
+function isInternalKey(key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const expected = config.internalApiKey;
+  if (key.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+}
+
+/**
+ * Whether a request comes from the game server (carries the internal key).
+ *
+ * Every call the game server makes comes from one address, so per-address
+ * rate limits meant for players must skip it: counted against one address,
+ * 60 sign-ins in 15 minutes locked every later player out of ranked (API-09).
+ */
+export function hasInternalKey(req: Request): boolean {
+  return isInternalKey(req.headers['x-internal-key']);
+}
+
+/**
+ * Middleware for server-to-server endpoints: requires the internal API key.
+ */
 export async function internalOnly(
   req: Request,
   res: Response,
@@ -87,17 +110,7 @@ export async function internalOnly(
     return;
   }
 
-  // Constant-time comparison to prevent timing attacks
-  const expected = config.internalApiKey;
-  if (key.length !== expected.length) {
-    res.status(403).json({ error: 'Forbidden' });
-    return;
-  }
-
-  const { timingSafeEqual } = await import('crypto');
-  const a = Buffer.from(key);
-  const b = Buffer.from(expected);
-  if (!timingSafeEqual(a, b)) {
+  if (!isInternalKey(key)) {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }

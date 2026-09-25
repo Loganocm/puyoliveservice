@@ -74,10 +74,14 @@ export async function recordMatch(
  */
 export async function verifyToken(token: string): Promise<UserProfile | null> {
   try {
+    // The internal key exempts these calls from the API's per-address rate
+    // limits: every player's sign-in reaches the API from this one server
+    // (API-09).
     const response = await fetch(`${API_URL}/api/auth/verify`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Internal-Key': INTERNAL_API_KEY
       },
       body: JSON.stringify({ token })
     });
@@ -100,7 +104,9 @@ export async function verifyToken(token: string): Promise<UserProfile | null> {
  */
 export async function getUserProfile(userId: number): Promise<UserProfile | null> {
   try {
-    const response = await fetch(`${API_URL}/api/users/${userId}`);
+    const response = await fetch(`${API_URL}/api/users/${userId}`, {
+      headers: { 'X-Internal-Key': INTERNAL_API_KEY }
+    });
 
     if (!response.ok) {
       return null;

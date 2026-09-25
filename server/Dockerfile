@@ -54,6 +54,9 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
 
 EXPOSE 3000
-ENV PORT=3000
+# production locks out the development switches (DEV_FIXED_SEED,
+# SIMULATED_LATENCY_MS, EXTRA_CORS_ORIGINS, HEARTBEAT_TIMEOUT_MS). The image
+# never set it, so they were live in production (OPS-11).
+ENV PORT=3000 NODE_ENV=production
 WORKDIR /app/server
 CMD ["node", "dist/index.js"]

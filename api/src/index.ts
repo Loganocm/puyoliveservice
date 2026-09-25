@@ -8,7 +8,7 @@ import { createServer } from 'http';
 import { config } from './config/index.js';
 import { prisma } from './db/prisma.js';
 import routes from './routes/index.js';
-import { errorHandler, notFoundHandler } from './middleware/index.js';
+import { errorHandler, notFoundHandler, hasInternalKey } from './middleware/index.js';
 
 export const app = express();
 app.set('trust proxy', 1);
@@ -96,10 +96,13 @@ app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Global API rate limiter — prevents general DoS
+// Global API rate limiter — prevents general DoS. The game server's calls
+// carry the internal key and all come from one address, so they are exempt
+// (API-09).
 app.use('/api', rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 100, // 100 requests per minute per IP
+  skip: hasInternalKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please slow down' },
