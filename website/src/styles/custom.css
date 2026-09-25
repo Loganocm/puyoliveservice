@@ -1,0 +1,29 @@
+/* Brand accents. Starlight derives its palette from these. */
+:root {
+  --sl-color-accent-low: #3a1216;
+  --sl-color-accent: #e5484d;
+  --sl-color-accent-high: #ffd1d3;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #ffdfe0;
+  --sl-color-accent: #ce2c31;
+  --sl-color-accent-high: #641723;
+}
+
+/* Severity chips used in the review pages: <span class="sev s1">S1</span> */
+.sev {
+  display: inline-block;
+  padding: 0 0.45em;
+  border-radius: 0.3em;
+  font-size: 0.8em;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.sev.s1 { background: #e5484d; color: #fff; }
+.sev.s2 { background: #f76b15; color: #fff; }
+.sev.s3 { background: #ffc53d; color: #1a1a1a; }
+.sev.s4 { background: #8b8d98; color: #fff; }
+
+/* Wide tables scroll inside their own box instead of the page. */
+.sl-markdown-content table { display: block; overflow-x: auto; }
